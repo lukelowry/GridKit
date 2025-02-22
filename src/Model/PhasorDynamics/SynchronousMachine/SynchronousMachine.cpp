@@ -63,6 +63,83 @@ namespace PhasorDynamics
     template <class ScalarT, typename IdxT>
     int SynchronousMachine<ScalarT, IdxT>::initialize()
     {
+        /* Read variables */
+        ScalarT delta;
+        ScalarT omega;
+        ScalarT psidp;
+        ScalarT psiqp;
+        ScalarT Eqp;
+        ScalarT Edp;
+        ScalarT psiqpp; 
+        ScalarT psidpp; 
+        ScalarT psipp; 
+        ScalarT ksat ;
+        ScalarT vd;
+        ScalarT vq;
+        ScalarT telec;
+        ScalarT id;
+        ScalarT iq;
+        ScalarT ir;
+        ScalarT ii;
+        ScalarT pmech;
+        ScalarT efd;
+        ScalarT inr;
+        ScalarT ini;
+        ScalarT vr; 
+        ScalarT vi; 
+        ScalarT vr_inf;
+        ScalarT vi_inf;
+    
+        /* Read derivatives */
+        ScalarT delta_dot = yp_[0];
+        ScalarT omega_dot = yp_[1];
+        ScalarT Eqp_dot = yp_[2];
+        ScalarT psidp_dot = yp_[3];
+        ScalarT psiqp_dot = yp_[4];
+        ScalarT Edp_dot = yp_[5];
+
+        /* Start by assuming state variables */
+        y_[0] = delta = 0.55399038;
+        y_[1] = omega = 0;
+        y_[2] = Eqp = 0.995472581; 
+        y_[3] = psidp = 0.971299567;
+        y_[4] = psiqp = 0.306880069; 
+        y_[5] = Edp = 0;
+
+        /* Assumed terminal conditions for system */
+        vr = 0.9949877346411762;
+        vi = 0.09999703952427966;
+        real_type p = 1.0;
+        real_type q = 0.05013;
+
+        /* Calculate the rest of the initial conditions */
+        y_[6] = psiqpp = -psiqp*Xq4_ - Edp*Xq5_;
+        y_[7] = psidpp =  psidp*Xd4_ + Eqp*Xd5_;
+        y_[8] = psipp = sqrt(psiqpp*psiqpp + psidpp*psidpp);
+        y_[9] = ksat = SB_*pow(psipp - SA_, 2);
+        y_[10] = vd = -psiqpp*(1 + omega); 
+        y_[11] = vq =  psidpp*(1 + omega); 
+        ir = (p*vr + q*vi) / (vr*vr + vi*vi);
+        ii = (p*vi - q*vr) / (vr*vr + vi*vi);
+        id = ir*sin(delta) -ii*cos(delta);
+        iq = ir*cos(delta) +ii*sin(delta);
+        real_type Te = (psidpp - id*Xdpp_)*iq - (psiqpp - iq*Xdpp_)*id; 
+        y_[12] = Te;
+        y_[13] = id;
+        y_[14] = iq;
+        y_[15] = ir;
+        y_[16] = ii;
+        y_[17] = /* pmech_set_ = */ Te; 
+        y_[18] = /* efd_set_ = */ Eqp + Xd1_*(id + Xd3_*(Eqp - psidp - Xd2_*id)) + psidpp*ksat;
+        y_[19] = gg_*(vd*sin(delta)+vq*cos(delta)) 
+            - bb_*(vd*-cos(delta) + vq*sin(delta)); /* machine inort, real */
+        y_[20] = bb_*(vd*sin(delta)+vq*cos(delta)) 
+            + gg_*(vd*-cos(delta) + vq*sin(delta)); /* machine inort, imag */
+        y_[21] = vr;   /* v1r - bus1 has GENROU */
+        y_[22] = vi;   /* v1i - bus1 has GENROU  */
+        y_[23] = 1.0;   /* v2r - bus2 has infinite bus */
+        y_[24] = 0;   /* v2i - bus2 has infinite bus  */
+
         return 0;
     }
 
