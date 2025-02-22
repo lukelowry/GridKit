@@ -71,27 +71,6 @@ namespace PhasorDynamics
         {
         }
 
-    public:
-        void setR(real_type R)
-        {
-            R_ = R;
-        }
-
-        void setX(real_type X)
-        {
-            // std::cout << "Setting X ...\n";
-            X_ = X;
-        }
-
-        void setG(real_type G)
-        {
-            G_ = G;
-        }
-
-        void setB(real_type B)
-        {
-            B_ = B;
-        }
 
     private:
         ScalarT& Vr()
@@ -114,13 +93,48 @@ namespace PhasorDynamics
             return bus_->Ii();
         }
 
+    private:
+        void setParameters();
 
     private:
-        bus_type* bus_;
-        real_type R_;
-        real_type X_;
-        real_type G_;
-        real_type B_;
+        bus_type* bus_{nullptr};
+
+        // Generator parameters
+        real_type omega0_{2*M_PI*60};
+        real_type H_{3.0};
+        real_type D_{0.0};
+        real_type Ra_{0.0};
+        real_type Tdop_{7.0};
+        real_type Tdopp_{0.04};
+        real_type Tqopp_{0.05};
+        real_type Tqop_{0.75};
+        real_type Xd_{2.1};
+        real_type Xdp_{0.2};
+        real_type Xdpp_{0.18};
+        real_type Xq_{0.5};
+        real_type Xqp_{0.5};
+        real_type Xqpp_{0.18};
+        real_type Xl_{0.15};
+        real_type S10_{0.0};
+        real_type S12_{0.0};
+
+        // Simplifying constants calculated from parameters
+        real_type SA_{0.0};
+        real_type SB_{0.0};
+        real_type Xd1_{0.0};
+        real_type Xd2_{0.0};
+        real_type Xd3_{0.0};
+        real_type Xd4_{0.0};
+        real_type Xd5_{0.0};
+        real_type Xq1_{0.0};
+        real_type Xq2_{0.0};
+        real_type Xq3_{0.0};
+        real_type Xq4_{0.0};
+        real_type Xq5_{0.0};
+        real_type Xqd_{0.0};
+        real_type gg_{0.0};
+        real_type bb_{0.0};
+    
     };
 
 } // namespace PhasorDynamics
