@@ -83,7 +83,13 @@ if(GRIDKIT_ENABLE_SUNDIALS_SPARSE)
 endif()
 
 if(${GRIDKIT_ENABLE_ENZYME})
-  include(FindEnzyme)
+  find_package(Enzyme REQUIRED CONFIG 
+              PATHS 
+              ${ENZYME_DIR}
+              ${ENZYME_DIR}/lib/cmake/Enzyme)
+  message(STATUS "Enzyme configuration found: ${Enzyme_CONFIG}")
+  include(EnzymeAddExecutable)
+  include(FindEnzymeLibraries)
 endif()
 
 # Macro that adds libraries
