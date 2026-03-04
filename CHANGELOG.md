@@ -59,6 +59,7 @@
 - Remove data copying between system and components in `PowerElectronics` models.
 - Added multi-contingency analysis application.
 - Added `BusToSignalAdapter` component for communicating bus voltages and injection currents.
+- Added support for running IDA with fixed time steps
 
 ## v0.1
 
