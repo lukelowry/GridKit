@@ -1,3 +1,5 @@
+#include <limits>
+
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
@@ -61,13 +63,36 @@ namespace GridKit
         return 0;
       }
 
-      void setTolerances([[maybe_unused]] RealT& rel_tol, [[maybe_unused]] RealT& abs_tol) const override
+      void setTolerances(RealT& rel_tol, RealT& abs_tol) const override
       {
+        rel_tol = 1e-8;
+        abs_tol = 1e-10;
       }
 
       void setMaxSteps(IdxT& msa) const override
       {
         msa = 2000;
+      }
+
+      void setMaxStepSize(RealT& hmax) const override
+      {
+        hmax = max_step_size_;
+      }
+
+      void setRequestedMaxStepSize(RealT max_step_size)
+      {
+        max_step_size_ = max_step_size;
+      }
+
+      int stepAccepted(RealT t) override
+      {
+        accepted_times_.push_back(t);
+        return 0;
+      }
+
+      const std::vector<RealT>& acceptedTimes() const
+      {
+        return accepted_times_;
       }
 
       int tagDifferentiable() override
@@ -262,6 +287,9 @@ namespace GridKit
       std::vector<ScalarT> param_;
       std::vector<ScalarT> param_up_;
       std::vector<ScalarT> param_lo_;
+
+      RealT              max_step_size_{std::numeric_limits<RealT>::infinity()};
+      std::vector<RealT> accepted_times_;
     };
   } // namespace Model
 
@@ -291,6 +319,34 @@ namespace GridKit
         ida.runSimulation(1.0, n_steps, output_cb);
 
         success *= (observed_steps == n_steps);
+
+        Model::NullEvaluator<ScalarT, IdxT> max_step_model;
+        max_step_model.setRequestedMaxStepSize(0.05);
+
+        Ida<double, size_t> max_step_ida(&max_step_model);
+        max_step_ida.configureSimulation();
+
+        unsigned max_step_observed_outputs = 0;
+        auto     max_step_output_cb        = [&]([[maybe_unused]] double t)
+        {
+          max_step_observed_outputs++;
+        };
+
+        max_step_ida.initializeSimulation(0.0, false);
+        max_step_ida.runSimulation(1.0, 10, max_step_output_cb);
+
+        const auto& accepted_times  = max_step_model.acceptedTimes();
+        success                    *= (max_step_observed_outputs == 10);
+        success                    *= (accepted_times.size() > 10);
+        success                    *= (!accepted_times.empty());
+
+        constexpr double max_step_tolerance = 1.0e-10;
+        for (size_t i = 1; i < accepted_times.size(); ++i)
+        {
+          const auto spacing  = accepted_times[i] - accepted_times[i - 1];
+          success            *= (spacing >= -max_step_tolerance);
+          success            *= (spacing <= 0.05 + max_step_tolerance);
+        }
 
         return success.report(__func__);
       }

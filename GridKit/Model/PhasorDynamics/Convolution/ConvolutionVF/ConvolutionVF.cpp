@@ -43,9 +43,12 @@ namespace GridKit
 
         // f[u] = u - U
         add_entry(residual_indices[U_INDEX], variable_indices[U_INDEX], 1.0);
-        if (ws_indices_[0] != INVALID_INDEX<IdxT>)
+        if (signals_.template isAttached<ConvolutionVFExternalVariables::U>()
+            && signals_.template isLinked<ConvolutionVFExternalVariables::U>())
         {
-          add_entry(residual_indices[U_INDEX], ws_indices_[0], -1.0);
+          add_entry(residual_indices[U_INDEX],
+                    signals_.template readExternalVariableIndex<ConvolutionVFExternalVariables::U>(),
+                    -1.0);
         }
 
         // f[z] = z - d*u - e*u' - sum(r[n]*x[n])

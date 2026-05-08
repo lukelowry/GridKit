@@ -1,4 +1,5 @@
 #include <iostream>
+#include <limits>
 
 #include <GridKit/LinearAlgebra/DenseMatrix/DenseMatrix.hpp>
 #include <GridKit/Model/PowerElectronics/Bus/MicrogridBus.hpp>
@@ -195,15 +196,16 @@ int main()
   EnzymeModelJacobian<DG>(dg, jac_autodiff);
 
   // Check
-  int  fail    = 0;
-  bool verbose = true;
+  int          fail               = 0;
+  bool         verbose            = true;
+  const double jacobian_tolerance = 100.0 * std::numeric_limits<double>::epsilon();
   for (size_t idy = 0; idy < dg->size(); ++idy)
   {
     for (size_t idx = 0; idx < dg->size(); ++idx)
     {
       double jac_value     = jac_autodiff.getValue(idx, idy);
       double jac_ref_value = jac_ref_dense.getValue(idx, idy);
-      if (!GridKit::Testing::isEqual(jac_value, jac_ref_value))
+      if (!GridKit::Testing::isEqual(jac_value, jac_ref_value, jacobian_tolerance))
       {
         fail++;
         if (verbose)

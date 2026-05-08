@@ -17,6 +17,7 @@ gridkit_add_library(phasor_dynamics_core
     ComponentLibrary.hpp
     ComponentSignals.hpp
     GridElement.hpp
+    History.hpp
     SystemModel.hpp
     SystemModelData.hpp
   LINK_LIBRARIES
@@ -40,6 +41,7 @@ add_subdirectory(Exciter)
 add_subdirectory(Governor)
 add_subdirectory(Load)
 add_subdirectory(LoadZIP)
+add_subdirectory(Source)
 add_subdirectory(Stabilizer)
 add_subdirectory(SynchronousMachine)
 

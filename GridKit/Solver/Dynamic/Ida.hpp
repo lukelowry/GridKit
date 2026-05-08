@@ -201,6 +201,11 @@ namespace AnalysisManager
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);
+      int         acceptReturnedStep(RealT t);
+      RealT       getMaxStepSize() const;
+      int         applyMaxStepSize(RealT hmax);
+      RealT       selectSolveTarget(RealT current_time, RealT next_output, RealT hmax) const;
+      static bool reachedTime(RealT t, RealT target);
       static void copyVec(const N_Vector x, std::vector<ScalarT>& y);
       static void copyVec(const std::vector<ScalarT>& x, N_Vector y);
       static void copyVec(const std::vector<bool>& x, N_Vector y);

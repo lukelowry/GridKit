@@ -1,8 +1,11 @@
 
 #include "Ida.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 #include <idas/idas.h>
@@ -97,6 +100,12 @@ namespace AnalysisManager
       /// \todo Need to set max number of steps based on user input!
       retval = IDASetMaxNumSteps(solver_, static_cast<long>(msa));
       checkOutput(retval, "IDASetMaxNumSteps");
+
+      retval = applyMaxStepSize(getMaxStepSize());
+      if (retval != 0)
+      {
+        return retval;
+      }
 
       // Tag differential variables
       std::vector<bool>& tag = model_->tag();
@@ -278,12 +287,70 @@ namespace AnalysisManager
 
         retval = IDAGetConsistentIC(solver_, yy_, yp_);
         checkOutput(retval, "IDAGetConsistentIC");
-
-        copyVec(yy_, model_->y());
-        copyVec(yp_, model_->yp());
       }
 
+      retval = acceptReturnedStep(t0);
+
       return retval;
+    }
+
+    /**
+     * @brief Copy a returned solver state to the model and notify it.
+     *
+     * Residual and Jacobian callbacks may evaluate trial states. This helper
+     * is used only after IDA returns a solution to the driver.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::acceptReturnedStep(RealT t)
+    {
+      copyVec(yy_, model_->y());
+      copyVec(yp_, model_->yp());
+      model_->updateTime(t, 0.0);
+      return model_->stepAccepted(t);
+    }
+
+    template <class ScalarT, typename IdxT>
+    typename Ida<ScalarT, IdxT>::RealT Ida<ScalarT, IdxT>::getMaxStepSize() const
+    {
+      RealT hmax;
+      model_->setMaxStepSize(hmax);
+
+      if (std::isfinite(hmax) && hmax > 0.0)
+      {
+        return hmax;
+      }
+
+      return std::numeric_limits<RealT>::infinity();
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::applyMaxStepSize(RealT hmax)
+    {
+      const RealT ida_hmax = (std::isfinite(hmax) && hmax > 0.0) ? hmax : 0.0;
+      const int   retval   = IDASetMaxStep(solver_, ida_hmax);
+      checkOutput(retval, "IDASetMaxStep");
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
+    typename Ida<ScalarT, IdxT>::RealT Ida<ScalarT, IdxT>::selectSolveTarget(
+        RealT current_time,
+        RealT next_output,
+        RealT hmax) const
+    {
+      if (!std::isfinite(hmax) || hmax <= 0.0)
+      {
+        return next_output;
+      }
+
+      return std::min(next_output, current_time + hmax);
+    }
+
+    template <class ScalarT, typename IdxT>
+    bool Ida<ScalarT, IdxT>::reachedTime(RealT t, RealT target)
+    {
+      const RealT scale = std::max(RealT{1.0}, std::max(std::abs(t), std::abs(target)));
+      return std::abs(t - target) <= RealT{100.0} * std::numeric_limits<RealT>::epsilon() * scale;
     }
 
     /**
@@ -295,10 +362,8 @@ namespace AnalysisManager
      * @param tf The final simulation time.
      * @param nout The number of integration segmentstimes.
      * @param step_callback An optional callback which, if provided, will be
-     * called after each time the IDA solver has been invoked with the value
-     * of `t` that IDA has calculated the last step at. The provided model will
-     * be updated with the latest values of `y` and `yp` before the callback is
-     * invoked.
+     * called at each requested output time. The provided model will be updated
+     * with the latest values of `y` and `yp` before the callback is invoked.
      * @return int zero if successful, error code otherwise.
      *
      * @note The actual time of the final IDA solution should be somewhat
@@ -313,47 +378,62 @@ namespace AnalysisManager
       int   retval = 0;
       int   iout   = 0;
       RealT tret;
-      RealT dt   = (tf - t_init_) / static_cast<RealT>(nout);
-      RealT tout = t_init_ + dt;
+      RealT dt           = (tf - t_init_) / static_cast<RealT>(nout);
+      RealT current_time = t_init_;
+      RealT next_output  = t_init_ + dt;
+      RealT hmax         = getMaxStepSize();
+
+      retval = applyMaxStepSize(hmax);
+      if (retval != 0)
+      {
+        return retval;
+      }
 
       // In loop, call IDASolve, print results, and test for error.
       //  Break out of loop when NOUT preset output times have been reached.
       // printOutput(0.0);
       while (nout > iout)
       {
-        retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
+        RealT target = selectSolveTarget(current_time, next_output, hmax);
+
+        if (std::isfinite(hmax))
+        {
+          retval = IDASetStopTime(solver_, target);
+          checkOutput(retval, "IDASetStopTime");
+        }
+
+        retval = IDASolve(solver_, target, &tret, yy_, yp_, IDA_NORMAL);
         checkOutput(retval, "IDASolve");
 
-        if (step_callback.has_value() || model_->monitoring())
+        if (retval >= 0)
         {
-          // The callback may try to observe upated values in the model, so we
-          // should update them here (At this point, the model's values are one
-          // internal integrator step out of date)
-          copyVec(yy_, model_->y());
-          copyVec(yp_, model_->yp());
-          model_->updateTime(tret, 0.0);
-
-          if (model_->monitoring())
+          retval = acceptReturnedStep(tret);
+          if (retval != 0)
           {
-            model_->printMonitoredVariables();
+            return retval;
           }
-          if (step_callback.has_value())
-          {
-            (*step_callback)(tret);
-          }
-        }
 
-        if (retval == IDA_SUCCESS)
-        {
-          ++iout;
-          tout += dt;
+          if (reachedTime(tret, next_output))
+          {
+            if (step_callback.has_value() || model_->monitoring())
+            {
+              if (model_->monitoring())
+              {
+                model_->printMonitoredVariables();
+              }
+              if (step_callback.has_value())
+              {
+                (*step_callback)(tret);
+              }
+            }
+
+            ++iout;
+            next_output = t_init_ + static_cast<RealT>(iout + 1) * dt;
+          }
+
+          current_time = tret;
         }
       }
-
-      // Final copy out. No guarantee last residual evaluation is final step.
-      copyVec(yy_, model_->y());
-      copyVec(yp_, model_->yp());
-      model_->updateTime(tf, 0.0);
       // if (model_->monitoring())
       // {
       //   model_->printMonitoredVariables();
@@ -448,34 +528,59 @@ namespace AnalysisManager
     int Ida<ScalarT, IdxT>::runSimulationQuadrature(RealT tf, int nout)
     {
       int   retval = 0;
+      int   iout   = 0;
       RealT tret;
 
       // std::cout << "Forward integration for initial value problem ... \n";
 
-      RealT dt   = tf / static_cast<RealT>(nout);
-      RealT tout = dt;
+      RealT dt           = (tf - t_init_) / static_cast<RealT>(nout);
+      RealT current_time = t_init_;
+      RealT next_output  = t_init_ + dt;
+      RealT hmax         = getMaxStepSize();
+
+      retval = applyMaxStepSize(hmax);
+      if (retval != 0)
+      {
+        return retval;
+      }
+
       // printOutput(0.0);
       // printSpecial(0.0, yy_);
-      for (int i = 0; i < nout; ++i)
+      while (iout < nout)
       {
-        retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
+        RealT target = selectSolveTarget(current_time, next_output, hmax);
+
+        if (std::isfinite(hmax))
+        {
+          retval = IDASetStopTime(solver_, target);
+          checkOutput(retval, "IDASetStopTime");
+        }
+
+        retval = IDASolve(solver_, target, &tret, yy_, yp_, IDA_NORMAL);
         checkOutput(retval, "IDASolve");
         // printSpecial(tout, yy_);
         // printOutput(tout);
 
-        if (retval == IDA_SUCCESS)
+        if (retval >= 0)
         {
-          tout += dt;
+          retval = acceptReturnedStep(tret);
+          if (retval != 0)
+          {
+            return retval;
+          }
+
+          if (reachedTime(tret, next_output))
+          {
+            ++iout;
+            next_output = t_init_ + static_cast<RealT>(iout + 1) * dt;
+          }
+
+          current_time = tret;
         }
 
         retval = IDAGetQuad(solver_, &tret, q_);
         checkOutput(retval, "IDAGetQuad");
       }
-
-      // Final copy out. No gaurentee last residual evaluation is final step.
-      copyVec(yy_, model_->y());
-      copyVec(yp_, model_->yp());
-      model_->updateTime(tf, 0.0);
 
       return retval;
     }
@@ -647,31 +752,56 @@ namespace AnalysisManager
     int Ida<ScalarT, IdxT>::runForwardSimulation(RealT tf, int nout)
     {
       int   retval = 0;
+      int   iout   = 0;
       int   ncheck;
       RealT time;
 
       // std::cout << "Forward integration for adjoint analysis ... \n";
 
-      RealT dt   = tf / static_cast<RealT>(nout);
-      RealT tout = dt;
-      for (int i = 0; i < nout; ++i)
+      RealT dt           = (tf - t_init_) / static_cast<RealT>(nout);
+      RealT current_time = t_init_;
+      RealT next_output  = t_init_ + dt;
+      RealT hmax         = getMaxStepSize();
+
+      retval = applyMaxStepSize(hmax);
+      if (retval != 0)
       {
-        retval = IDASolveF(solver_, tout, &time, yy_, yp_, IDA_NORMAL, &ncheck);
+        return retval;
+      }
+
+      while (iout < nout)
+      {
+        RealT target = selectSolveTarget(current_time, next_output, hmax);
+
+        if (std::isfinite(hmax))
+        {
+          retval = IDASetStopTime(solver_, target);
+          checkOutput(retval, "IDASetStopTime");
+        }
+
+        retval = IDASolveF(solver_, target, &time, yy_, yp_, IDA_NORMAL, &ncheck);
         checkOutput(retval, "IDASolveF");
 
-        if (retval == IDA_SUCCESS)
+        if (retval >= 0)
         {
-          tout += dt;
+          retval = acceptReturnedStep(time);
+          if (retval != 0)
+          {
+            return retval;
+          }
+
+          if (reachedTime(time, next_output))
+          {
+            ++iout;
+            next_output = t_init_ + static_cast<RealT>(iout + 1) * dt;
+          }
+
+          current_time = time;
         }
 
         retval = IDAGetQuad(solver_, &time, q_);
         checkOutput(retval, "IDASolve");
       }
-
-      // Final copy out. No gaurentee last residual evaluation is final step.
-      copyVec(yy_, model_->y());
-      copyVec(yp_, model_->yp());
-      model_->updateTime(tf, 0.0);
 
       return retval;
     }

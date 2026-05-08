@@ -1,15 +1,17 @@
 /**
- * @file ConvolutionVF.hpp
- * @brief Declaration of a vector-fitting convolution helper
+ * @file CsvSignalSource.hpp
+ * @brief Declaration of a CSV-backed signal source
  */
 
 #pragma once
 
+#include <filesystem>
+#include <string>
 #include <vector>
 
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
-#include <GridKit/Model/PhasorDynamics/Convolution/ConvolutionVF/ConvolutionVFData.hpp>
+#include <GridKit/Model/PhasorDynamics/Source/CsvSignalSource/CsvSignalSourceData.hpp>
 
 // Forward declarations
 namespace GridKit
@@ -19,11 +21,11 @@ namespace GridKit
     template <class ScalarT, typename IdxT>
     class SignalNode;
 
-    namespace Convolution
+    namespace Source
     {
       template <typename RealT, typename IdxT>
-      struct ConvolutionVFData;
-    } // namespace Convolution
+      struct CsvSignalSourceData;
+    } // namespace Source
   } // namespace PhasorDynamics
 } // namespace GridKit
 
@@ -31,41 +33,38 @@ namespace GridKit
 {
   namespace PhasorDynamics
   {
-    namespace Convolution
+    namespace Source
     {
-      /// Internal variables of a `ConvolutionVF`
-      enum class ConvolutionVFInternalVariables : size_t
+      /// Internal variables of a `CsvSignalSource`
+      enum class CsvSignalSourceInternalVariables : size_t
       {
-        Z, ///< Convolution output
+        VALUE, ///< Signal value
         MAXIMUM,
       };
 
-      /// External variables of a `ConvolutionVF`
-      enum class ConvolutionVFExternalVariables : size_t
+      /// External variables of a `CsvSignalSource`
+      enum class CsvSignalSourceExternalVariables : size_t
       {
-        U, ///< Convolution input
         MAXIMUM,
       };
 
       /**
-       * @brief Scalar convolution helper from vector-fitting coefficients.
+       * @brief Signal source driven by CSV samples.
        *
-       * The inherited `y_` vector stores model states in the order
-       * `u`, `z`, then one memory state `x_n` per pole.
+       * The inherited `y_` vector stores one algebraic output variable,
+       * which is assigned to a `SignalNode` for use by other components.
        */
       template <class ScalarT, typename IdxT>
-      class ConvolutionVF : public Component<ScalarT, IdxT>
+      class CsvSignalSource : public Component<ScalarT, IdxT>
       {
         using Component<ScalarT, IdxT>::gridkit_component_id_;
         using Component<ScalarT, IdxT>::alpha_;
         using Component<ScalarT, IdxT>::f_;
-        using Component<ScalarT, IdxT>::nnz_;
         using Component<ScalarT, IdxT>::size_;
         using Component<ScalarT, IdxT>::tag_;
         using Component<ScalarT, IdxT>::time_;
         using Component<ScalarT, IdxT>::y_;
         using Component<ScalarT, IdxT>::yp_;
-        using Component<ScalarT, IdxT>::wb_;
         using Component<ScalarT, IdxT>::J_;
         using Component<ScalarT, IdxT>::J_rows_buffer_;
         using Component<ScalarT, IdxT>::J_cols_buffer_;
@@ -75,13 +74,13 @@ namespace GridKit
 
       public:
         using RealT           = typename Component<ScalarT, IdxT>::RealT;
-        using model_data_type = ConvolutionVFData<RealT, IdxT>;
+        using model_data_type = CsvSignalSourceData<RealT, IdxT>;
         using signal_type     = SignalNode<ScalarT, IdxT>;
 
-        ConvolutionVF();
-        ConvolutionVF(signal_type* input, signal_type* output, const model_data_type& data);
-        ConvolutionVF(const model_data_type& data);
-        ~ConvolutionVF() = default;
+        CsvSignalSource();
+        CsvSignalSource(signal_type* output, const model_data_type& data);
+        CsvSignalSource(const model_data_type& data);
+        ~CsvSignalSource() = default;
 
         int setGridKitComponentID(IdxT) override final;
         int allocate() override final;
@@ -91,46 +90,45 @@ namespace GridKit
         int evaluateResidual() override final;
         int evaluateJacobian() override final;
 
-        /// Get the `ComponentSignals` from this `ConvolutionVF`
+        /// Get the `ComponentSignals` from this `CsvSignalSource`
         auto getSignals()
             -> ComponentSignals<ScalarT,
                                 IdxT,
-                                ConvolutionVFInternalVariables,
-                                ConvolutionVFExternalVariables>&
+                                CsvSignalSourceInternalVariables,
+                                CsvSignalSourceExternalVariables>&
         {
           return signals_;
         }
 
-      public:
-        __attribute__((always_inline)) inline int evaluateInternalResidual(ScalarT*, ScalarT*, ScalarT*, ScalarT*, ScalarT*);
+      private:
+        void  initializeParameters(const model_data_type& data);
+        int   loadCsv();
+        RealT interpolate(RealT t) const;
+
+        static std::string              trim(const std::string& value);
+        static std::vector<std::string> splitCsvLine(const std::string& line);
 
       private:
-        void initializeParameters(const model_data_type& data);
+        static constexpr size_t VALUE_INDEX = 0;
 
-      private:
-        static constexpr size_t U_INDEX  = 0;
-        static constexpr size_t Z_INDEX  = 1;
-        static constexpr size_t X_OFFSET = 2;
+        std::filesystem::path file_;
+        std::string           time_column_{"t"};
+        std::string           value_column_{"u"};
+        RealT                 value_scale_{1.0};
+        RealT                 value_offset_{0.0};
 
-        RealT d_{0.0};
-        RealT e_{0.0};
-        RealT u0_{0.0};
-        RealT up0_{0.0};
-
-        std::vector<RealT> poles_;
-        std::vector<RealT> residues_;
+        std::vector<RealT> time_samples_;
+        std::vector<RealT> value_samples_;
+        int                csv_error_count_{0};
 
         /// Component signal extension
         ComponentSignals<ScalarT,
                          IdxT,
-                         ConvolutionVFInternalVariables,
-                         ConvolutionVFExternalVariables>
+                         CsvSignalSourceInternalVariables,
+                         CsvSignalSourceExternalVariables>
             signals_;
-
-        // Local copy of signal value
-        std::vector<ScalarT> ws_;
       };
 
-    } // namespace Convolution
+    } // namespace Source
   } // namespace PhasorDynamics
 } // namespace GridKit

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 #include <GridKit/Definitions.hpp>
@@ -874,6 +875,48 @@ namespace GridKit
         }
 
         updateVariables();
+      }
+
+      int stepAccepted(RealT t) override
+      {
+        int ret = 0;
+
+        for (const auto& bus : buses_)
+        {
+          ret += bus->stepAccepted(t);
+        }
+
+        for (const auto& component : components_)
+        {
+          ret += component->stepAccepted(t);
+        }
+
+        return ret;
+      }
+
+      void setMaxStepSize(RealT& hmax) const override
+      {
+        hmax = std::numeric_limits<RealT>::infinity();
+
+        for (const auto& bus : buses_)
+        {
+          RealT bus_hmax;
+          bus->setMaxStepSize(bus_hmax);
+          if (bus_hmax > 0.0 && bus_hmax < hmax)
+          {
+            hmax = bus_hmax;
+          }
+        }
+
+        for (const auto& component : components_)
+        {
+          RealT component_hmax;
+          component->setMaxStepSize(component_hmax);
+          if (component_hmax > 0.0 && component_hmax < hmax)
+          {
+            hmax = component_hmax;
+          }
+        }
       }
 
       /**

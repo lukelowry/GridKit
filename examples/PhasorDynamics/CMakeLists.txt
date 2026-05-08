@@ -2,6 +2,8 @@ add_subdirectory(Tiny)
 add_subdirectory(Small)
 
 if(GRIDKIT_ENABLE_ENZYME)
+  add_subdirectory(Convolution)
+  add_subdirectory(Delay)
   add_subdirectory(Medium)
   add_subdirectory(Large)
 endif()
