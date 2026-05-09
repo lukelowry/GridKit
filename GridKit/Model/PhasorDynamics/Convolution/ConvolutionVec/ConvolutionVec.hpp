@@ -36,8 +36,8 @@ namespace GridKit
        * @brief Square MIMO convolution helper from vector-fitting coefficients.
        *
        * The inherited `y_` vector stores model states in the order
-       * all input proxies `u_i`, all outputs `z_i`, then one memory state
-       * `x_k` per pole.
+       * all input proxies `u_i`, all outputs `z_i`, one memory state
+       * `x_k` per real pole, then two real memory states per complex pair.
        */
       template <class ScalarT, typename IdxT>
       class ConvolutionVec : public Component<ScalarT, IdxT>
@@ -94,7 +94,25 @@ namespace GridKit
         /// Return the number of vector-fitting modes.
         auto modeCount() const -> size_t
         {
+          return realModeCount() + complexPairCount();
+        }
+
+        /// Return the number of real vector-fitting modes.
+        auto realModeCount() const -> size_t
+        {
           return poles_.size();
+        }
+
+        /// Return the number of stored complex conjugate pole pairs.
+        auto complexPairCount() const -> size_t
+        {
+          return complex_pole_real_.size();
+        }
+
+        /// Return the number of memory states used by real and complex-pair modes.
+        auto memoryStateCount() const -> size_t
+        {
+          return realModeCount() + static_cast<size_t>(2) * complexPairCount();
         }
 
       public:
@@ -103,6 +121,7 @@ namespace GridKit
       private:
         void initializeParameters(const model_data_type& data);
         void linkOutputSignals();
+        auto jacobianEntryCapacity() const -> size_t;
 
         auto uIndex(size_t i) const -> size_t
         {
@@ -117,6 +136,16 @@ namespace GridKit
         auto xIndex(size_t k) const -> size_t
         {
           return static_cast<size_t>(2) * dimension_ + k;
+        }
+
+        auto complexRealStateIndex(size_t pair) const -> size_t
+        {
+          return complex_state_offset_ + static_cast<size_t>(2) * pair;
+        }
+
+        auto complexImagStateIndex(size_t pair) const -> size_t
+        {
+          return complexRealStateIndex(pair) + 1;
         }
 
         auto matrixIndex(size_t row, size_t col) const -> size_t
@@ -137,8 +166,18 @@ namespace GridKit
         std::vector<RealT> poles_;
         std::vector<RealT> input_couplings_;
         std::vector<RealT> output_residues_;
+
+        std::vector<RealT> complex_pole_real_;
+        std::vector<RealT> complex_pole_imag_;
+        std::vector<RealT> complex_input_couplings_real_;
+        std::vector<RealT> complex_input_couplings_imag_;
+        std::vector<RealT> complex_output_residues_real_;
+        std::vector<RealT> complex_output_residues_imag_;
+
         std::vector<RealT> u0_;
         std::vector<RealT> up0_;
+
+        size_t complex_state_offset_{0};
 
         std::vector<signal_type*> input_signals_;
         std::vector<signal_type*> output_signals_;

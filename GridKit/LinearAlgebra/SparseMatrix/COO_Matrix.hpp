@@ -58,6 +58,7 @@ namespace GridKit
       // Set values from vector storage. Will sort before storing
       void setValues(std::vector<IdxT> r, std::vector<IdxT> c, std::vector<RealT> v);
       void setValues(RealT alpha, IdxT* r, IdxT* c, RealT* v, IdxT nnz);
+      void reserve(IdxT nnz);
 
       // BLAS. Will sort before running
       void  axpy(RealT alpha, COO_Matrix<RealT, IdxT>& a, const bool sort = true);
@@ -306,6 +307,24 @@ namespace GridKit
         this->checkIncreaseSize(r[i], c[i]);
       }
       this->sorted_ = false;
+    }
+
+    /**
+     * @brief Reserve storage for coordinate and value entries.
+     *
+     * @tparam RealT - Real type for Jacobian entries
+     * @tparam IdxT - Integer data type for matrix indices
+     *
+     * @param[in] nnz number of nonzero entries to reserve
+     *
+     */
+    template <typename RealT, typename IdxT>
+    inline void COO_Matrix<RealT, IdxT>::reserve(IdxT nnz)
+    {
+      const auto capacity = static_cast<size_t>(nnz);
+      this->row_indices_.reserve(capacity);
+      this->column_indices_.reserve(capacity);
+      this->values_.reserve(capacity);
     }
 
     /**

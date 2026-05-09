@@ -63,6 +63,14 @@ namespace GridKit
         std::vector<RealT> b; ///< Per-pole input coupling vectors, mode-major
         std::vector<RealT> c; ///< Per-pole output residue vectors, mode-major
 
+        std::vector<RealT> complex_p_real; ///< Real parts of stored positive-imaginary complex-pair poles
+        std::vector<RealT> complex_p_imag; ///< Positive imaginary parts of stored complex-pair poles
+
+        std::vector<RealT> complex_b_real; ///< Real parts of per-pair input coupling vectors, mode-major
+        std::vector<RealT> complex_b_imag; ///< Imaginary parts of per-pair input coupling vectors, mode-major
+        std::vector<RealT> complex_c_real; ///< Real parts of per-pair output residue vectors, mode-major
+        std::vector<RealT> complex_c_imag; ///< Imaginary parts of per-pair output residue vectors, mode-major
+
         std::vector<RealT> u0;  ///< Initial input vector
         std::vector<RealT> up0; ///< Initial input derivative vector
       };

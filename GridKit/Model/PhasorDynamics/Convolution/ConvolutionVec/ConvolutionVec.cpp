@@ -20,18 +20,14 @@ namespace GridKit
 
         J_.zeroMatrix();
 
-        const auto mode_count = poles_.size();
-        const auto max_nnz    = static_cast<size_t>(3) * dimension_
-                             + dimension_ * dimension_
-                             + static_cast<size_t>(2) * dimension_ * mode_count
-                             + mode_count;
-
-        if (J_rows_buffer_ == nullptr && max_nnz > 0)
+        if (J_rows_buffer_ == nullptr && jacobianEntryCapacity() > 0)
         {
-          J_rows_buffer_ = new IdxT[max_nnz];
-          J_cols_buffer_ = new IdxT[max_nnz];
-          J_vals_buffer_ = new RealT[max_nnz];
+          Log::error() << "ConvolutionVec: allocate must be called before evaluateJacobian\n";
+          return 1;
         }
+
+        const auto real_mode_count    = realModeCount();
+        const auto complex_pair_count = complexPairCount();
 
         IdxT nnz       = 0;
         auto add_entry = [&](IdxT row, IdxT col, RealT value)
@@ -68,15 +64,24 @@ namespace GridKit
 
           add_entry(residual_indices[zIndex(i)], variable_indices[zIndex(i)], 1.0);
 
-          for (size_t k = 0; k < mode_count; ++k)
+          for (size_t k = 0; k < real_mode_count; ++k)
           {
             add_entry(residual_indices[zIndex(i)],
                       variable_indices[xIndex(k)],
                       -output_residues_[modeVectorIndex(k, i)]);
           }
+          for (size_t pair = 0; pair < complex_pair_count; ++pair)
+          {
+            add_entry(residual_indices[zIndex(i)],
+                      variable_indices[complexRealStateIndex(pair)],
+                      -static_cast<RealT>(2.0) * complex_output_residues_real_[modeVectorIndex(pair, i)]);
+            add_entry(residual_indices[zIndex(i)],
+                      variable_indices[complexImagStateIndex(pair)],
+                      static_cast<RealT>(2.0) * complex_output_residues_imag_[modeVectorIndex(pair, i)]);
+          }
         }
 
-        for (size_t k = 0; k < mode_count; ++k)
+        for (size_t k = 0; k < real_mode_count; ++k)
         {
           // f[x_k] = -x_k' + b_k*u + p_k*x_k
           for (size_t i = 0; i < dimension_; ++i)
@@ -87,6 +92,40 @@ namespace GridKit
           }
 
           add_entry(residual_indices[xIndex(k)], variable_indices[xIndex(k)], poles_[k] - alpha_);
+        }
+
+        for (size_t pair = 0; pair < complex_pair_count; ++pair)
+        {
+          const auto real_state_index = complexRealStateIndex(pair);
+          const auto imag_state_index = complexImagStateIndex(pair);
+
+          // f[xr_q] = -xr_q' + br_q*u + ar_q*xr_q - ai_q*xi_q
+          for (size_t i = 0; i < dimension_; ++i)
+          {
+            add_entry(residual_indices[real_state_index],
+                      variable_indices[uIndex(i)],
+                      complex_input_couplings_real_[modeVectorIndex(pair, i)]);
+          }
+          add_entry(residual_indices[real_state_index],
+                    variable_indices[real_state_index],
+                    complex_pole_real_[pair] - alpha_);
+          add_entry(residual_indices[real_state_index],
+                    variable_indices[imag_state_index],
+                    -complex_pole_imag_[pair]);
+
+          // f[xi_q] = -xi_q' + bi_q*u + ai_q*xr_q + ar_q*xi_q
+          for (size_t i = 0; i < dimension_; ++i)
+          {
+            add_entry(residual_indices[imag_state_index],
+                      variable_indices[uIndex(i)],
+                      complex_input_couplings_imag_[modeVectorIndex(pair, i)]);
+          }
+          add_entry(residual_indices[imag_state_index],
+                    variable_indices[real_state_index],
+                    complex_pole_imag_[pair]);
+          add_entry(residual_indices[imag_state_index],
+                    variable_indices[imag_state_index],
+                    complex_pole_real_[pair] - alpha_);
         }
 
         J_.setValues(1.0, J_rows_buffer_, J_cols_buffer_, J_vals_buffer_, nnz);
