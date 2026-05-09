@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <vector>
 
+#include <GridKit/Model/EMT/RationalApprox/RationalApprox.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/Convolution/ConvolutionVec/ConvolutionVecData.hpp>
 
@@ -100,19 +101,19 @@ namespace GridKit
         /// Return the number of real vector-fitting modes.
         auto realModeCount() const -> size_t
         {
-          return poles_.size();
+          return approximation_.realPoleCount();
         }
 
         /// Return the number of stored complex conjugate pole pairs.
         auto complexPairCount() const -> size_t
         {
-          return complex_pole_real_.size();
+          return approximation_.complexPairCount();
         }
 
         /// Return the number of memory states used by real and complex-pair modes.
         auto memoryStateCount() const -> size_t
         {
-          return realModeCount() + static_cast<size_t>(2) * complexPairCount();
+          return approximation_.stateCount();
         }
 
       public:
@@ -122,6 +123,11 @@ namespace GridKit
         void initializeParameters(const model_data_type& data);
         void linkOutputSignals();
         auto jacobianEntryCapacity() const -> size_t;
+
+        auto memoryStateIndex(size_t state) const -> size_t
+        {
+          return static_cast<size_t>(2) * dimension_ + state;
+        }
 
         auto uIndex(size_t i) const -> size_t
         {
@@ -135,55 +141,23 @@ namespace GridKit
 
         auto xIndex(size_t k) const -> size_t
         {
-          return static_cast<size_t>(2) * dimension_ + k;
-        }
-
-        auto complexRealStateIndex(size_t pair) const -> size_t
-        {
-          return complex_state_offset_ + static_cast<size_t>(2) * pair;
-        }
-
-        auto complexImagStateIndex(size_t pair) const -> size_t
-        {
-          return complexRealStateIndex(pair) + 1;
-        }
-
-        auto matrixIndex(size_t row, size_t col) const -> size_t
-        {
-          return row * dimension_ + col;
-        }
-
-        auto modeVectorIndex(size_t mode, size_t component) const -> size_t
-        {
-          return mode * dimension_ + component;
+          return memoryStateIndex(k);
         }
 
       private:
         size_t dimension_{0};
 
-        std::vector<RealT> d_;
-        std::vector<RealT> e_;
-        std::vector<RealT> poles_;
-        std::vector<RealT> input_couplings_;
-        std::vector<RealT> output_residues_;
-
-        std::vector<RealT> complex_pole_real_;
-        std::vector<RealT> complex_pole_imag_;
-        std::vector<RealT> complex_input_couplings_real_;
-        std::vector<RealT> complex_input_couplings_imag_;
-        std::vector<RealT> complex_output_residues_real_;
-        std::vector<RealT> complex_output_residues_imag_;
+        GridKit::EMT::RationalApprox<ScalarT, IdxT> approximation_;
 
         std::vector<RealT> u0_;
         std::vector<RealT> up0_;
-
-        size_t complex_state_offset_{0};
 
         std::vector<signal_type*> input_signals_;
         std::vector<signal_type*> output_signals_;
 
         // Local copy of signal values
         std::vector<ScalarT> ws_;
+        std::vector<ScalarT> output_;
       };
 
     } // namespace Convolution

@@ -13,6 +13,7 @@ gridkit_add_library(phasor_dynamics_convolutionvec
   HEADERS
     ${_install_headers}
   LINK_LIBRARIES
+    PUBLIC GridKit::emt_rationalapprox
     PUBLIC GridKit::phasor_dynamics_core
     PUBLIC GridKit::phasor_dynamics_signal)
 
@@ -20,6 +21,7 @@ gridkit_add_library(phasor_dynamics_convolutionvec_dependency_tracking
   SOURCES
     ConvolutionVecDependencyTracking.cpp
   LINK_LIBRARIES
+    PUBLIC GridKit::emt_rationalapprox
     PUBLIC GridKit::phasor_dynamics_core
     PUBLIC GridKit::phasor_dynamics_signal_dependency_tracking)
 

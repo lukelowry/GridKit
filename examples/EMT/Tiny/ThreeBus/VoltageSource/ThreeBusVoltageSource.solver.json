@@ -1,0 +1,10 @@
+{
+  "format_version": 1,
+  "case_file": "ThreeBusVoltageSource.case.json",
+  "dt": 0.000125,
+  "tmax": 0.04,
+  "schedule": [
+    {"time": 0.01, "target": "load_extra", "action": "on"}
+  ],
+  "output_file": "emt_three_bus_output.csv"
+}

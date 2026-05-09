@@ -43,38 +43,38 @@ namespace GridKit
       template <class ScalarT, typename IdxT>
       void ConvolutionVec<ScalarT, IdxT>::initializeParameters(const model_data_type& data)
       {
-        dimension_       = data.dimension;
-        d_               = data.d;
-        e_               = data.e;
-        poles_           = data.p;
-        input_couplings_ = data.b;
-        output_residues_ = data.c;
+        GridKit::EMT::RationalApproxData<RealT, IdxT> approx_data;
+        approx_data.dimension = data.dimension;
+        approx_data.d         = data.d;
+        approx_data.e         = data.e;
 
-        complex_pole_real_            = data.complex_p_real;
-        complex_pole_imag_            = data.complex_p_imag;
-        complex_input_couplings_real_ = data.complex_b_real;
-        complex_input_couplings_imag_ = data.complex_b_imag;
-        complex_output_residues_real_ = data.complex_c_real;
-        complex_output_residues_imag_ = data.complex_c_imag;
+        approx_data.p = data.p;
+        approx_data.b = data.b;
+        approx_data.c = data.c;
+
+        approx_data.complex_p_real = data.complex_p_real;
+        approx_data.complex_p_imag = data.complex_p_imag;
+        approx_data.complex_b_real = data.complex_b_real;
+        approx_data.complex_b_imag = data.complex_b_imag;
+        approx_data.complex_c_real = data.complex_c_real;
+        approx_data.complex_c_imag = data.complex_c_imag;
+
+        dimension_ = data.dimension;
+        approximation_.setData(approx_data);
 
         u0_  = data.u0;
         up0_ = data.up0;
 
-        complex_state_offset_ = static_cast<size_t>(2) * dimension_ + poles_.size();
-        size_                 = static_cast<IdxT>(static_cast<size_t>(2) * dimension_ + memoryStateCount());
+        size_ = static_cast<IdxT>(static_cast<size_t>(2) * dimension_ + memoryStateCount());
       }
 
       template <class ScalarT, typename IdxT>
       auto ConvolutionVec<ScalarT, IdxT>::jacobianEntryCapacity() const -> size_t
       {
-        const auto real_mode_count    = realModeCount();
-        const auto complex_pair_count = complexPairCount();
-
-        return static_cast<size_t>(3) * dimension_
-               + dimension_ * dimension_
-               + static_cast<size_t>(2) * dimension_ * real_mode_count
-               + real_mode_count
-               + complex_pair_count * (static_cast<size_t>(4) * dimension_ + static_cast<size_t>(4));
+        return static_cast<size_t>(2) * dimension_
+               + dimension_
+               + approximation_.outputJacobianEntryCount()
+               + approximation_.stateJacobianEntryCount();
       }
 
       template <class ScalarT, typename IdxT>
@@ -134,6 +134,7 @@ namespace GridKit
         {
           value = 0.0;
         }
+        output_.resize(dimension_);
 
         for (IdxT j = 0; j < size_; ++j)
         {
@@ -158,64 +159,8 @@ namespace GridKit
       template <class ScalarT, typename IdxT>
       int ConvolutionVec<ScalarT, IdxT>::verify() const
       {
-        int ret = 0;
+        int ret = approximation_.verify();
 
-        if (dimension_ == 0)
-        {
-          Log::error() << "ConvolutionVec: dimension must be positive\n";
-          ret += 1;
-        }
-
-        const size_t matrix_size              = dimension_ * dimension_;
-        const size_t real_mode_vector_size    = poles_.size() * dimension_;
-        const size_t complex_pair_count       = complex_pole_real_.size();
-        const size_t complex_mode_vector_size = complex_pair_count * dimension_;
-
-        if (d_.size() != matrix_size)
-        {
-          Log::error() << "ConvolutionVec: d matrix size must equal dimension^2\n";
-          ret += 1;
-        }
-        if (e_.size() != matrix_size)
-        {
-          Log::error() << "ConvolutionVec: e matrix size must equal dimension^2\n";
-          ret += 1;
-        }
-        if (input_couplings_.size() != real_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: b vector size must equal pole_count * dimension\n";
-          ret += 1;
-        }
-        if (output_residues_.size() != real_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: c vector size must equal pole_count * dimension\n";
-          ret += 1;
-        }
-        if (complex_pole_imag_.size() != complex_pair_count)
-        {
-          Log::error() << "ConvolutionVec: complex pole real and imaginary vector sizes must match\n";
-          ret += 1;
-        }
-        if (complex_input_couplings_real_.size() != complex_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: complex_b_real size must equal complex_pair_count * dimension\n";
-          ret += 1;
-        }
-        if (complex_input_couplings_imag_.size() != complex_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: complex_b_imag size must equal complex_pair_count * dimension\n";
-          ret += 1;
-        }
-        if (complex_output_residues_real_.size() != complex_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: complex_c_real size must equal complex_pair_count * dimension\n";
-          ret += 1;
-        }
-        if (complex_output_residues_imag_.size() != complex_mode_vector_size)
-        {
-          Log::error() << "ConvolutionVec: complex_c_imag size must equal complex_pair_count * dimension\n";
-          ret += 1;
-        }
         if (u0_.size() != dimension_)
         {
           Log::error() << "ConvolutionVec: u0 vector size must equal dimension\n";
@@ -225,30 +170,6 @@ namespace GridKit
         {
           Log::error() << "ConvolutionVec: up0 vector size must equal dimension\n";
           ret += 1;
-        }
-
-        for (auto pole : poles_)
-        {
-          if (pole == 0.0)
-          {
-            Log::error() << "ConvolutionVec: poles must be nonzero\n";
-            ret += 1;
-          }
-        }
-        for (size_t pair = 0; pair < complex_pole_imag_.size(); ++pair)
-        {
-          if (complex_pole_imag_[pair] <= 0.0)
-          {
-            Log::error() << "ConvolutionVec: complex pole imaginary parts must be positive\n";
-            ret += 1;
-          }
-          if (pair < complex_pole_real_.size()
-              && complex_pole_real_[pair] == 0.0
-              && complex_pole_imag_[pair] == 0.0)
-          {
-            Log::error() << "ConvolutionVec: complex poles must be nonzero\n";
-            ret += 1;
-          }
         }
 
         if (input_signals_.size() != dimension_)
@@ -296,87 +217,20 @@ namespace GridKit
           yp_[uIndex(i)] = up0_[i];
         }
 
-        for (size_t k = 0; k < poles_.size(); ++k)
+        if (memoryStateCount() > 0)
         {
-          ScalarT input_value{0};
-          ScalarT input_derivative{0};
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            const auto coupling_index  = modeVectorIndex(k, i);
-            input_value               += input_couplings_[coupling_index] * u0_[i];
-            input_derivative          += input_couplings_[coupling_index] * up0_[i];
-          }
-
-          const auto state_index = xIndex(k);
-          const auto pole        = poles_[k];
-
-          y_[state_index]  = -input_value / pole - input_derivative / (pole * pole);
-          yp_[state_index] = input_value + pole * y_[state_index];
+          approximation_.initialize(y_.data() + uIndex(0),
+                                    yp_.data() + uIndex(0),
+                                    y_.data() + memoryStateIndex(0),
+                                    yp_.data() + memoryStateIndex(0));
         }
 
-        for (size_t pair = 0; pair < complexPairCount(); ++pair)
-        {
-          ScalarT input_value_real{0};
-          ScalarT input_value_imag{0};
-          ScalarT input_derivative_real{0};
-          ScalarT input_derivative_imag{0};
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            const auto coupling_index  = modeVectorIndex(pair, i);
-            input_value_real          += complex_input_couplings_real_[coupling_index] * u0_[i];
-            input_value_imag          += complex_input_couplings_imag_[coupling_index] * u0_[i];
-            input_derivative_real     += complex_input_couplings_real_[coupling_index] * up0_[i];
-            input_derivative_imag     += complex_input_couplings_imag_[coupling_index] * up0_[i];
-          }
-
-          const auto real_state_index = complexRealStateIndex(pair);
-          const auto imag_state_index = complexImagStateIndex(pair);
-          const auto pole_real        = complex_pole_real_[pair];
-          const auto pole_imag        = complex_pole_imag_[pair];
-          const auto pole_norm_sq     = pole_real * pole_real + pole_imag * pole_imag;
-          const auto inv_pole_real    = pole_real / pole_norm_sq;
-          const auto inv_pole_imag    = -pole_imag / pole_norm_sq;
-          const auto inv_pole_sq_real = inv_pole_real * inv_pole_real - inv_pole_imag * inv_pole_imag;
-          const auto inv_pole_sq_imag = static_cast<RealT>(2.0) * inv_pole_real * inv_pole_imag;
-
-          y_[real_state_index] = -(input_value_real * inv_pole_real - input_value_imag * inv_pole_imag)
-                                 - (input_derivative_real * inv_pole_sq_real
-                                    - input_derivative_imag * inv_pole_sq_imag);
-          y_[imag_state_index] = -(input_value_real * inv_pole_imag + input_value_imag * inv_pole_real)
-                                 - (input_derivative_real * inv_pole_sq_imag
-                                    + input_derivative_imag * inv_pole_sq_real);
-
-          yp_[real_state_index] = input_value_real
-                                  + pole_real * y_[real_state_index]
-                                  - pole_imag * y_[imag_state_index];
-          yp_[imag_state_index] = input_value_imag
-                                  + pole_imag * y_[real_state_index]
-                                  + pole_real * y_[imag_state_index];
-        }
-
+        approximation_.evaluateOutput(y_.data() + uIndex(0),
+                                      yp_.data() + uIndex(0),
+                                      y_.data() + memoryStateIndex(0),
+                                      y_.data() + zIndex(0));
         for (size_t i = 0; i < dimension_; ++i)
         {
-          ScalarT output{0};
-          for (size_t j = 0; j < dimension_; ++j)
-          {
-            const auto coefficient_index  = matrixIndex(i, j);
-            output                       += d_[coefficient_index] * y_[uIndex(j)];
-            output                       += e_[coefficient_index] * yp_[uIndex(j)];
-          }
-
-          for (size_t k = 0; k < poles_.size(); ++k)
-          {
-            output += output_residues_[modeVectorIndex(k, i)] * y_[xIndex(k)];
-          }
-          for (size_t pair = 0; pair < complexPairCount(); ++pair)
-          {
-            const auto residue_index  = modeVectorIndex(pair, i);
-            output                   += static_cast<RealT>(2.0)
-                      * (complex_output_residues_real_[residue_index] * y_[complexRealStateIndex(pair)]
-                         - complex_output_residues_imag_[residue_index] * y_[complexImagStateIndex(pair)]);
-          }
-
-          y_[zIndex(i)]  = output;
           yp_[zIndex(i)] = 0.0;
         }
 
@@ -392,14 +246,9 @@ namespace GridKit
           tag_[zIndex(i)] = false;
         }
 
-        for (size_t k = 0; k < poles_.size(); ++k)
+        for (size_t state = 0; state < memoryStateCount(); ++state)
         {
-          tag_[xIndex(k)] = true;
-        }
-        for (size_t pair = 0; pair < complexPairCount(); ++pair)
-        {
-          tag_[complexRealStateIndex(pair)] = true;
-          tag_[complexImagStateIndex(pair)] = true;
+          tag_[memoryStateIndex(state)] = true;
         }
 
         return 0;
@@ -418,70 +267,22 @@ namespace GridKit
           f[uIndex(i)] = y[uIndex(i)] - ws[i];
         }
 
-        const auto real_mode_count    = realModeCount();
-        const auto complex_pair_count = complexPairCount();
-
-        for (size_t k = 0; k < real_mode_count; ++k)
+        if (memoryStateCount() > 0)
         {
-          ScalarT input_value{0};
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            input_value += input_couplings_[modeVectorIndex(k, i)] * y[uIndex(i)];
-          }
-
-          f[xIndex(k)] = -yp[xIndex(k)] + input_value + poles_[k] * y[xIndex(k)];
+          approximation_.evaluateStateResidual(y + uIndex(0),
+                                               y + memoryStateIndex(0),
+                                               yp + memoryStateIndex(0),
+                                               f + memoryStateIndex(0));
         }
 
-        for (size_t pair = 0; pair < complex_pair_count; ++pair)
-        {
-          ScalarT input_value_real{0};
-          ScalarT input_value_imag{0};
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            const auto coupling_index  = modeVectorIndex(pair, i);
-            input_value_real          += complex_input_couplings_real_[coupling_index] * y[uIndex(i)];
-            input_value_imag          += complex_input_couplings_imag_[coupling_index] * y[uIndex(i)];
-          }
-
-          const auto real_state_index = complexRealStateIndex(pair);
-          const auto imag_state_index = complexImagStateIndex(pair);
-          const auto pole_real        = complex_pole_real_[pair];
-          const auto pole_imag        = complex_pole_imag_[pair];
-
-          f[real_state_index] = -yp[real_state_index]
-                                + input_value_real
-                                + pole_real * y[real_state_index]
-                                - pole_imag * y[imag_state_index];
-          f[imag_state_index] = -yp[imag_state_index]
-                                + input_value_imag
-                                + pole_imag * y[real_state_index]
-                                + pole_real * y[imag_state_index];
-        }
+        approximation_.evaluateOutput(y + uIndex(0),
+                                      yp + uIndex(0),
+                                      y + memoryStateIndex(0),
+                                      output_.data());
 
         for (size_t i = 0; i < dimension_; ++i)
         {
-          ScalarT direct_sum{0};
-          for (size_t j = 0; j < dimension_; ++j)
-          {
-            const auto coefficient_index  = matrixIndex(i, j);
-            direct_sum                   += d_[coefficient_index] * y[uIndex(j)];
-            direct_sum                   += e_[coefficient_index] * yp[uIndex(j)];
-          }
-
-          ScalarT residue_sum{0};
-          for (size_t k = 0; k < real_mode_count; ++k)
-          {
-            residue_sum += output_residues_[modeVectorIndex(k, i)] * y[xIndex(k)];
-          }
-          for (size_t pair = 0; pair < complex_pair_count; ++pair)
-          {
-            const auto residue_index  = modeVectorIndex(pair, i);
-            residue_sum              += static_cast<RealT>(2.0)
-                           * (complex_output_residues_real_[residue_index] * y[complexRealStateIndex(pair)]
-                              - complex_output_residues_imag_[residue_index] * y[complexImagStateIndex(pair)]);
-          }
-
-          f[zIndex(i)] = y[zIndex(i)] - direct_sum - residue_sum;
+          f[zIndex(i)] = y[zIndex(i)] - output_[i];
         }
 
         return 0;

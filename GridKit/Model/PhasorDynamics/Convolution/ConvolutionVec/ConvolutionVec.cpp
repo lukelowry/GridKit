@@ -26,9 +26,6 @@ namespace GridKit
           return 1;
         }
 
-        const auto real_mode_count    = realModeCount();
-        const auto complex_pair_count = complexPairCount();
-
         IdxT nnz       = 0;
         auto add_entry = [&](IdxT row, IdxT col, RealT value)
         {
@@ -54,78 +51,25 @@ namespace GridKit
         for (size_t i = 0; i < dimension_; ++i)
         {
           // f[z_i] = z_i - row_i(D)*u - row_i(E)*u' - sum(c[k,i]*x[k])
-          for (size_t j = 0; j < dimension_; ++j)
-          {
-            const auto coefficient_index = matrixIndex(i, j);
-            add_entry(residual_indices[zIndex(i)],
-                      variable_indices[uIndex(j)],
-                      -d_[coefficient_index] - alpha_ * e_[coefficient_index]);
-          }
-
           add_entry(residual_indices[zIndex(i)], variable_indices[zIndex(i)], 1.0);
-
-          for (size_t k = 0; k < real_mode_count; ++k)
-          {
-            add_entry(residual_indices[zIndex(i)],
-                      variable_indices[xIndex(k)],
-                      -output_residues_[modeVectorIndex(k, i)]);
-          }
-          for (size_t pair = 0; pair < complex_pair_count; ++pair)
-          {
-            add_entry(residual_indices[zIndex(i)],
-                      variable_indices[complexRealStateIndex(pair)],
-                      -static_cast<RealT>(2.0) * complex_output_residues_real_[modeVectorIndex(pair, i)]);
-            add_entry(residual_indices[zIndex(i)],
-                      variable_indices[complexImagStateIndex(pair)],
-                      static_cast<RealT>(2.0) * complex_output_residues_imag_[modeVectorIndex(pair, i)]);
-          }
         }
 
-        for (size_t k = 0; k < real_mode_count; ++k)
+        const auto input_col0 = variable_indices[uIndex(0)];
+        const auto state_col0 = memoryStateCount() > 0 ? variable_indices[memoryStateIndex(0)] : static_cast<IdxT>(0);
+
+        approximation_.addOutputJacobianEntries(residual_indices[zIndex(0)],
+                                                input_col0,
+                                                state_col0,
+                                                alpha_,
+                                                static_cast<RealT>(-1.0),
+                                                add_entry);
+        if (memoryStateCount() > 0)
         {
-          // f[x_k] = -x_k' + b_k*u + p_k*x_k
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            add_entry(residual_indices[xIndex(k)],
-                      variable_indices[uIndex(i)],
-                      input_couplings_[modeVectorIndex(k, i)]);
-          }
-
-          add_entry(residual_indices[xIndex(k)], variable_indices[xIndex(k)], poles_[k] - alpha_);
-        }
-
-        for (size_t pair = 0; pair < complex_pair_count; ++pair)
-        {
-          const auto real_state_index = complexRealStateIndex(pair);
-          const auto imag_state_index = complexImagStateIndex(pair);
-
-          // f[xr_q] = -xr_q' + br_q*u + ar_q*xr_q - ai_q*xi_q
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            add_entry(residual_indices[real_state_index],
-                      variable_indices[uIndex(i)],
-                      complex_input_couplings_real_[modeVectorIndex(pair, i)]);
-          }
-          add_entry(residual_indices[real_state_index],
-                    variable_indices[real_state_index],
-                    complex_pole_real_[pair] - alpha_);
-          add_entry(residual_indices[real_state_index],
-                    variable_indices[imag_state_index],
-                    -complex_pole_imag_[pair]);
-
-          // f[xi_q] = -xi_q' + bi_q*u + ai_q*xr_q + ar_q*xi_q
-          for (size_t i = 0; i < dimension_; ++i)
-          {
-            add_entry(residual_indices[imag_state_index],
-                      variable_indices[uIndex(i)],
-                      complex_input_couplings_imag_[modeVectorIndex(pair, i)]);
-          }
-          add_entry(residual_indices[imag_state_index],
-                    variable_indices[real_state_index],
-                    complex_pole_imag_[pair]);
-          add_entry(residual_indices[imag_state_index],
-                    variable_indices[imag_state_index],
-                    complex_pole_real_[pair] - alpha_);
+          approximation_.addStateJacobianEntries(residual_indices[memoryStateIndex(0)],
+                                                 input_col0,
+                                                 state_col0,
+                                                 alpha_,
+                                                 add_entry);
         }
 
         J_.setValues(1.0, J_rows_buffer_, J_cols_buffer_, J_vals_buffer_, nnz);
