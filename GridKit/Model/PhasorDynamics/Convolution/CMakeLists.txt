@@ -4,3 +4,4 @@
 # ]]
 
 add_subdirectory(ConvolutionVF)
+add_subdirectory(ConvolutionVec)
