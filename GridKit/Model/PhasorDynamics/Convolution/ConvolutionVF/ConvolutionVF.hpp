@@ -127,9 +127,8 @@ namespace GridKit
                          ConvolutionVFExternalVariables>
             signals_;
 
-        // Local copies of signal variables
+        // Local copy of signal value
         std::vector<ScalarT> ws_;
-        std::vector<IdxT>    ws_indices_;
       };
 
     } // namespace Convolution

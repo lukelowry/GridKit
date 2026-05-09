@@ -90,9 +90,7 @@ namespace GridKit
         residual_indices_.resize(size);
 
         ws_.resize(1);
-        ws_indices_.resize(1);
-        ws_[0]         = 0.0;
-        ws_indices_[0] = INVALID_INDEX<IdxT>;
+        ws_[0] = 0.0;
 
         for (IdxT j = 0; j < size_; ++j)
         {
@@ -239,8 +237,7 @@ namespace GridKit
       {
         if (signals_.template isAttached<ConvolutionVFExternalVariables::U>())
         {
-          ws_[0]         = signals_.template readExternalVariable<ConvolutionVFExternalVariables::U>();
-          ws_indices_[0] = signals_.template readExternalVariableIndex<ConvolutionVFExternalVariables::U>();
+          ws_[0] = signals_.template readExternalVariable<ConvolutionVFExternalVariables::U>();
         }
 
         evaluateInternalResidual(y_.data(), yp_.data(), wb_.data(), ws_.data(), f_.data());

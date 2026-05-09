@@ -16,7 +16,7 @@ Symbol | Units | Description | Note
 $d$ | [-] | Direct-feedthrough coefficient |
 $e$ | [s] | Input-derivative coefficient |
 $p_n$ | [1/s] | Vector-fitting pole | Real pole form
-$r_n$ | [-] | Vector-fitting residue | One residue per pole
+$r_n$ | [1/s] | Vector-fitting residue | One residue per pole
 $u_0$ | [-] | Initial input value |
 $\dot{u}_0$ | [-/s] | Initial input derivative |
 
@@ -29,7 +29,7 @@ $\dot{u}_0$ | [-/s] | Initial input derivative |
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
 $u$ | [-] | Local input proxy | Stored in `y_[0]`
-$x_n$ | [-] | Vector-fitting memory state | Stored in `y_[2 + n]`
+$x_n$ | [s] | Vector-fitting memory state | Stored in `y_[2 + n]`
 
 #### Algebraic
 
@@ -96,5 +96,5 @@ z_0 = d u_0 + e\dot{u}_0 + \sum_{n=1}^{N} r_n x_{n0}
 - Pole and residue vectors must have equal length.
 - Poles must be nonzero.
 - A zero-pole-count model is valid and contains only `u` and `z`.
-- Parser, SystemModel, input-format, monitor, and test integration are out of
-  scope for this component skeleton.
+- Parser, input-format, monitor, and test integration are out of scope for this
+  pass.
