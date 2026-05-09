@@ -1,3 +1,4 @@
+add_subdirectory(Convolution)
 add_subdirectory(Tiny)
 add_subdirectory(Small)
 
