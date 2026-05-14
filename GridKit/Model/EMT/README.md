@@ -24,6 +24,11 @@ Branch models such as `BranchLumpedConstant` are documented under
 
 ## System Model
 
+`Case.hpp` is the public case-loading façade: it defines `CaseData`,
+`CaseNames`, `Case`, and `loadCase`. The JSON schema implementation lives in
+`IO/CaseJson.hpp`, with scalar/vector/matrix readers in `IO/JsonSupport.hpp`
+and descriptor parameter binding in `IO/ParamReader.hpp`.
+
 The EMT `SystemModel` is the IDA-facing runtime model. `SystemModelData` owns
 construction-time buses, typed component storage, terminal connections, and
 signal connections. EMT requires Enzyme; without Enzyme the EMT target is not

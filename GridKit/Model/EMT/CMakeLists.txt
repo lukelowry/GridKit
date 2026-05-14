@@ -81,7 +81,9 @@ install(
     include/GridKit/Model/EMT/System)
 install(
   FILES
+    IO/CaseJson.hpp
     IO/JsonSupport.hpp
     IO/ParamReader.hpp
+    IO/SolverFile.hpp
   DESTINATION
     include/GridKit/Model/EMT/IO)

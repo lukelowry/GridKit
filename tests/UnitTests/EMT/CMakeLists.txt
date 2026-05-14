@@ -37,3 +37,13 @@ add_test(NAME EMTCaseTest COMMAND test_emt_case)
 
 install(TARGETS test_emt_case
   RUNTIME DESTINATION bin)
+
+add_executable(test_emt_solver_file runSolverFileTests.cpp)
+target_link_libraries(test_emt_solver_file
+  GridKit::emt_io
+  GridKit::testing)
+
+add_test(NAME EMTSolverFileTest COMMAND test_emt_solver_file)
+
+install(TARGETS test_emt_solver_file
+  RUNTIME DESTINATION bin)

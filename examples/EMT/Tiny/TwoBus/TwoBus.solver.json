@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "case_file": "TwoBus.case.json",
+
+  "solve": {
+    "tmax": 0.06,
+    "dt": 1e-4,
+    "rel_tol": 1e-8,
+    "abs_tol": 1e-8,
+    "max_steps": 200000,
+    "use_jacobian": true
+  },
+
+  "output": {
+    "monitor": { "file": "EMTTinyTwoBusSolver.csv" },
+    "ida_stats": { "file": "EMTTinyTwoBus.ida-stats.json", "format": "json" }
+  },
+
+  "schedule": [
+    { "time": 0.010, "target": "load_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
+    { "time": 0.011, "target": "load_bus", "action": "clear" }
+  ]
+}
