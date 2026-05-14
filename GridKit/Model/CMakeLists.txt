@@ -8,6 +8,7 @@
 add_subdirectory(PhasorDynamics)
 add_subdirectory(PowerFlow)
 add_subdirectory(PowerElectronics)
+add_subdirectory(EMT)
 
 install(FILES
   Evaluator.hpp
