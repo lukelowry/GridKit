@@ -78,24 +78,25 @@ expression is accumulated into the owning bus residual.
 
 ## Initialization
 
-The initialization assumes a balanced three-phase system. Given the power
-flow phasor load current $I = |I| \angle \theta$, the initial load
-current is:
+The initialization uses the physical load parameters and the connected bus
+initial RMS phase-voltage phasors. For each phase, with
+$V$ denoting the RMS bus phasor and $\omega$ denoting the bus angular
+frequency,
 
 ``` math
-\mathbf{i}(0) = \sqrt{2}\,|I|
-\begin{bmatrix}
-  \cos(\theta) \\
-  \cos(\theta - \tfrac{2\pi}{3}) \\
-  \cos(\theta + \tfrac{2\pi}{3})
-\end{bmatrix}
+Z = R + j\omega L
 ```
 
-The initial derivative is then given by the RL load equation for DAE
-consistency:
+``` math
+I = -\frac{V}{Z}
+```
 
 ``` math
-\dot{\mathbf{i}}(0) = -\mathbf{L}^{-1}\left(\mathbf{v}(0) + \mathbf{R}\,\mathbf{i}(0)\right)
+i(0) = \sqrt{2}\,\Re(I)
+```
+
+``` math
+\dot{i}(0) = \sqrt{2}\,\Re(j\omega I)
 ```
 
 ## Model Outputs

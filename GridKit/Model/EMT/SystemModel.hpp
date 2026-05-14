@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <span>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -8,15 +9,10 @@
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/Definitions.hpp>
-#include <GridKit/Model/EMT/System/Assembly.hpp>
-#include <GridKit/Model/EMT/System/ComponentTraits.hpp>
-#include <GridKit/Model/EMT/System/EnzymeJacobian.hpp>
-#include <GridKit/Model/EMT/System/JacobianView.hpp>
+#include <GridKit/Model/EMT/System/Jacobian.hpp>
 #include <GridKit/Model/EMT/System/Layout.hpp>
-#include <GridKit/Model/EMT/System/NetworkData.hpp>
-#include <GridKit/Model/EMT/System/PatternView.hpp>
-#include <GridKit/Model/EMT/System/ResidualView.hpp>
-#include <GridKit/Model/EMT/System/VariableView.hpp>
+#include <GridKit/Model/EMT/System/Network.hpp>
+#include <GridKit/Model/EMT/System/Views.hpp>
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/ScalarTraits.hpp>
 
@@ -54,25 +50,19 @@ namespace GridKit
       {
         allocated_ = false;
         buildLayout();
-        if (layout_.size() != layout_.equations())
+        if (layout_.size() != layout_.equationCount())
         {
           throw std::invalid_argument("EMT layout must have one residual equation per variable");
         }
 
-        y_.assign(layout_.size(), ScalarT{0.0});
-        yp_.assign(layout_.size(), ScalarT{0.0});
-        f_.assign(layout_.size(), ScalarT{0.0});
-        tag_.assign(layout_.size(), false);
-        differential_variables_.assign(layout_.size(), false);
+        y_.assign(static_cast<size_t>(layout_.size()), ScalarT{0.0});
+        yp_.assign(static_cast<size_t>(layout_.size()), ScalarT{0.0});
+        f_.assign(static_cast<size_t>(layout_.size()), ScalarT{0.0});
+        tag_.assign(static_cast<size_t>(layout_.size()), false);
+        differential_variables_.assign(static_cast<size_t>(layout_.size()), false);
 
-        prepareResolvedStorage();
-        bindTerminalConnections();
-        validateTerminals();
-        bindPortConnections();
-        validateInputs();
-
-        markStaticDifferentialVariables();
-        buildAssembly();
+        markDifferentialVariables();
+        buildJacobianPlan();
         allocated_ = true;
         return 0;
       }
@@ -86,8 +76,25 @@ namespace GridKit
 
         for (IdxT bus = 0; bus < static_cast<IdxT>(network_.buses.size()); ++bus)
         {
-          network_.buses[bus].initialize(y_.data(), yp_.data(), layout_.busVariable(bus, 0));
+          network_.buses[static_cast<size_t>(bus)].initialize(y_.data(), yp_.data(), layout_.busVariable(bus, 0));
         }
+
+        network_.components.forEach(
+            [&](const auto& component, ComponentId id)
+            {
+              const auto&                     slot = layout_.component(id);
+              InitialStateView<ScalarT, IdxT> init(y_.data(),
+                                                   yp_.data(),
+                                                   layout_,
+                                                   slot,
+                                                   layout_.terminalBuses(id),
+                                                   std::span<const Bus<ScalarT, IdxT>>(network_.buses.data(),
+                                                                                       network_.buses.size()));
+              if constexpr (requires(InitialStateView<ScalarT, IdxT>& view) { component.initialize(view); })
+              {
+                component.initialize(init);
+              }
+            });
         return 0;
       }
 
@@ -105,18 +112,16 @@ namespace GridKit
         network_.components.forEach(
             [&](auto& component, ComponentId id)
             {
-              const auto& slot               = layout_.component(id);
-              auto        terminal_bus_ids   = layout_.terminals(resolved_terminal_bus_ids_, id);
-              auto        input_variable_ids = layout_.inputs(resolved_input_variable_ids_, id);
-
-              VariableView<ScalarT, IdxT> variables(y_.data(),
-                                                    yp_.data(),
-                                                    layout_,
-                                                    slot,
-                                                    terminal_bus_ids,
-                                                    input_variable_ids);
-              ResidualView<ScalarT, IdxT> residual(f_.data(), layout_, slot, terminal_bus_ids);
-              component.residual(variables, residual);
+              const auto&                 slot = layout_.component(id);
+              StateView<ScalarT, IdxT>    state(y_.data(),
+                                             yp_.data(),
+                                             layout_,
+                                             slot,
+                                             layout_.terminalBuses(id),
+                                             layout_.inputVariables(id),
+                                             static_cast<ScalarT>(time_));
+              EquationView<ScalarT, IdxT> equations(f_.data(), layout_, slot, layout_.terminalBuses(id));
+              component.residual(state, equations);
             });
         return 0;
       }
@@ -124,39 +129,7 @@ namespace GridKit
       int evaluateJacobian() override
       {
         ensureAllocated();
-        assembly_.clearValues();
-        network_.components.forEach(
-            [&](auto& component, ComponentId id)
-            {
-              using ComponentT               = std::decay_t<decltype(component)>;
-              const auto& slot               = layout_.component(id);
-              auto        terminal_bus_ids   = layout_.terminals(resolved_terminal_bus_ids_, id);
-              auto        input_variable_ids = layout_.inputs(resolved_input_variable_ids_, id);
-
-              VariableView<ScalarT, IdxT> variables(y_.data(),
-                                                    yp_.data(),
-                                                    layout_,
-                                                    slot,
-                                                    terminal_bus_ids,
-                                                    input_variable_ids);
-              JacobianView<RealT, IdxT>   jacobian(assembly_.values(),
-                                                 assembly_.rowPtrs(),
-                                                 assembly_.columns(),
-                                                 layout_,
-                                                 slot,
-                                                 terminal_bus_ids,
-                                                 input_variable_ids,
-                                                 alpha_);
-
-              if constexpr (ComponentTraits<ComponentT>::direct_jacobian)
-              {
-                component.jacobian(variables, jacobian);
-              }
-              else
-              {
-                EnzymeJacobian<ComponentT>::evaluate(component, variables, jacobian);
-              }
-            });
+        jacobian_.evaluate(network_, y_, yp_, static_cast<ScalarT>(time_), alpha_);
         return 0;
       }
 
@@ -187,17 +160,17 @@ namespace GridKit
 
       IdxT nnz() override
       {
-        return assembly_.nnz();
+        return jacobian_.matrix().nnz();
       }
 
       CsrMatrixT* getCsrJacobian() const override
       {
-        return assembly_.matrix();
+        return jacobian_.matrix().matrix();
       }
 
       bool hasJacobian() override
       {
-        return use_jac_ && jacobianAvailable();
+        return use_jac_;
       }
 
       IdxT sizeQuadrature() override
@@ -319,12 +292,12 @@ namespace GridKit
 
       MatrixT& getJacobian() override
       {
-        return jacobian_;
+        return coo_jacobian_;
       }
 
       const MatrixT& getJacobian() const override
       {
-        return jacobian_;
+        return coo_jacobian_;
       }
 
       std::vector<ScalarT>& getIntegrand() override
@@ -362,9 +335,9 @@ namespace GridKit
         return layout_;
       }
 
-      const Assembly<RealT, IdxT>& assembly() const
+      const JacobianMatrix<RealT, IdxT>& assembly() const
       {
-        return assembly_;
+        return jacobian_.matrix();
       }
 
       NetworkT& network()
@@ -388,42 +361,24 @@ namespace GridKit
 
       void buildLayout()
       {
-        layout_.reset(static_cast<IdxT>(network_.buses.size()));
-        layout_.setComponentTypes(StoreT::typeCount());
-
+        layout_.reset(static_cast<IdxT>(network_.buses.size()), StoreT::typeCount());
         network_.components.forEach(
             [&](const auto& component, ComponentId id)
             {
               using ComponentT = std::decay_t<decltype(component)>;
+              static_assert(ComponentTraits<ComponentT>::is_valid,
+                            "EMT components with local variables must define static constexpr bool differential(size_t)");
               layout_.appendComponent(id.type,
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::variables),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::equations),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::terminals),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::inputs));
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::variable_count),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::equation_count),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::terminal_count),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::input_count));
             });
-      }
 
-      void prepareResolvedStorage()
-      {
-        resolved_terminal_bus_ids_.assign(layout_.terminalCount(), INVALID_INDEX<IdxT>);
-        resolved_input_variable_ids_.assign(layout_.inputCount(), INVALID_INDEX<IdxT>);
-      }
-
-      void markStaticDifferentialVariables()
-      {
-        network_.components.forEach(
-            [&](const auto& component, ComponentId id)
-            {
-              using ComponentT = std::decay_t<decltype(component)>;
-              (void) component;
-              const auto& slot = layout_.component(id);
-              for (IdxT local = 0; local < slot.variable_count; ++local)
-              {
-                differential_variables_[slot.variable_offset + local] =
-                    differential_variables_[slot.variable_offset + local]
-                    || ComponentTraits<ComponentT>::differential(local);
-              }
-            });
+        layout_.allocateConnections();
+        bindTerminalConnections();
+        bindPortConnections();
+        layout_.validateConnections();
       }
 
       void bindTerminalConnections()
@@ -441,18 +396,13 @@ namespace GridKit
               {
                 using ComponentT = std::decay_t<decltype(component)>;
                 (void) component;
-                if (connection.terminal.index >= ComponentTraits<ComponentT>::terminals)
+                if (connection.terminal.index >= ComponentTraits<ComponentT>::terminal_count)
                 {
                   throw std::invalid_argument("EMT terminal index is out of range");
                 }
-
-                const auto& slot   = layout_.component(connection.terminal.component);
-                IdxT&       bus_id = resolved_terminal_bus_ids_[slot.terminal_offset + connection.terminal.index];
-                if (bus_id != INVALID_INDEX<IdxT>)
-                {
-                  throw std::invalid_argument("EMT terminal is connected more than once");
-                }
-                bus_id = connection.bus;
+                layout_.connectTerminal(connection.terminal.component,
+                                        connection.terminal.index,
+                                        connection.bus);
               });
 
           if (!found)
@@ -462,29 +412,13 @@ namespace GridKit
         }
       }
 
-      void validateTerminals() const
-      {
-        network_.components.forEach(
-            [&](const auto& component, ComponentId id)
-            {
-              (void) component;
-              const auto& slot = layout_.component(id);
-              for (IdxT local = 0; local < slot.terminal_count; ++local)
-              {
-                if (resolved_terminal_bus_ids_[slot.terminal_offset + local] == INVALID_INDEX<IdxT>)
-                {
-                  throw std::invalid_argument("EMT component terminal is not connected");
-                }
-              }
-            });
-      }
-
       void bindPortConnections()
       {
         for (const auto& connection : network_.port_connections)
         {
-          const IdxT output_variable = resolveOutputVariable(connection.output);
-          bindInput(connection.input, output_variable);
+          layout_.connectInput(connection.input.component,
+                               connection.input.index,
+                               resolveOutputVariable(connection.output));
         }
       }
 
@@ -497,17 +431,17 @@ namespace GridKit
             {
               using ComponentT = std::decay_t<decltype(component)>;
               (void) component;
-              if (output.index >= ComponentTraits<ComponentT>::outputs)
+              if (output.index >= ComponentTraits<ComponentT>::output_count)
               {
                 throw std::invalid_argument("EMT output index is out of range");
               }
 
               const OutputSpec spec = ComponentTraits<ComponentT>::output(output.index);
-              if (spec.variable >= ComponentTraits<ComponentT>::variables)
+              if (spec.variable >= ComponentTraits<ComponentT>::variable_count)
               {
                 throw std::invalid_argument("EMT output variable is out of range");
               }
-              variable = layout_.component(output.component).variable_offset + spec.variable;
+              variable = layout_.component(output.component).variable_offset + static_cast<IdxT>(spec.variable);
             });
 
         if (!found)
@@ -517,101 +451,48 @@ namespace GridKit
         return variable;
       }
 
-      void bindInput(const InputRef& input, IdxT output_variable)
+      void markDifferentialVariables()
       {
-        const bool found = network_.components.visit(
-            input.component,
-            [&](const auto& component)
+        network_.components.forEach(
+            [&](const auto& component, ComponentId id)
             {
               using ComponentT = std::decay_t<decltype(component)>;
               (void) component;
-              if (input.index >= ComponentTraits<ComponentT>::inputs)
+              const auto& slot = layout_.component(id);
+              for (IdxT local = 0; local < slot.variable_count; ++local)
               {
-                throw std::invalid_argument("EMT input index is out of range");
+                differential_variables_[static_cast<size_t>(slot.variable_offset + local)] =
+                    ComponentTraits<ComponentT>::differential(static_cast<size_t>(local));
               }
-
-              const auto& slot           = layout_.component(input.component);
-              IdxT&       input_variable = resolved_input_variable_ids_[slot.input_offset + input.index];
-              if (input_variable != INVALID_INDEX<IdxT>)
-              {
-                throw std::invalid_argument("EMT input is connected more than once");
-              }
-              input_variable = output_variable;
             });
+      }
 
-        if (!found)
+      void buildJacobianPlan()
+      {
+        std::vector<ScalarT> scratch_y(static_cast<size_t>(layout_.size()), ScalarT{0.0});
+        std::vector<ScalarT> scratch_yp(static_cast<size_t>(layout_.size()), ScalarT{0.0});
+        initializeScratchState(scratch_y, scratch_yp);
+        jacobian_.build(network_, layout_, scratch_y, scratch_yp, ScalarT{0.125});
+      }
+
+      static ScalarT deterministicScratchValue(IdxT index)
+      {
+        const IdxT cycle = index % IdxT{23};
+        return ScalarT{0.125} + ScalarT{0.03125} * static_cast<ScalarT>(cycle + IdxT{1});
+      }
+
+      void initializeScratchState(std::vector<ScalarT>& y, std::vector<ScalarT>& yp) const
+      {
+        for (IdxT i = 0; i < static_cast<IdxT>(y.size()); ++i)
         {
-          throw std::invalid_argument("EMT input component does not exist");
+          y[static_cast<size_t>(i)]  = deterministicScratchValue(i);
+          yp[static_cast<size_t>(i)] = deterministicScratchValue(i + static_cast<IdxT>(y.size()));
         }
       }
 
-      void validateInputs() const
-      {
-        network_.components.forEach(
-            [&](const auto& component, ComponentId id)
-            {
-              (void) component;
-              const auto& slot = layout_.component(id);
-              for (IdxT local = 0; local < slot.input_count; ++local)
-              {
-                if (resolved_input_variable_ids_[slot.input_offset + local] == INVALID_INDEX<IdxT>)
-                {
-                  throw std::invalid_argument("EMT input is not connected");
-                }
-              }
-            });
-      }
-
-      void buildAssembly()
-      {
-        std::vector<typename Assembly<RealT, IdxT>::Entry> entries;
-        network_.components.forEach(
-            [&](const auto& component, ComponentId id)
-            {
-              using ComponentT                            = std::decay_t<decltype(component)>;
-              const auto&              slot               = layout_.component(id);
-              auto                     terminal_bus_ids   = layout_.terminals(resolved_terminal_bus_ids_, id);
-              auto                     input_variable_ids = layout_.inputs(resolved_input_variable_ids_, id);
-              PatternView<RealT, IdxT> pattern(entries,
-                                               layout_,
-                                               slot,
-                                               terminal_bus_ids,
-                                               input_variable_ids,
-                                               &differential_variables_);
-
-              if constexpr (requires(PatternView<RealT, IdxT>& p) { component.pattern(p); })
-              {
-                component.pattern(pattern);
-              }
-              else
-              {
-                EnzymeJacobian<ComponentT>::pattern(component, pattern);
-              }
-            });
-        assembly_.build(layout_.size(), std::move(entries));
-      }
-
-      bool jacobianAvailable() const
-      {
-        bool available = true;
-        network_.components.forEach(
-            [&](const auto& component, ComponentId)
-            {
-              using ComponentT = std::decay_t<decltype(component)>;
-              (void) component;
-              if constexpr (!ComponentTraits<ComponentT>::direct_jacobian)
-              {
-#ifndef GRIDKIT_ENABLE_ENZYME
-                available = false;
-#endif
-              }
-            });
-        return available;
-      }
-
-      NetworkT              network_;
-      Layout<IdxT>          layout_;
-      Assembly<RealT, IdxT> assembly_;
+      NetworkT                    network_;
+      Layout<IdxT>                layout_;
+      JacobianPlan<ScalarT, IdxT> jacobian_;
 
       std::vector<ScalarT> y_;
       std::vector<ScalarT> yp_;
@@ -628,10 +509,7 @@ namespace GridKit
       std::vector<ScalarT> adjoint_residual_;
       std::vector<ScalarT> adjoint_integrand_;
 
-      MatrixT jacobian_;
-
-      std::vector<IdxT> resolved_terminal_bus_ids_;
-      std::vector<IdxT> resolved_input_variable_ids_;
+      MatrixT coo_jacobian_;
 
       RealT rel_tol_{1e-4};
       RealT abs_tol_{1e-4};

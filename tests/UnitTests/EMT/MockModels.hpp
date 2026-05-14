@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include <GridKit/Model/EMT/System/Port.hpp>
+#include <GridKit/Model/EMT/System/Network.hpp>
 
 namespace GridKit
 {
@@ -13,12 +13,16 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockOneTerminalComponent
       {
-        static constexpr size_t variables       = 3;
-        static constexpr size_t equations       = 3;
-        static constexpr size_t terminals       = 1;
-        static constexpr size_t inputs          = 0;
-        static constexpr size_t outputs         = 0;
-        static constexpr bool   direct_jacobian = true;
+        static constexpr size_t variable_count = 3;
+        static constexpr size_t equation_count = 3;
+        static constexpr size_t terminal_count = 1;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 0;
+
+        static constexpr bool differential(size_t local)
+        {
+          return local < variable_count;
+        }
 
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
@@ -26,45 +30,27 @@ namespace GridKit
           const auto v = x.voltage(0);
           for (IdxT phase = 0; phase < 3; ++phase)
           {
-            r.equation(phase, x.variable(phase) + v[phase]);
+            r.set(phase, x.variable(phase) + v[phase]);
           }
-          r.inject(0, {x.variable(0), x.variable(1), x.variable(2)});
-        }
-
-        template <class Pattern>
-        void pattern(Pattern& p) const
-        {
-          for (IdxT phase = 0; phase < 3; ++phase)
-          {
-            p.addEquationVariable(phase, phase);
-            p.addEquationTerminalVoltage(phase, 0, phase);
-            p.addInjectionVariable(0, phase, phase);
-          }
-        }
-
-        template <class Variables, class Jacobian>
-        void jacobian(const Variables&, Jacobian& j) const
-        {
-          for (IdxT phase = 0; phase < 3; ++phase)
-          {
-            j.addEquationVariable(phase, phase, RealT{1.0});
-            j.addEquationTerminalVoltage(phase, 0, phase, RealT{1.0});
-            j.addInjectionVariable(0, phase, phase, RealT{1.0});
-          }
+          r.injectCurrent(0, {x.variable(0), x.variable(1), x.variable(2)});
         }
       };
 
       template <class RealT, typename IdxT>
       struct MockBranchLumpedConstant
       {
-        static constexpr size_t variables       = 3;
-        static constexpr size_t equations       = 3;
-        static constexpr size_t terminals       = 2;
-        static constexpr size_t inputs          = 0;
-        static constexpr size_t outputs         = 0;
-        static constexpr bool   direct_jacobian = true;
-        static constexpr size_t from            = 0;
-        static constexpr size_t to              = 1;
+        static constexpr size_t variable_count = 3;
+        static constexpr size_t equation_count = 3;
+        static constexpr size_t terminal_count = 2;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 0;
+        static constexpr size_t from           = 0;
+        static constexpr size_t to             = 1;
+
+        static constexpr bool differential(size_t local)
+        {
+          return local < variable_count;
+        }
 
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
@@ -73,79 +59,46 @@ namespace GridKit
           const auto vb = x.voltage(to);
           for (IdxT phase = 0; phase < 3; ++phase)
           {
-            r.equation(phase, x.variable(phase) + vb[phase] - va[phase]);
+            r.set(phase, x.variable(phase) + vb[phase] - va[phase]);
           }
-          r.inject(from, {-x.variable(0), -x.variable(1), -x.variable(2)});
-          r.inject(to, {x.variable(0), x.variable(1), x.variable(2)});
-        }
-
-        template <class Pattern>
-        void pattern(Pattern& p) const
-        {
-          for (IdxT phase = 0; phase < 3; ++phase)
-          {
-            p.addEquationVariable(phase, phase);
-            p.addEquationTerminalVoltage(phase, from, phase);
-            p.addEquationTerminalVoltage(phase, to, phase);
-            p.addInjectionVariable(from, phase, phase);
-            p.addInjectionVariable(to, phase, phase);
-          }
-        }
-
-        template <class Variables, class Jacobian>
-        void jacobian(const Variables&, Jacobian& j) const
-        {
-          for (IdxT phase = 0; phase < 3; ++phase)
-          {
-            j.addEquationVariable(phase, phase, RealT{1.0});
-            j.addEquationTerminalVoltage(phase, from, phase, RealT{-1.0});
-            j.addEquationTerminalVoltage(phase, to, phase, RealT{1.0});
-            j.addInjectionVariable(from, phase, phase, RealT{-1.0});
-            j.addInjectionVariable(to, phase, phase, RealT{1.0});
-          }
+          r.injectCurrent(from, {-x.variable(0), -x.variable(1), -x.variable(2)});
+          r.injectCurrent(to, {x.variable(0), x.variable(1), x.variable(2)});
         }
       };
 
       template <class RealT, typename IdxT>
       struct MockThreeTerminalBranch
       {
-        static constexpr size_t variables       = 0;
-        static constexpr size_t equations       = 0;
-        static constexpr size_t terminals       = 3;
-        static constexpr size_t inputs          = 0;
-        static constexpr size_t outputs         = 0;
-        static constexpr bool   direct_jacobian = true;
+        static constexpr size_t variable_count = 0;
+        static constexpr size_t equation_count = 0;
+        static constexpr size_t terminal_count = 3;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 0;
 
         template <class Variables, class Residual>
         void residual(const Variables&, Residual& r) const
         {
-          r.inject(0, {RealT{1.0}, RealT{2.0}, RealT{3.0}});
-          r.inject(1, {RealT{4.0}, RealT{5.0}, RealT{6.0}});
-          r.inject(2, {RealT{7.0}, RealT{8.0}, RealT{9.0}});
-        }
-
-        template <class Pattern>
-        void pattern(Pattern&) const
-        {
-        }
-
-        template <class Variables, class Jacobian>
-        void jacobian(const Variables&, Jacobian&) const
-        {
+          r.injectCurrent(0, {RealT{1.0}, RealT{2.0}, RealT{3.0}});
+          r.injectCurrent(1, {RealT{4.0}, RealT{5.0}, RealT{6.0}});
+          r.injectCurrent(2, {RealT{7.0}, RealT{8.0}, RealT{9.0}});
         }
       };
 
       template <class RealT, typename IdxT>
       struct MockPortSource
       {
-        static constexpr size_t variables       = 1;
-        static constexpr size_t equations       = 1;
-        static constexpr size_t terminals       = 0;
-        static constexpr size_t inputs          = 0;
-        static constexpr size_t outputs         = 1;
-        static constexpr bool   direct_jacobian = true;
+        static constexpr size_t variable_count = 1;
+        static constexpr size_t equation_count = 1;
+        static constexpr size_t terminal_count = 0;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 1;
 
         RealT value{10.0};
+
+        static constexpr bool differential(size_t local)
+        {
+          return local < variable_count;
+        }
 
         static constexpr GridKit::EMT::OutputSpec output(size_t index)
         {
@@ -156,50 +109,44 @@ namespace GridKit
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
         {
-          r.equation(0, x.variable(0) - value);
-        }
-
-        template <class Pattern>
-        void pattern(Pattern& p) const
-        {
-          p.addEquationVariable(0, 0);
-        }
-
-        template <class Variables, class Jacobian>
-        void jacobian(const Variables&, Jacobian& j) const
-        {
-          j.addEquationVariable(0, 0, RealT{1.0});
+          r.set(0, x.variable(0) - value);
         }
       };
 
       template <class RealT, typename IdxT>
       struct MockPortSink
       {
-        static constexpr size_t variables       = 1;
-        static constexpr size_t equations       = 1;
-        static constexpr size_t terminals       = 0;
-        static constexpr size_t inputs          = 1;
-        static constexpr size_t outputs         = 0;
-        static constexpr bool   direct_jacobian = true;
+        static constexpr size_t variable_count = 1;
+        static constexpr size_t equation_count = 1;
+        static constexpr size_t terminal_count = 0;
+        static constexpr size_t input_count    = 1;
+        static constexpr size_t output_count   = 0;
+
+        static constexpr bool differential(size_t local)
+        {
+          return local < variable_count;
+        }
 
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
         {
-          r.equation(0, x.variable(0) - x.input(0));
+          r.set(0, x.variable(0) - x.input(0));
         }
+      };
 
-        template <class Pattern>
-        void pattern(Pattern& p) const
-        {
-          p.addEquationVariable(0, 0);
-          p.addEquationInput(0, 0);
-        }
+      template <class RealT, typename IdxT>
+      struct MockMissingDifferential
+      {
+        static constexpr size_t variable_count = 1;
+        static constexpr size_t equation_count = 1;
+        static constexpr size_t terminal_count = 0;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 0;
 
-        template <class Variables, class Jacobian>
-        void jacobian(const Variables&, Jacobian& j) const
+        template <class Variables, class Residual>
+        void residual(const Variables& x, Residual& r) const
         {
-          j.addEquationVariable(0, 0, RealT{1.0});
-          j.addEquationInput(0, 0, RealT{-1.0});
+          r.set(0, x.variable(0));
         }
       };
     } // namespace EMTMocks

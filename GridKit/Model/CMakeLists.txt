@@ -8,7 +8,9 @@
 add_subdirectory(PhasorDynamics)
 add_subdirectory(PowerFlow)
 add_subdirectory(PowerElectronics)
-add_subdirectory(EMT)
+if(GRIDKIT_ENABLE_ENZYME)
+  add_subdirectory(EMT)
+endif()
 
 install(FILES
   Evaluator.hpp

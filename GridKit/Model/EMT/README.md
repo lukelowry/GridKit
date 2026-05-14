@@ -26,7 +26,8 @@ Branch models such as `BranchLumpedConstant` are documented under
 
 The EMT `SystemModel` is the IDA-facing runtime model. `NetworkData` owns
 construction-time buses, typed component storage, terminal connections, and
-port connections. `Layout` assigns global `y` variables and residual rows once:
+port connections. EMT requires Enzyme; without Enzyme the EMT target is not
+configured. `Layout` assigns global `y` variables and residual rows once:
 
 ```text
 global y / f
@@ -35,9 +36,10 @@ global y / f
 +--------------+------------------+
 ```
 
-Models read through `VariableView`, write equations and KCL injections through
-`ResidualView`, declare exact sparse structure through `PatternView`, and write
-Jacobian values through `JacobianView`. Electrical wiring is represented by
+Models read through `StateView` and write equations and KCL injections through
+`EquationView`. Components expose only initialization and residual physics;
+`JacobianPlan` owns cached Enzyme workspaces and CSR insertion slots.
+Electrical wiring is represented by
 `TerminalConnection` entries from component terminals to buses. Signal/control
 wiring is represented by direction-specific `OutputRef` to `InputRef`
 `PortConnection` entries.

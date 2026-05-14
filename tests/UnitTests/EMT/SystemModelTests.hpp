@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include <GridKit/Model/EMT/System/NetworkData.hpp>
+#include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
 #include <GridKit/Testing/Testing.hpp>
 
@@ -21,6 +21,7 @@ namespace GridKit
       using ThreeTerminal        = EMTMocks::MockThreeTerminalBranch<RealT, IdxT>;
       using Source               = EMTMocks::MockPortSource<RealT, IdxT>;
       using Sink                 = EMTMocks::MockPortSink<RealT, IdxT>;
+      using MissingDifferential  = EMTMocks::MockMissingDifferential<RealT, IdxT>;
 
       TestOutcome networkData()
       {
@@ -51,6 +52,7 @@ namespace GridKit
         EMT::SystemModel<decltype(bus_only)> bus_system(bus_only);
         bus_system.allocate();
         success *= (bus_system.size() == 3);
+        success *= (!EMT::ComponentTraits<MissingDifferential>::is_valid);
 
         return success.report(__func__);
       }

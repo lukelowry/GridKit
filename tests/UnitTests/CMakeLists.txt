@@ -1,6 +1,8 @@
 #
 add_subdirectory(AutomaticDifferentiation)
-add_subdirectory(EMT)
+if(GRIDKIT_ENABLE_ENZYME)
+  add_subdirectory(EMT)
+endif()
 add_subdirectory(LinearAlgebra)
 add_subdirectory(Math)
 add_subdirectory(PhasorDynamics)

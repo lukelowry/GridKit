@@ -85,6 +85,6 @@ and
 
 ## Model Outputs
 
-Phase voltages $v_a$, $v_b$, and $v_c$ are monitorable model outputs.
-
-Phase-voltage derivatives $\dot{v}_a$, $\dot{v}_b$, and $\dot{v}_c$ are also available as monitorable outputs.
+The bus has no EMT signal outputs. Candidate future monitor quantities include
+phase voltages $v_a$, $v_b$, and $v_c$, along with phase-voltage derivatives
+$\dot{v}_a$, $\dot{v}_b$, and $\dot{v}_c$.

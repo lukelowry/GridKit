@@ -102,8 +102,8 @@ e_c(0) &= \sqrt{2}\,E_c\cos(\phi_c)
 
 ## Model Outputs
 
-Candidate monitorable outputs include the source waveform components
-$e_a(t)$, $e_b(t)$, and $e_c(t)$.
+There are no EMT signal outputs. Candidate future monitor quantities include
+the source waveform components $e_a(t)$, $e_b(t)$, and $e_c(t)$.
 
 The port current injection expression is documented above as
 $\mathbf{i}^\text{inj}$.

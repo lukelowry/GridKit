@@ -92,32 +92,33 @@ Each expression is accumulated into the owning bus residual.
 
 ## Initialization
 
-The initialization assumes a balanced three-phase system. Given bus
-voltages $\mathbf{v}_1(0)$, $\mathbf{v}_2(0)$ and their time
-derivatives $\dot{\mathbf{v}}_1(0)$, $\dot{\mathbf{v}}_2(0)$ from
-the EMT bus, and the power flow phasor series current
-$I = |I| \angle \theta$, the initial series current is:
+The initialization uses the physical branch parameters and the connected bus
+initial RMS phase-voltage phasors. With $\mathbf{V}_1$ and $\mathbf{V}_2$
+denoting RMS phase-voltage phasors and $\omega$ denoting the common terminal
+angular frequency,
 
 ``` math
-\mathbf{i}(0) = \sqrt{2}\,|I|
-\begin{bmatrix}
-  \cos(\theta) \\
-  \cos(\theta - \tfrac{2\pi}{3}) \\
-  \cos(\theta + \tfrac{2\pi}{3})
-\end{bmatrix}
+\mathbf{Z} = \mathbf{R} + j\omega\mathbf{L}
 ```
 
-The initial derivative is then given by the series branch equation for
-DAE consistency:
+``` math
+\mathbf{I} = \mathbf{Z}^{-1}\left(\mathbf{V}_1 - \mathbf{V}_2\right)
+```
+
+The instantaneous initial current and derivative are:
 
 ``` math
-\dot{\mathbf{i}}(0) = \mathbf{L}^{-1}\left(\mathbf{v}_1(0) - \mathbf{v}_2(0) - \mathbf{R}\,\mathbf{i}(0)\right)
+\mathbf{i}(0) = \sqrt{2}\,\Re(\mathbf{I})
+```
+
+``` math
+\dot{\mathbf{i}}(0) = \sqrt{2}\,\Re(j\omega\mathbf{I})
 ```
 
 ## Model Outputs
 
-Candidate monitorable outputs include the series branch current components
-$i_a$, $i_b$, and $i_c$.
+There are no EMT signal outputs. Candidate future monitor quantities include
+the series branch current components $i_a$, $i_b$, and $i_c$.
 
 Port current injection expressions are documented above as
 $\mathbf{i}^\text{inj}_1$ and $\mathbf{i}^\text{inj}_2$.

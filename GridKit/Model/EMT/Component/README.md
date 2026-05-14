@@ -9,7 +9,7 @@ A component README should include:
 3. Differential and algebraic equations
 4. Bus residual contributions, when applicable
 5. Initialization notes
-6. Monitorable outputs
+6. Signal outputs, if the model has EMT signal ports
 
 ## Types
 
