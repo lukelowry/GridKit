@@ -3,15 +3,28 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
+#include <string_view>
+#include <tuple>
 #include <type_traits>
 
-#include <GridKit/Model/EMT/Component/VoltageSource/VoltageSourceData.hpp>
+#include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/System/ComponentDescriptor.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
+    template <class RealT, typename IdxT>
+    struct VoltageSourceData
+    {
+      PhaseVector<RealT> e{RealT{0.0}, RealT{0.0}, RealT{0.0}};
+      PhaseVector<RealT> phi{RealT{0.0}, RealT{0.0}, RealT{0.0}};
+      PhaseVector<RealT> r{RealT{0.0}, RealT{0.0}, RealT{0.0}};
+      RealT              omega0{0.0};
+    };
+
     template <class RealT, typename IdxT>
     class VoltageSource
     {
@@ -68,6 +81,103 @@ namespace GridKit
 
     private:
       VoltageSourceData<RealT, IdxT> data_;
+    };
+
+    template <class RealT>
+    RealT hzToRadPerSec(RealT hz)
+    {
+      return RealT{2.0} * std::acos(RealT{-1.0}) * hz;
+    }
+
+    enum class VoltageSourceMonitorVariable
+    {
+      ia,
+      ib,
+      ic
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentDescriptor<VoltageSource<RealT, IdxT>>
+    {
+      using Component = VoltageSource<RealT, IdxT>;
+      using Data      = VoltageSourceData<RealT, IdxT>;
+
+      static constexpr std::string_view                class_name = "VoltageSource";
+      static constexpr std::array<std::string_view, 1> terminals{"ac"};
+      static constexpr std::array<std::string_view, 0> inputs{};
+      static constexpr std::array<std::string_view, 0> outputs{};
+
+      static constexpr auto params = std::tuple{
+          field("e", &Data::e),
+          field("phi", &Data::phi),
+          field("r", &Data::r),
+          field("frequency", &Data::omega0, &hzToRadPerSec<RealT>),
+      };
+
+      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
+      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
+      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentMonitorTraits<VoltageSource<RealT, IdxT>>
+    {
+      using Variable = VoltageSourceMonitorVariable;
+
+      template <class Context>
+      static void bind(Context& ctx, const VoltageSource<RealT, IdxT>& source, std::size_t raw)
+      {
+        IdxT        phase = 0;
+        const char* label = nullptr;
+        switch (static_cast<Variable>(raw))
+        {
+        case Variable::ia:
+          phase = 0;
+          label = "ia";
+          break;
+        case Variable::ib:
+          phase = 1;
+          label = "ib";
+          break;
+        case Variable::ic:
+          phase = 2;
+          label = "ic";
+          break;
+        default:
+          throw std::invalid_argument("Invalid EMT VoltageSource monitor variable");
+        }
+
+        const auto data        = source.data();
+        const auto bus_voltage = ctx.terminalVoltageIndex(0, phase);
+        const auto y           = ctx.y();
+        const auto time        = ctx.time();
+
+        ctx.add(label,
+                [data, y, time, bus_voltage, phase]()
+                {
+                  const RealT sqrt2 = std::sqrt(RealT{2.0});
+                  const RealT e     = sqrt2 * data.e[phase] * std::cos(data.omega0 * (*time) + data.phi[phase]);
+                  const RealT v     = static_cast<RealT>((*y)[static_cast<std::size_t>(bus_voltage)]);
+                  return (e - v) / data.r[phase];
+                });
+      }
+
+      static std::optional<std::size_t> resolve(std::string_view name)
+      {
+        if (name == "ia")
+        {
+          return static_cast<std::size_t>(Variable::ia);
+        }
+        if (name == "ib")
+        {
+          return static_cast<std::size_t>(Variable::ib);
+        }
+        if (name == "ic")
+        {
+          return static_cast<std::size_t>(Variable::ic);
+        }
+        return std::nullopt;
+      }
     };
   } // namespace EMT
 } // namespace GridKit

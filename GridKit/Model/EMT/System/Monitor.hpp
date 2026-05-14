@@ -1,17 +1,16 @@
 #pragma once
 
-#include <cmath>
+#include <array>
 #include <cstddef>
+#include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <GridKit/Constants.hpp>
-#include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
-#include <GridKit/Model/EMT/Component/Breaker/Breaker.hpp>
-#include <GridKit/Model/EMT/Component/BusFault/BusFault.hpp>
-#include <GridKit/Model/EMT/Component/LoadRL/LoadRL.hpp>
-#include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
+#include <GridKit/Model/EMT/Bus/Bus.hpp>
 
 namespace GridKit
 {
@@ -24,51 +23,118 @@ namespace GridKit
       vc,
       dva,
       dvb,
-      dvc
+      dvc,
+      ifa,
+      ifb,
+      ifc
     };
 
-    enum class LoadRLMonitorVariable
+    inline std::optional<BusMonitorVariable> resolveBusMonitorVariable(std::string_view name)
     {
-      ia,
-      ib,
-      ic,
-      dia,
-      dib,
-      dic
+      if (name == "va")
+      {
+        return BusMonitorVariable::va;
+      }
+      if (name == "vb")
+      {
+        return BusMonitorVariable::vb;
+      }
+      if (name == "vc")
+      {
+        return BusMonitorVariable::vc;
+      }
+      if (name == "dva")
+      {
+        return BusMonitorVariable::dva;
+      }
+      if (name == "dvb")
+      {
+        return BusMonitorVariable::dvb;
+      }
+      if (name == "dvc")
+      {
+        return BusMonitorVariable::dvc;
+      }
+      if (name == "ifa")
+      {
+        return BusMonitorVariable::ifa;
+      }
+      if (name == "ifb")
+      {
+        return BusMonitorVariable::ifb;
+      }
+      if (name == "ifc")
+      {
+        return BusMonitorVariable::ifc;
+      }
+      return std::nullopt;
+    }
+
+    struct MonitorEntry
+    {
+      std::string_view name;
+      bool             derivative;
+      std::size_t      local;
     };
 
-    enum class BranchLumpedConstantMonitorVariable
+    template <class Enum>
+    constexpr std::array<MonitorEntry, 6> phaseCurrentMonitors()
     {
-      ia,
-      ib,
-      ic,
-      dia,
-      dib,
-      dic
-    };
+      return {{{"ia", false, 0u},
+               {"ib", false, 1u},
+               {"ic", false, 2u},
+               {"dia", true, 0u},
+               {"dib", true, 1u},
+               {"dic", true, 2u}}};
+    }
 
-    enum class BreakerMonitorVariable
+    template <class Entries>
+    std::optional<std::size_t> resolveMonitor(const Entries& entries, std::string_view name)
     {
-      ia,
-      ib,
-      ic,
-      dia,
-      dib,
-      dic
-    };
+      for (std::size_t index = 0; index < entries.size(); ++index)
+      {
+        if (entries[index].name == name)
+        {
+          return index;
+        }
+      }
+      return std::nullopt;
+    }
 
-    enum class BusFaultMonitorVariable
+    template <class Context, class Entries>
+    void bindStateMonitors(Context& ctx, const Entries& entries, std::size_t raw)
     {
-      ia,
-      ib,
-      ic
-    };
+      if (raw >= entries.size())
+      {
+        throw std::invalid_argument("Invalid EMT component monitor variable");
+      }
 
-    enum class VoltageSourceMonitorVariable
+      const auto& entry = entries[raw];
+      if (entry.derivative)
+      {
+        ctx.addDerivative(std::string(entry.name), entry.local);
+      }
+      else
+      {
+        ctx.addState(std::string(entry.name), entry.local);
+      }
+    }
+
+    template <class Derived, class Enum>
+    struct StateMonitorTable
     {
-      ia,
-      ib,
-      ic
+      using Variable = Enum;
+
+      template <class Context, class Component>
+      static void bind(Context& ctx, const Component&, std::size_t raw)
+      {
+        bindStateMonitors(ctx, Derived::entries, raw);
+      }
+
+      static std::optional<std::size_t> resolve(std::string_view name)
+      {
+        return resolveMonitor(Derived::entries, name);
+      }
     };
 
     template <typename IdxT>
@@ -79,193 +145,74 @@ namespace GridKit
       std::vector<BusMonitorVariable> variables;
     };
 
+    template <class EntityT>
+    struct BusMonitorTraits;
+
+    template <class RealT, typename IdxT>
+    struct BusMonitorTraits<Bus<RealT, IdxT>>
+    {
+      using Variable = BusMonitorVariable;
+
+      template <class Context>
+      static void bind(Context& ctx, const Bus<RealT, IdxT>& bus, Variable variable)
+      {
+        switch (variable)
+        {
+        case Variable::va:
+          ctx.addVoltage("va", IdxT{0});
+          return;
+        case Variable::vb:
+          ctx.addVoltage("vb", IdxT{1});
+          return;
+        case Variable::vc:
+          ctx.addVoltage("vc", IdxT{2});
+          return;
+        case Variable::dva:
+          ctx.addVoltageDerivative("dva", IdxT{0});
+          return;
+        case Variable::dvb:
+          ctx.addVoltageDerivative("dvb", IdxT{1});
+          return;
+        case Variable::dvc:
+          ctx.addVoltageDerivative("dvc", IdxT{2});
+          return;
+        case Variable::ifa:
+          bindFaultCurrent(ctx, bus, "ifa", IdxT{0});
+          return;
+        case Variable::ifb:
+          bindFaultCurrent(ctx, bus, "ifb", IdxT{1});
+          return;
+        case Variable::ifc:
+          bindFaultCurrent(ctx, bus, "ifc", IdxT{2});
+          return;
+        }
+
+        throw std::invalid_argument("Invalid EMT bus monitor variable");
+      }
+
+      static std::optional<Variable> resolve(std::string_view name)
+      {
+        return resolveBusMonitorVariable(name);
+      }
+
+    private:
+      template <class Context>
+      static void bindFaultCurrent(Context&                ctx,
+                                   const Bus<RealT, IdxT>& bus,
+                                   std::string             label,
+                                   IdxT                    phase)
+      {
+        const IdxT  index = ctx.voltageIndex(phase);
+        const auto* y     = ctx.y();
+        ctx.add(std::move(label),
+                [&bus, y, index, phase]()
+                {
+                  return bus.faultCurrent((*y)[static_cast<size_t>(index)], static_cast<size_t>(phase));
+                });
+      }
+    };
+
     template <class ComponentT>
     struct ComponentMonitorTraits;
-
-    template <class RealT, typename IdxT>
-    struct ComponentMonitorTraits<LoadRL<RealT, IdxT>>
-    {
-      using Variable = LoadRLMonitorVariable;
-
-      template <class Context>
-      static void bind(Context& ctx, const LoadRL<RealT, IdxT>&, size_t raw)
-      {
-        switch (static_cast<Variable>(raw))
-        {
-        case Variable::ia:
-          ctx.addState("ia", 0);
-          break;
-        case Variable::ib:
-          ctx.addState("ib", 1);
-          break;
-        case Variable::ic:
-          ctx.addState("ic", 2);
-          break;
-        case Variable::dia:
-          ctx.addDerivative("dia", 0);
-          break;
-        case Variable::dib:
-          ctx.addDerivative("dib", 1);
-          break;
-        case Variable::dic:
-          ctx.addDerivative("dic", 2);
-          break;
-        default:
-          throw std::invalid_argument("Invalid EMT LoadRL monitor variable");
-        }
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentMonitorTraits<BranchLumpedConstant<RealT, IdxT>>
-    {
-      using Variable = BranchLumpedConstantMonitorVariable;
-
-      template <class Context>
-      static void bind(Context& ctx, const BranchLumpedConstant<RealT, IdxT>&, size_t raw)
-      {
-        switch (static_cast<Variable>(raw))
-        {
-        case Variable::ia:
-          ctx.addState("ia", 0);
-          break;
-        case Variable::ib:
-          ctx.addState("ib", 1);
-          break;
-        case Variable::ic:
-          ctx.addState("ic", 2);
-          break;
-        case Variable::dia:
-          ctx.addDerivative("dia", 0);
-          break;
-        case Variable::dib:
-          ctx.addDerivative("dib", 1);
-          break;
-        case Variable::dic:
-          ctx.addDerivative("dic", 2);
-          break;
-        default:
-          throw std::invalid_argument("Invalid EMT BranchLumpedConstant monitor variable");
-        }
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentMonitorTraits<Breaker<RealT, IdxT>>
-    {
-      using Variable = BreakerMonitorVariable;
-
-      template <class Context>
-      static void bind(Context& ctx, const Breaker<RealT, IdxT>&, size_t raw)
-      {
-        switch (static_cast<Variable>(raw))
-        {
-        case Variable::ia:
-          ctx.addState("ia", 0);
-          break;
-        case Variable::ib:
-          ctx.addState("ib", 1);
-          break;
-        case Variable::ic:
-          ctx.addState("ic", 2);
-          break;
-        case Variable::dia:
-          ctx.addDerivative("dia", 0);
-          break;
-        case Variable::dib:
-          ctx.addDerivative("dib", 1);
-          break;
-        case Variable::dic:
-          ctx.addDerivative("dic", 2);
-          break;
-        default:
-          throw std::invalid_argument("Invalid EMT Breaker monitor variable");
-        }
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentMonitorTraits<BusFault<RealT, IdxT>>
-    {
-      using Variable = BusFaultMonitorVariable;
-
-      template <class Context>
-      static void bind(Context& ctx, const BusFault<RealT, IdxT>& fault, size_t raw)
-      {
-        IdxT        phase = 0;
-        const char* label = nullptr;
-        switch (static_cast<Variable>(raw))
-        {
-        case Variable::ia:
-          phase = 0;
-          label = "ia";
-          break;
-        case Variable::ib:
-          phase = 1;
-          label = "ib";
-          break;
-        case Variable::ic:
-          phase = 2;
-          label = "ic";
-          break;
-        default:
-          throw std::invalid_argument("Invalid EMT BusFault monitor variable");
-        }
-
-        const auto bus_voltage = ctx.terminalVoltageIndex(0, phase);
-        const auto y           = ctx.y();
-
-        ctx.add(label,
-                [&fault, y, bus_voltage, phase]()
-                {
-                  const RealT v = static_cast<RealT>((*y)[static_cast<size_t>(bus_voltage)]);
-                  return fault.current(v, static_cast<size_t>(phase));
-                });
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentMonitorTraits<VoltageSource<RealT, IdxT>>
-    {
-      using Variable = VoltageSourceMonitorVariable;
-
-      template <class Context>
-      static void bind(Context& ctx, const VoltageSource<RealT, IdxT>& source, size_t raw)
-      {
-        IdxT        phase = 0;
-        const char* label = nullptr;
-        switch (static_cast<Variable>(raw))
-        {
-        case Variable::ia:
-          phase = 0;
-          label = "ia";
-          break;
-        case Variable::ib:
-          phase = 1;
-          label = "ib";
-          break;
-        case Variable::ic:
-          phase = 2;
-          label = "ic";
-          break;
-        default:
-          throw std::invalid_argument("Invalid EMT VoltageSource monitor variable");
-        }
-
-        const auto data        = source.data();
-        const auto bus_voltage = ctx.terminalVoltageIndex(0, phase);
-        const auto y           = ctx.y();
-        const auto time        = ctx.time();
-
-        ctx.add(label,
-                [data, y, time, bus_voltage, phase]()
-                {
-                  const RealT sqrt2 = std::sqrt(RealT{2.0});
-                  const RealT e     = sqrt2 * data.e[phase] * std::cos(data.omega0 * (*time) + data.phi[phase]);
-                  const RealT v     = static_cast<RealT>((*y)[static_cast<size_t>(bus_voltage)]);
-                  return (e - v) / data.r[phase];
-                });
-      }
-    };
   } // namespace EMT
 } // namespace GridKit

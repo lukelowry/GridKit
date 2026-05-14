@@ -2,7 +2,6 @@
 
 #include <concepts>
 #include <cstddef>
-#include <initializer_list>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -10,10 +9,6 @@
 #include <vector>
 
 #include <GridKit/Constants.hpp>
-#include <GridKit/Model/EMT/Bus/Bus.hpp>
-#include <GridKit/Model/EMT/System/Monitor.hpp>
-#include <GridKit/Model/Events.hpp>
-#include <GridKit/Model/VariableMonitor.hpp>
 
 namespace GridKit
 {
@@ -31,8 +26,8 @@ namespace GridKit
     }
 
     struct TerminalRef;
-    struct InputRef;
-    struct OutputRef;
+    struct SignalInputRef;
+    struct SignalOutputRef;
 
     struct ComponentRef
     {
@@ -43,9 +38,9 @@ namespace GridKit
         return id;
       }
 
-      constexpr TerminalRef terminal(size_t local) const;
-      constexpr InputRef    input(size_t local) const;
-      constexpr OutputRef   output(size_t local) const;
+      constexpr TerminalRef     terminal(size_t local) const;
+      constexpr SignalInputRef  input(size_t local) const;
+      constexpr SignalOutputRef output(size_t local) const;
     };
 
     struct TerminalRef
@@ -55,33 +50,39 @@ namespace GridKit
     };
 
     template <typename IdxT>
+    struct BusRef
+    {
+      IdxT id{INVALID_INDEX<IdxT>};
+    };
+
+    template <typename IdxT>
     struct TerminalConnection
     {
       TerminalRef terminal;
       IdxT        bus{INVALID_INDEX<IdxT>};
     };
 
-    struct OutputSpec
+    struct SignalOutputSpec
     {
       size_t variable{INVALID_INDEX<size_t>};
     };
 
-    struct InputRef
+    struct SignalInputRef
     {
       ComponentId component;
       size_t      index{INVALID_INDEX<size_t>};
     };
 
-    struct OutputRef
+    struct SignalOutputRef
     {
       ComponentId component;
       size_t      index{INVALID_INDEX<size_t>};
     };
 
-    struct PortConnection
+    struct SignalConnection
     {
-      OutputRef output;
-      InputRef  input;
+      SignalOutputRef output;
+      SignalInputRef  input;
     };
 
     constexpr TerminalRef ComponentRef::terminal(size_t local) const
@@ -89,12 +90,12 @@ namespace GridKit
       return {id, local};
     }
 
-    constexpr InputRef ComponentRef::input(size_t local) const
+    constexpr SignalInputRef ComponentRef::input(size_t local) const
     {
       return {id, local};
     }
 
-    constexpr OutputRef ComponentRef::output(size_t local) const
+    constexpr SignalOutputRef ComponentRef::output(size_t local) const
     {
       return {id, local};
     }
@@ -121,12 +122,12 @@ namespace GridKit
         return {id, local};
       }
 
-      constexpr InputRef input(size_t local) const
+      constexpr SignalInputRef input(size_t local) const
       {
         return {id, local};
       }
 
-      constexpr OutputRef output(size_t local) const
+      constexpr SignalOutputRef output(size_t local) const
       {
         return {id, local};
       }
@@ -137,14 +138,6 @@ namespace GridKit
       ComponentRef        component;
       std::string         label;
       std::vector<size_t> variables;
-    };
-
-    struct ComponentEventRequest
-    {
-      double                         time{0.0};
-      ComponentRef                   component;
-      GridKit::Model::Events::Action action;
-      size_t                         order{0};
     };
 
     namespace Detail
@@ -215,7 +208,7 @@ namespace GridKit
         }
       }
 
-      static constexpr OutputSpec output(size_t index)
+      static constexpr SignalOutputSpec output(size_t index)
       {
         if constexpr (output_count == 0)
         {
@@ -238,7 +231,7 @@ namespace GridKit
       {
         using ComponentT = std::decay_t<T>;
         static_assert(Detail::Contains<ComponentT, Ts...>,
-                      "Component type is not part of this EMT network");
+                      "Component type is not part of this EMT system model data");
         static_assert(ComponentTraits<ComponentT>::is_valid,
                       "EMT components with local variables must define static constexpr bool differential(size_t)");
 
@@ -334,82 +327,5 @@ namespace GridKit
       std::tuple<std::vector<Ts>...> components_;
     };
 
-    template <class RealT, typename IdxT, class... ComponentTs>
-    struct NetworkData
-    {
-      using scalar_type          = RealT;
-      using index_type           = IdxT;
-      using component_store_type = ComponentStore<ComponentTs...>;
-      using MonitorSinkSpec      = GridKit::Model::VariableMonitorBase::SinkSpec;
-
-      std::vector<Bus<RealT, IdxT>>         buses;
-      component_store_type                  components;
-      std::vector<TerminalConnection<IdxT>> terminal_connections;
-      std::vector<PortConnection>           port_connections;
-      std::vector<MonitorSinkSpec>          monitor_sinks;
-      std::vector<BusMonitorRequest<IdxT>>  bus_monitors;
-      std::vector<ComponentMonitorRequest>  component_monitors;
-      std::vector<ComponentEventRequest>    component_events;
-
-      IdxT addBus(BusData<RealT, IdxT> data)
-      {
-        const IdxT id = static_cast<IdxT>(buses.size());
-        buses.emplace_back(data);
-        return id;
-      }
-
-      template <class T>
-      auto add(T component)
-      {
-        return components.add(std::move(component));
-      }
-
-      void connect(TerminalRef terminal, IdxT bus)
-      {
-        terminal_connections.push_back({terminal, bus});
-      }
-
-      void connect(OutputRef output, InputRef input)
-      {
-        port_connections.push_back({output, input});
-      }
-
-      void addMonitorSink(MonitorSinkSpec sink)
-      {
-        monitor_sinks.push_back(std::move(sink));
-      }
-
-      void monitorBus(IdxT                                      bus,
-                      std::string                               label,
-                      std::initializer_list<BusMonitorVariable> variables)
-      {
-        bus_monitors.push_back({bus, std::move(label), {variables.begin(), variables.end()}});
-      }
-
-      template <class ComponentT>
-      void monitorComponent(TypedComponentRef<ComponentT>                                                component,
-                            std::string                                                                  label,
-                            std::initializer_list<typename ComponentMonitorTraits<ComponentT>::Variable> variables)
-      {
-        std::vector<size_t> encoded;
-        encoded.reserve(variables.size());
-        for (auto variable : variables)
-        {
-          encoded.push_back(static_cast<size_t>(variable));
-        }
-        component_monitors.push_back({ComponentRef{component.id}, std::move(label), std::move(encoded)});
-      }
-
-      template <class ComponentT>
-      void schedule(double                         time,
-                    TypedComponentRef<ComponentT>  component,
-                    GridKit::Model::Events::Action action)
-      {
-        component_events.push_back({time,
-                                    ComponentRef{component.id},
-                                    std::move(action),
-                                    component_events.size()});
-      }
-    };
   } // namespace EMT
 } // namespace GridKit

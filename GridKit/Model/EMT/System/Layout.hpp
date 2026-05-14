@@ -6,7 +6,7 @@
 #include <vector>
 
 #include <GridKit/Constants.hpp>
-#include <GridKit/Model/EMT/System/Network.hpp>
+#include <GridKit/Model/EMT/System/Components.hpp>
 
 namespace GridKit
 {

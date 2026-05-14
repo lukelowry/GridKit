@@ -4,16 +4,16 @@
 #include <type_traits>
 #include <utility>
 
+#include <GridKit/Model/EMT/Bus/Bus.hpp>
 #include <GridKit/Model/EMT/Component/Breaker/Breaker.hpp>
-#include <GridKit/Model/EMT/Component/BusFault/BusFault.hpp>
 #include <GridKit/Model/Events.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
-    template <class ComponentT>
-    struct ComponentEventTraits
+    template <class EntityT>
+    struct EventTraits
     {
       template <class ActionT>
       static constexpr bool supports()
@@ -22,9 +22,14 @@ namespace GridKit
       }
 
       template <class ActionT>
-      static void apply(ComponentT&, const ActionT&)
+      static void apply(EntityT&, const ActionT&)
       {
-        throw std::invalid_argument("EMT component does not support this event action");
+        throw std::invalid_argument("EMT entity does not support scheduled event action");
+      }
+
+      template <class ActionT>
+      static void prepare(EntityT&, const ActionT&)
+      {
       }
     };
 
@@ -38,8 +43,69 @@ namespace GridKit
       }
     };
 
+    template <class EntityT>
+    struct ResidualTraits
+    {
+      template <class Context>
+      static void evaluate(Context&, const EntityT&)
+      {
+      }
+    };
+
     template <class RealT, typename IdxT>
-    struct ComponentEventTraits<Breaker<RealT, IdxT>>
+    struct EventTraits<Bus<RealT, IdxT>>
+    {
+      template <class ActionT>
+      static constexpr bool supports()
+      {
+        return std::is_same_v<ActionT, GridKit::Model::Events::Fault>
+               || std::is_same_v<ActionT, GridKit::Model::Events::Clear>;
+      }
+
+      static void apply(Bus<RealT, IdxT>&                    bus,
+                        const GridKit::Model::Events::Fault& action)
+      {
+        bus.fault(action);
+      }
+
+      static void apply(Bus<RealT, IdxT>&                    bus,
+                        const GridKit::Model::Events::Clear& action)
+      {
+        bus.clear(action.phases);
+      }
+
+      static void prepare(Bus<RealT, IdxT>& bus, const GridKit::Model::Events::Fault&)
+      {
+        bus.prepareFaultStructure();
+      }
+
+      static void prepare(Bus<RealT, IdxT>& bus, const GridKit::Model::Events::Clear&)
+      {
+        bus.prepareFaultStructure();
+      }
+
+      template <class ActionT>
+      static void apply(Bus<RealT, IdxT>&, const ActionT&)
+      {
+        throw std::invalid_argument("EMT bus supports fault and clear only");
+      }
+    };
+
+    template <class RealT, typename IdxT>
+    struct ResidualTraits<Bus<RealT, IdxT>>
+    {
+      template <class Context>
+      static void evaluate(Context& ctx, const Bus<RealT, IdxT>& bus)
+      {
+        for (IdxT phase = 0; phase < static_cast<IdxT>(ctx.phaseCount()); ++phase)
+        {
+          ctx.addCurrent(phase, bus.residualCurrent(ctx.voltage(phase), static_cast<size_t>(phase)));
+        }
+      }
+    };
+
+    template <class RealT, typename IdxT>
+    struct EventTraits<Breaker<RealT, IdxT>>
     {
       template <class ActionT>
       static constexpr bool supports()
@@ -58,6 +124,14 @@ namespace GridKit
                         const GridKit::Model::Events::Close& action)
       {
         breaker.close(action.phases);
+      }
+
+      static void prepare(Breaker<RealT, IdxT>&, const GridKit::Model::Events::Open&)
+      {
+      }
+
+      static void prepare(Breaker<RealT, IdxT>&, const GridKit::Model::Events::Close&)
+      {
       }
 
       template <class ActionT>
@@ -80,54 +154,6 @@ namespace GridKit
         auto closed = breaker;
         closed.close(GridKit::Model::Events::PhaseMask::abc());
         fn(closed);
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentEventTraits<BusFault<RealT, IdxT>>
-    {
-      template <class ActionT>
-      static constexpr bool supports()
-      {
-        return std::is_same_v<ActionT, GridKit::Model::Events::Fault>
-               || std::is_same_v<ActionT, GridKit::Model::Events::Clear>;
-      }
-
-      static void apply(BusFault<RealT, IdxT>&               fault,
-                        const GridKit::Model::Events::Fault& action)
-      {
-        fault.fault(action);
-      }
-
-      static void apply(BusFault<RealT, IdxT>&               fault,
-                        const GridKit::Model::Events::Clear& action)
-      {
-        fault.clear(action.phases);
-      }
-
-      template <class ActionT>
-      static void apply(BusFault<RealT, IdxT>&, const ActionT&)
-      {
-        throw std::invalid_argument("EMT BusFault supports fault and clear only");
-      }
-    };
-
-    template <class RealT, typename IdxT>
-    struct ComponentStructuralModes<BusFault<RealT, IdxT>>
-    {
-      template <class Fn>
-      static void visit(const BusFault<RealT, IdxT>& fault, Fn&& fn)
-      {
-        auto cleared = fault;
-        cleared.clear(GridKit::Model::Events::PhaseMask::abc());
-        fn(cleared);
-
-        auto active = fault;
-        active.fault(GridKit::Model::Events::Fault{GridKit::Model::Events::PhaseMask::abc(),
-                                                   static_cast<double>(fault.resistance()),
-                                                   0.0,
-                                                   0.0});
-        fn(active);
       }
     };
   } // namespace EMT

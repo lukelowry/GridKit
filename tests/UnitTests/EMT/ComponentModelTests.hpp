@@ -12,14 +12,13 @@
 #include <vector>
 
 #include <GridKit/Model/CallbackVariableMonitor.hpp>
-#include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/Component/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
 #include <GridKit/Model/EMT/Component/Breaker/Breaker.hpp>
-#include <GridKit/Model/EMT/Component/BusFault/BusFault.hpp>
 #include <GridKit/Model/EMT/Component/LoadRL/LoadRL.hpp>
 #include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
-#include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
+#include <GridKit/Model/EMT/SystemModelData.hpp>
 #include <GridKit/Model/Events.hpp>
 #include <GridKit/Model/VariableMonitorController.hpp>
 #include <GridKit/Testing/Testing.hpp>
@@ -40,8 +39,6 @@ namespace GridKit
       using BranchData    = EMT::BranchLumpedConstantData<RealT, IdxT>;
       using Breaker       = EMT::Breaker<RealT, IdxT>;
       using BreakerData   = EMT::BreakerData<RealT, IdxT>;
-      using BusFault      = EMT::BusFault<RealT, IdxT>;
-      using BusFaultData  = EMT::BusFaultData<RealT, IdxT>;
       using PhaseMask     = GridKit::Model::Events::PhaseMask;
 
       TestOutcome eventPhaseMask()
@@ -98,14 +95,14 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+        Data data;
 
-        const IdxT bus  = network.addBus({120.0, 0.25, 60.0});
-        const auto load = network.add(LoadRL({{2.0, 3.0, 4.0}, {0.01, 0.02, 0.03}}));
-        network.connect(load.terminal(0), bus);
+        const IdxT bus  = data.addBus({120.0, 0.25, 60.0});
+        const auto load = data.add(LoadRL({{2.0, 3.0, 4.0}, {0.01, 0.02, 0.03}}));
+        data.connect(load.terminal(0), bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
         system.evaluateResidual();
@@ -142,17 +139,17 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, VoltageSource>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, VoltageSource>;
+        Data data;
 
-        const IdxT bus    = network.addBus({1.0, 0.0, 60.0});
-        const auto source = network.add(VoltageSource({{120.0, 121.0, 122.0},
-                                                       {0.1, -2.0, 2.2},
-                                                       {2.0, 4.0, 5.0},
-                                                       2.0 * std::acos(RealT{-1.0}) * 60.0}));
-        network.connect(source.terminal(0), bus);
+        const IdxT bus    = data.addBus({1.0, 0.0, 60.0});
+        const auto source = data.add(VoltageSource({{120.0, 121.0, 122.0},
+                                                    {0.1, -2.0, 2.2},
+                                                    {2.0, 4.0, 5.0},
+                                                    2.0 * std::acos(RealT{-1.0}) * 60.0}));
+        data.connect(source.terminal(0), bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
 
@@ -165,17 +162,18 @@ namespace GridKit
         system.updateTime(t, 0.0);
         system.evaluateResidual();
 
-        const auto& data  = system.network().components.template get<VoltageSource>()[0].data();
-        const auto& f     = system.getResidual();
-        const RealT sqrt2 = std::sqrt(RealT{2.0});
-        const RealT tol   = RealT{1.0e-12};
+        const auto& source_data = system.data().components.template get<VoltageSource>()[0].data();
+        const auto& f           = system.getResidual();
+        const RealT sqrt2       = std::sqrt(RealT{2.0});
+        const RealT tol         = RealT{1.0e-12};
 
         for (IdxT phase = 0; phase < 3; ++phase)
         {
-          const RealT e = sqrt2 * data.e[static_cast<size_t>(phase)]
-                          * std::cos(data.omega0 * t + data.phi[static_cast<size_t>(phase)]);
-          const RealT ref  = (e - y[system.layout().busVariable(bus, phase)]) / data.r[static_cast<size_t>(phase)];
-          success         *= isEqual(f[system.layout().busEquation(bus, phase)], ref, tol);
+          const RealT e = sqrt2 * source_data.e[static_cast<size_t>(phase)]
+                          * std::cos(source_data.omega0 * t + source_data.phi[static_cast<size_t>(phase)]);
+          const RealT ref = (e - y[system.layout().busVariable(bus, phase)])
+                            / source_data.r[static_cast<size_t>(phase)];
+          success *= isEqual(f[system.layout().busEquation(bus, phase)], ref, tol);
         }
 
         return success.report(__func__);
@@ -218,17 +216,17 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Branch>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
+        Data data;
 
-        const auto data     = fullBranchData();
-        const IdxT from_bus = network.addBus({120.0, 0.2, 60.0});
-        const IdxT to_bus   = network.addBus({118.0, 0.05, 60.0});
-        const auto branch   = network.add(Branch(data));
-        network.connect(branch.terminal(Branch::from), from_bus);
-        network.connect(branch.terminal(Branch::to), to_bus);
+        const auto branch_data = fullBranchData();
+        const IdxT from_bus    = data.addBus({120.0, 0.2, 60.0});
+        const IdxT to_bus      = data.addBus({118.0, 0.05, 60.0});
+        const auto branch      = data.add(Branch(branch_data));
+        data.connect(branch.terminal(Branch::from), from_bus);
+        data.connect(branch.terminal(Branch::to), to_bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
         system.evaluateResidual();
@@ -239,8 +237,8 @@ namespace GridKit
         const auto            v_to   = to_init.template initialVoltagePhasor<RealT>();
         const RealT           omega  = from_init.template omega<RealT>();
 
-        const auto r = EMT::scale(data.r, data.length);
-        const auto l = EMT::scale(data.l, data.length);
+        const auto r = EMT::scale(branch_data.r, branch_data.length);
+        const auto l = EMT::scale(branch_data.l, branch_data.length);
 
         EMT::PhaseMatrix<std::complex<RealT>> z{};
         EMT::PhaseVector<std::complex<RealT>> voltage_delta{};
@@ -278,17 +276,17 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Branch>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
+        Data data;
 
-        const auto data     = fullBranchData();
-        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto branch   = network.add(Branch(data));
-        network.connect(branch.terminal(Branch::from), from_bus);
-        network.connect(branch.terminal(Branch::to), to_bus);
+        const auto branch_data = fullBranchData();
+        const IdxT from_bus    = data.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus      = data.addBus({1.0, 0.0, 60.0});
+        const auto branch      = data.add(Branch(branch_data));
+        data.connect(branch.terminal(Branch::from), from_bus);
+        data.connect(branch.terminal(Branch::to), to_bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
 
         auto&       y    = system.y();
@@ -323,10 +321,10 @@ namespace GridKit
           current_derivative[phase] = yp[slot.variable_offset + phase];
         }
 
-        const auto r      = EMT::scale(data.r, data.length);
-        const auto l      = EMT::scale(data.l, data.length);
-        const auto g_half = EMT::scale(data.g, RealT{0.5} * data.length);
-        const auto c_half = EMT::scale(data.c, RealT{0.5} * data.length);
+        const auto r      = EMT::scale(branch_data.r, branch_data.length);
+        const auto l      = EMT::scale(branch_data.l, branch_data.length);
+        const auto g_half = EMT::scale(branch_data.g, RealT{0.5} * branch_data.length);
+        const auto c_half = EMT::scale(branch_data.c, RealT{0.5} * branch_data.length);
 
         const auto r_current  = EMT::multiply(r, current);
         const auto l_currentp = EMT::multiply(l, current_derivative);
@@ -355,16 +353,16 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
+        Data data;
 
-        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto breaker  = network.add(Breaker(BreakerData{}));
-        network.connect(breaker.terminal(Breaker::from), from_bus);
-        network.connect(breaker.terminal(Breaker::to), to_bus);
+        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = data.add(Breaker(BreakerData{}));
+        data.connect(breaker.terminal(Breaker::from), from_bus);
+        data.connect(breaker.terminal(Breaker::to), to_bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
 
         auto&       y    = system.y();
@@ -388,7 +386,7 @@ namespace GridKit
           success *= isEqual(closed_f[system.layout().busEquation(to_bus, phase)], current, RealT{1.0e-12});
         }
 
-        auto& state = system.network().components.template get<Breaker>()[0];
+        auto& state = system.data().components.template get<Breaker>()[0];
         state.open(PhaseMask::a());
         success *= !state.closed(0);
         success *= state.closed(1);
@@ -413,20 +411,20 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
+        Data data;
 
-        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto breaker  = network.add(Breaker(BreakerData{}));
-        network.connect(breaker.terminal(Breaker::from), from_bus);
-        network.connect(breaker.terminal(Breaker::to), to_bus);
+        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = data.add(Breaker(BreakerData{}));
+        data.connect(breaker.terminal(Breaker::from), from_bus);
+        data.connect(breaker.terminal(Breaker::to), to_bus);
 
-        network.schedule(0.50, breaker, GridKit::Model::Events::Open{PhaseMask::abc()});
-        network.schedule(0.50, breaker, GridKit::Model::Events::Close{PhaseMask::a()});
-        network.schedule(0.75, breaker, GridKit::Model::Events::Close{PhaseMask::abc()});
+        data.schedule(0.50, breaker, GridKit::Model::Events::Open{PhaseMask::abc()});
+        data.schedule(0.50, breaker, GridKit::Model::Events::Close{PhaseMask::a()});
+        data.schedule(0.75, breaker, GridKit::Model::Events::Close{PhaseMask::abc()});
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
 
         auto event_time  = system.nextEventTime();
@@ -437,7 +435,7 @@ namespace GridKit
         }
 
         success     *= system.applyNextEventBatch();
-        auto& state  = system.network().components.template get<Breaker>()[0];
+        auto& state  = system.data().components.template get<Breaker>()[0];
         success     *= state.closed(0);
         success     *= !state.closed(1);
         success     *= !state.closed(2);
@@ -460,19 +458,19 @@ namespace GridKit
         success *= system.nextEventTime().has_value();
 
         {
-          Network                         invalid;
+          Data                            invalid;
           EMT::TypedComponentRef<Breaker> missing{{0, 0}};
           invalid.schedule(0.10, missing, GridKit::Model::Events::Open{PhaseMask::abc()});
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> bad_system(invalid);
+                EMT::SystemModel<Data> bad_system(invalid);
                 bad_system.allocate();
               });
         }
 
         {
-          Network    unsupported;
+          Data       unsupported;
           const IdxT a      = unsupported.addBus({1.0, 0.0, 60.0});
           const IdxT b      = unsupported.addBus({1.0, 0.0, 60.0});
           const auto target = unsupported.add(Breaker(BreakerData{}));
@@ -482,13 +480,13 @@ namespace GridKit
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> bad_system(unsupported);
+                EMT::SystemModel<Data> bad_system(unsupported);
                 bad_system.allocate();
               });
         }
 
         {
-          Network    negative_time;
+          Data       negative_time;
           const IdxT a      = negative_time.addBus({1.0, 0.0, 60.0});
           const IdxT b      = negative_time.addBus({1.0, 0.0, 60.0});
           const auto target = negative_time.add(Breaker(BreakerData{}));
@@ -498,7 +496,7 @@ namespace GridKit
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> bad_system(negative_time);
+                EMT::SystemModel<Data> bad_system(negative_time);
                 bad_system.allocate();
               });
         }
@@ -510,28 +508,28 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
+        using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
 
         const std::string file = "EMTBreakerMonitorTest.csv";
         std::filesystem::remove(file);
 
-        Network    network;
-        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto breaker  = network.add(Breaker(BreakerData{}));
-        network.connect(breaker.terminal(Breaker::from), from_bus);
-        network.connect(breaker.terminal(Breaker::to), to_bus);
-        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
-        network.monitorComponent(breaker,
-                                 "breaker",
-                                 {EMT::BreakerMonitorVariable::ia,
-                                  EMT::BreakerMonitorVariable::ib,
-                                  EMT::BreakerMonitorVariable::ic,
-                                  EMT::BreakerMonitorVariable::dia,
-                                  EMT::BreakerMonitorVariable::dib,
-                                  EMT::BreakerMonitorVariable::dic});
+        Data       data;
+        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = data.add(Breaker(BreakerData{}));
+        data.connect(breaker.terminal(Breaker::from), from_bus);
+        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        data.monitorComponent(breaker,
+                              "breaker",
+                              {EMT::BreakerMonitorVariable::ia,
+                               EMT::BreakerMonitorVariable::ib,
+                               EMT::BreakerMonitorVariable::ic,
+                               EMT::BreakerMonitorVariable::dia,
+                               EMT::BreakerMonitorVariable::dib,
+                               EMT::BreakerMonitorVariable::dic});
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
 
         const auto& slot = system.layout().component(breaker);
@@ -575,18 +573,16 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, BusFault>;
-        Network network;
+        using BusNetwork = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+        BusNetwork data;
 
-        const IdxT bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto fault = network.add(BusFault(BusFaultData{}));
-        network.connect(fault.terminal(0), bus);
-        network.schedule(0.05,
-                         fault,
-                         GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
-        network.schedule(0.07, fault, GridKit::Model::Events::Clear{PhaseMask::a()});
+        const IdxT bus = data.addBus({1.0, 0.0, 60.0});
+        data.schedule(0.05,
+                      data.busRef(bus),
+                      GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
+        data.schedule(0.07, data.busRef(bus), GridKit::Model::Events::Clear{PhaseMask::a()});
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<BusNetwork> system(data);
         system.allocate();
 
         success *= (system.nnz() == 3);
@@ -605,10 +601,10 @@ namespace GridKit
 
         const auto* csr  = system.getCsrJacobian();
         success         *= system.applyNextEventBatch();
-        auto& state      = system.network().components.template get<BusFault>()[0];
-        success         *= state.active(0);
-        success         *= !state.active(1);
-        success         *= !state.active(2);
+        auto& state      = system.data().buses[static_cast<size_t>(bus)];
+        success         *= state.faultActive(0);
+        success         *= !state.faultActive(1);
+        success         *= !state.faultActive(2);
 
         system.evaluateResidual();
         success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 0)], RealT{-5.0});
@@ -626,7 +622,7 @@ namespace GridKit
                            RealT{0.0});
 
         success *= system.applyNextEventBatch();
-        success *= !state.active(0);
+        success *= !state.faultActive(0);
         system.evaluateResidual();
         success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 0)], RealT{0.0});
         system.evaluateJacobian();
@@ -638,34 +634,57 @@ namespace GridKit
                            RealT{0.0});
 
         {
-          Network    unsupported;
-          const IdxT bad_bus   = unsupported.addBus({1.0, 0.0, 60.0});
-          const auto bad_fault = unsupported.add(BusFault(BusFaultData{}));
-          unsupported.connect(bad_fault.terminal(0), bad_bus);
-          unsupported.schedule(0.01, bad_fault, GridKit::Model::Events::Open{PhaseMask::a()});
+          BusNetwork unsupported;
+          const IdxT bad_bus = unsupported.addBus({1.0, 0.0, 60.0});
+          unsupported.schedule(0.01, unsupported.busRef(bad_bus), GridKit::Model::Events::Open{PhaseMask::a()});
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> bad_system(unsupported);
+                EMT::SystemModel<BusNetwork> bad_system(unsupported);
                 bad_system.allocate();
               });
         }
 
         {
-          Network    reactive;
-          const IdxT bad_bus   = reactive.addBus({1.0, 0.0, 60.0});
-          const auto bad_fault = reactive.add(BusFault(BusFaultData{}));
-          reactive.connect(bad_fault.terminal(0), bad_bus);
+          using BreakerNetwork = EMT::SystemModelData<RealT, IdxT, Breaker>;
+          BreakerNetwork unsupported;
+          const IdxT     from    = unsupported.addBus({1.0, 0.0, 60.0});
+          const IdxT     to      = unsupported.addBus({1.0, 0.0, 60.0});
+          const auto     breaker = unsupported.add(Breaker(BreakerData{}));
+          unsupported.connect(breaker.terminal(Breaker::from), from);
+          unsupported.connect(breaker.terminal(Breaker::to), to);
+          unsupported.schedule(0.01,
+                               breaker,
+                               GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<BreakerNetwork> bad_system(unsupported);
+                bad_system.allocate();
+              });
+        }
+
+        {
+          BusNetwork reactive;
+          const IdxT bad_bus = reactive.addBus({1.0, 0.0, 60.0});
           reactive.schedule(0.01,
-                            bad_fault,
+                            reactive.busRef(bad_bus),
                             GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 1.0, 0.0});
-          EMT::SystemModel<Network> reactive_system(reactive);
+          EMT::SystemModel<BusNetwork> reactive_system(reactive);
           reactive_system.allocate();
           success *= throws<std::invalid_argument>(
               [&]()
               {
                 reactive_system.applyNextEventBatch();
               });
+        }
+
+        {
+          BusNetwork plain;
+          plain.addBus({1.0, 0.0, 60.0});
+          EMT::SystemModel<BusNetwork> plain_system(plain);
+          plain_system.allocate();
+          success *= (plain_system.nnz() == 0);
         }
 
         return success.report(__func__);
@@ -675,28 +694,26 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, BusFault>;
+        using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
 
-        const std::string file = "EMTBusFaultMonitorTest.csv";
+        const std::string file = "EMTBusEventMonitorTest.csv";
         std::filesystem::remove(file);
 
-        BusFaultData data{};
-        data.active = PhaseMask::abc();
-        data.r      = RealT{2.0};
+        Data       data;
+        const IdxT bus = data.addBus({1.0, 0.0, 60.0});
+        data.schedule(0.0,
+                      data.busRef(bus),
+                      GridKit::Model::Events::Fault{PhaseMask::abc(), 2.0, 0.0, 0.0});
+        data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        data.monitorBus(bus,
+                        "fault",
+                        {EMT::BusMonitorVariable::ifa,
+                         EMT::BusMonitorVariable::ifb,
+                         EMT::BusMonitorVariable::ifc});
 
-        Network    network;
-        const IdxT bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto fault = network.add(BusFault(data));
-        network.connect(fault.terminal(0), bus);
-        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
-        network.monitorComponent(fault,
-                                 "fault",
-                                 {EMT::BusFaultMonitorVariable::ia,
-                                  EMT::BusFaultMonitorVariable::ib,
-                                  EMT::BusFaultMonitorVariable::ic});
-
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
+        success *= system.applyNextEventBatch();
         for (IdxT phase = 0; phase < 3; ++phase)
         {
           system.y()[system.layout().busVariable(bus, phase)] = RealT{10.0} + static_cast<RealT>(phase);
@@ -712,7 +729,7 @@ namespace GridKit
         std::getline(input, row);
         const auto values = csvNumbers(row);
 
-        success *= (header == "t,fault_ia,fault_ib,fault_ic");
+        success *= (header == "t,fault_ifa,fault_ifb,fault_ifc");
         success *= (values.size() == 4);
         if (values.size() == 4)
         {
@@ -732,17 +749,17 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
+        Data data;
 
-        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
-        const auto breaker  = network.add(Breaker(BreakerData{}));
-        network.connect(breaker.terminal(Breaker::from), from_bus);
-        network.connect(breaker.terminal(Breaker::to), to_bus);
-        network.schedule(0.10, breaker, GridKit::Model::Events::Open{PhaseMask::a()});
+        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = data.add(Breaker(BreakerData{}));
+        data.connect(breaker.terminal(Breaker::from), from_bus);
+        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.schedule(0.10, breaker, GridKit::Model::Events::Open{PhaseMask::a()});
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         const auto* csr = system.getCsrJacobian();
         const IdxT  nnz = system.nnz();
@@ -789,53 +806,53 @@ namespace GridKit
         TestStatus success = true;
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
-          Network    network;
-          const IdxT bus  = network.addBus({120.0, 0.0, 60.0});
-          const auto load = network.add(LoadRL(loadData()));
-          network.connect(load.terminal(0), bus);
+          using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+          Data       data;
+          const IdxT bus  = data.addBus({120.0, 0.0, 60.0});
+          const auto load = data.add(LoadRL(loadData()));
+          data.connect(load.terminal(0), bus);
 
-          EMT::SystemModel<Network> system(network);
+          EMT::SystemModel<Data> system(data);
           system.allocate();
           success *= (system.nnz() == 9);
         }
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, VoltageSource>;
-          Network    network;
-          const IdxT bus    = network.addBus({120.0, 0.0, 60.0});
-          const auto source = network.add(VoltageSource(sourceData()));
-          network.connect(source.terminal(0), bus);
+          using Data = EMT::SystemModelData<RealT, IdxT, VoltageSource>;
+          Data       data;
+          const IdxT bus    = data.addBus({120.0, 0.0, 60.0});
+          const auto source = data.add(VoltageSource(sourceData()));
+          data.connect(source.terminal(0), bus);
 
-          EMT::SystemModel<Network> system(network);
+          EMT::SystemModel<Data> system(data);
           system.allocate();
           success *= (system.nnz() == 3);
         }
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, Branch>;
-          Network    network;
-          const IdxT from_bus = network.addBus({120.0, 0.0, 60.0});
-          const IdxT to_bus   = network.addBus({118.0, 0.1, 60.0});
-          const auto branch   = network.add(Branch(fullBranchData()));
-          network.connect(branch.terminal(Branch::from), from_bus);
-          network.connect(branch.terminal(Branch::to), to_bus);
+          using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
+          Data       data;
+          const IdxT from_bus = data.addBus({120.0, 0.0, 60.0});
+          const IdxT to_bus   = data.addBus({118.0, 0.1, 60.0});
+          const auto branch   = data.add(Branch(fullBranchData()));
+          data.connect(branch.terminal(Branch::from), from_bus);
+          data.connect(branch.terminal(Branch::to), to_bus);
 
-          EMT::SystemModel<Network> system(network);
+          EMT::SystemModel<Data> system(data);
           system.allocate();
           success *= (system.nnz() == 39);
         }
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, Branch>;
-          Network    network;
-          const IdxT from_bus = network.addBus({120.0, 0.0, 60.0});
-          const IdxT to_bus   = network.addBus({118.0, 0.1, 60.0});
-          const auto branch   = network.add(Branch(diagonalBranchData()));
-          network.connect(branch.terminal(Branch::from), from_bus);
-          network.connect(branch.terminal(Branch::to), to_bus);
+          using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
+          Data       data;
+          const IdxT from_bus = data.addBus({120.0, 0.0, 60.0});
+          const IdxT to_bus   = data.addBus({118.0, 0.1, 60.0});
+          const auto branch   = data.add(Branch(diagonalBranchData()));
+          data.connect(branch.terminal(Branch::from), from_bus);
+          data.connect(branch.terminal(Branch::to), to_bus);
 
-          EMT::SystemModel<Network> system(network);
+          EMT::SystemModel<Data> system(data);
           system.allocate();
           success *= (system.nnz() == 21);
         }
@@ -847,20 +864,20 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
+        Data data;
 
-        const IdxT from_bus = network.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = network.addBus({118.0, 0.02, 60.0});
-        const auto load     = network.add(LoadRL(loadData()));
-        const auto source   = network.add(VoltageSource(sourceData()));
-        const auto branch   = network.add(Branch(fullBranchData()));
-        network.connect(load.terminal(0), to_bus);
-        network.connect(source.terminal(0), from_bus);
-        network.connect(branch.terminal(Branch::from), from_bus);
-        network.connect(branch.terminal(Branch::to), to_bus);
+        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
+        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const auto load     = data.add(LoadRL(loadData()));
+        const auto source   = data.add(VoltageSource(sourceData()));
+        const auto branch   = data.add(Branch(fullBranchData()));
+        data.connect(load.terminal(0), to_bus);
+        data.connect(source.terminal(0), from_bus);
+        data.connect(branch.terminal(Branch::from), from_bus);
+        data.connect(branch.terminal(Branch::to), to_bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
 
         std::fill(system.y().begin(), system.y().end(), RealT{0.0});
@@ -884,20 +901,20 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
-        Network network;
+        using Data = EMT::SystemModelData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
+        Data data;
 
-        const IdxT from_bus = network.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = network.addBus({118.0, 0.02, 60.0});
-        const auto load     = network.add(LoadRL(loadData()));
-        const auto source   = network.add(VoltageSource(sourceData()));
-        const auto branch   = network.add(Branch(fullBranchData()));
-        network.connect(load.terminal(0), to_bus);
-        network.connect(source.terminal(0), from_bus);
-        network.connect(branch.terminal(Branch::from), from_bus);
-        network.connect(branch.terminal(Branch::to), to_bus);
+        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
+        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const auto load     = data.add(LoadRL(loadData()));
+        const auto source   = data.add(VoltageSource(sourceData()));
+        const auto branch   = data.add(Branch(fullBranchData()));
+        data.connect(load.terminal(0), to_bus);
+        data.connect(source.terminal(0), from_bus);
+        data.connect(branch.terminal(Branch::from), from_bus);
+        data.connect(branch.terminal(Branch::to), to_bus);
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
         const RealT alpha = RealT{7.0};
@@ -964,30 +981,30 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Network = EMT::NetworkData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
+        using Data = EMT::SystemModelData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
 
         const std::string file = "EMTMonitorBindingTest.csv";
         std::filesystem::remove(file);
 
-        Network    network;
-        const IdxT from_bus = network.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = network.addBus({118.0, 0.02, 60.0});
-        const auto load     = network.add(LoadRL(loadData()));
-        const auto source   = network.add(VoltageSource(sourceData()));
-        const auto branch   = network.add(Branch(fullBranchData()));
-        network.connect(load.terminal(0), to_bus);
-        network.connect(source.terminal(0), from_bus);
-        network.connect(branch.terminal(Branch::from), from_bus);
-        network.connect(branch.terminal(Branch::to), to_bus);
+        Data       data;
+        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
+        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const auto load     = data.add(LoadRL(loadData()));
+        const auto source   = data.add(VoltageSource(sourceData()));
+        const auto branch   = data.add(Branch(fullBranchData()));
+        data.connect(load.terminal(0), to_bus);
+        data.connect(source.terminal(0), from_bus);
+        data.connect(branch.terminal(Branch::from), from_bus);
+        data.connect(branch.terminal(Branch::to), to_bus);
 
-        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
-        network.monitorBus(from_bus, "source_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
-        network.monitorBus(to_bus, "load_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
-        network.monitorComponent(source, "source", {EMT::VoltageSourceMonitorVariable::ia, EMT::VoltageSourceMonitorVariable::ib, EMT::VoltageSourceMonitorVariable::ic});
-        network.monitorComponent(load, "load", {EMT::LoadRLMonitorVariable::ia, EMT::LoadRLMonitorVariable::ib, EMT::LoadRLMonitorVariable::ic});
-        network.monitorComponent(branch, "line", {EMT::BranchLumpedConstantMonitorVariable::ia, EMT::BranchLumpedConstantMonitorVariable::ib, EMT::BranchLumpedConstantMonitorVariable::ic});
+        data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        data.monitorBus(from_bus, "source_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
+        data.monitorBus(to_bus, "load_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
+        data.monitorComponent(source, "source", {EMT::VoltageSourceMonitorVariable::ia, EMT::VoltageSourceMonitorVariable::ib, EMT::VoltageSourceMonitorVariable::ic});
+        data.monitorComponent(load, "load", {EMT::LoadRLMonitorVariable::ia, EMT::LoadRLMonitorVariable::ib, EMT::LoadRLMonitorVariable::ic});
+        data.monitorComponent(branch, "line", {EMT::BranchLumpedConstantMonitorVariable::ia, EMT::BranchLumpedConstantMonitorVariable::ib, EMT::BranchLumpedConstantMonitorVariable::ic});
 
-        EMT::SystemModel<Network> system(network);
+        EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
         system.updateTime(0.0, 1.0);
@@ -1008,7 +1025,7 @@ namespace GridKit
         if (values.size() == 16)
         {
           const auto& y          = system.y();
-          const auto& sourceData = system.network().components.template get<VoltageSource>()[0].data();
+          const auto& sourceData = system.data().components.template get<VoltageSource>()[0].data();
           const auto& loadSlot   = system.layout().component(load);
           const auto& lineSlot   = system.layout().component(branch);
           const RealT sqrt2      = std::sqrt(RealT{2.0});
@@ -1045,48 +1062,48 @@ namespace GridKit
         TestStatus success = true;
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
-          Network network;
-          network.addBus({120.0, 0.0, 60.0});
-          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
-          network.monitorBus(IdxT{99}, "missing", {EMT::BusMonitorVariable::va});
+          using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+          Data data;
+          data.addBus({120.0, 0.0, 60.0});
+          data.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          data.monitorBus(IdxT{99}, "missing", {EMT::BusMonitorVariable::va});
 
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> system(network);
+                EMT::SystemModel<Data> system(data);
                 system.allocate();
               });
         }
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
-          Network    network;
-          const IdxT bus  = network.addBus({120.0, 0.0, 60.0});
-          const auto load = network.add(LoadRL(loadData()));
-          network.connect(load.terminal(0), bus);
-          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
-          network.monitorComponent(load, "load", {static_cast<EMT::LoadRLMonitorVariable>(99)});
+          using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+          Data       data;
+          const IdxT bus  = data.addBus({120.0, 0.0, 60.0});
+          const auto load = data.add(LoadRL(loadData()));
+          data.connect(load.terminal(0), bus);
+          data.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          data.monitorComponent(load, "load", {static_cast<EMT::LoadRLMonitorVariable>(99)});
 
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> system(network);
+                EMT::SystemModel<Data> system(data);
                 system.allocate();
               });
         }
 
         {
-          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
-          Network network;
-          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
+          Data data;
+          data.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
           EMT::TypedComponentRef<LoadRL> missing{{99, 0}};
-          network.monitorComponent(missing, "missing", {EMT::LoadRLMonitorVariable::ia});
+          data.monitorComponent(missing, "missing", {EMT::LoadRLMonitorVariable::ia});
 
           success *= throws<std::invalid_argument>(
               [&]()
               {
-                EMT::SystemModel<Network> system(network);
+                EMT::SystemModel<Data> system(data);
                 system.allocate();
               });
         }

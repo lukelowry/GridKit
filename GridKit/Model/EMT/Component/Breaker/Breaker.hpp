@@ -1,16 +1,25 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <string_view>
+#include <tuple>
 #include <type_traits>
 
-#include <GridKit/Model/EMT/Component/Breaker/BreakerData.hpp>
 #include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/System/ComponentDescriptor.hpp>
 #include <GridKit/Model/Events.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
+    template <class RealT, typename IdxT>
+    struct BreakerData
+    {
+      GridKit::Model::Events::PhaseMask closed{GridKit::Model::Events::PhaseMask::abc()};
+    };
+
     template <class RealT, typename IdxT>
     class Breaker
     {
@@ -90,6 +99,44 @@ namespace GridKit
 
     private:
       GridKit::Model::Events::PhaseMask closed_{GridKit::Model::Events::PhaseMask::abc()};
+    };
+
+    enum class BreakerMonitorVariable
+    {
+      ia,
+      ib,
+      ic,
+      dia,
+      dib,
+      dic
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentDescriptor<Breaker<RealT, IdxT>>
+    {
+      using Component = Breaker<RealT, IdxT>;
+      using Data      = BreakerData<RealT, IdxT>;
+      using PhaseMask = GridKit::Model::Events::PhaseMask;
+
+      static constexpr std::string_view                class_name = "Breaker";
+      static constexpr std::array<std::string_view, 2> terminals{"from", "to"};
+      static constexpr std::array<std::string_view, 0> inputs{};
+      static constexpr std::array<std::string_view, 0> outputs{};
+
+      static constexpr auto params = std::tuple{
+          optionalField("closed", &Data::closed, PhaseMask::abc()),
+      };
+
+      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
+      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
+      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentMonitorTraits<Breaker<RealT, IdxT>>
+      : StateMonitorTable<ComponentMonitorTraits<Breaker<RealT, IdxT>>, BreakerMonitorVariable>
+    {
+      static constexpr auto entries = phaseCurrentMonitors<BreakerMonitorVariable>();
     };
   } // namespace EMT
 } // namespace GridKit

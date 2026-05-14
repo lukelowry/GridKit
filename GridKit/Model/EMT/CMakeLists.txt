@@ -20,57 +20,68 @@ target_compile_options(emt
 
 add_library(GridKit::emt ALIAS emt)
 
+add_library(emt_io INTERFACE)
+target_link_libraries(emt_io
+  INTERFACE
+    GridKit::emt)
+target_include_directories(emt_io
+  INTERFACE
+    $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include>
+    $<INSTALL_INTERFACE:include>)
+
+add_library(GridKit::emt_io ALIAS emt_io)
+
 install(TARGETS emt EXPORT gridkit-targets)
+install(TARGETS emt_io EXPORT gridkit-targets)
 install(
   FILES
+    Case.hpp
+    ComponentLibrary.hpp
     README.md
     PhaseMath.hpp
     SystemModel.hpp
+    SystemModelData.hpp
   DESTINATION
     include/GridKit/Model/EMT)
 install(
   FILES
     Bus/Bus.hpp
-    Bus/BusData.hpp
   DESTINATION
     include/GridKit/Model/EMT/Bus)
 install(
   FILES
-    Branch/BranchLumpedConstant/BranchLumpedConstant.hpp
-    Branch/BranchLumpedConstant/BranchLumpedConstantData.hpp
+    Component/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp
   DESTINATION
-    include/GridKit/Model/EMT/Branch/BranchLumpedConstant)
+    include/GridKit/Model/EMT/Component/Branch/BranchLumpedConstant)
 install(
   FILES
     Component/LoadRL/LoadRL.hpp
-    Component/LoadRL/LoadRLData.hpp
   DESTINATION
     include/GridKit/Model/EMT/Component/LoadRL)
 install(
   FILES
     Component/VoltageSource/VoltageSource.hpp
-    Component/VoltageSource/VoltageSourceData.hpp
   DESTINATION
     include/GridKit/Model/EMT/Component/VoltageSource)
 install(
   FILES
     Component/Breaker/Breaker.hpp
-    Component/Breaker/BreakerData.hpp
   DESTINATION
     include/GridKit/Model/EMT/Component/Breaker)
 install(
   FILES
-    Component/BusFault/BusFault.hpp
-    Component/BusFault/BusFaultData.hpp
-  DESTINATION
-    include/GridKit/Model/EMT/Component/BusFault)
-install(
-  FILES
+    System/ComponentDescriptor.hpp
+    System/Components.hpp
     System/Events.hpp
     System/Jacobian.hpp
     System/Layout.hpp
     System/Monitor.hpp
-    System/Network.hpp
     System/Views.hpp
   DESTINATION
     include/GridKit/Model/EMT/System)
+install(
+  FILES
+    IO/JsonSupport.hpp
+    IO/ParamReader.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/IO)

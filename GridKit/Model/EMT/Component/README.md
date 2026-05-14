@@ -13,6 +13,6 @@ A component README should include:
 
 ## Types
 
-- `BranchLumpedConstant` (See [BranchLumpedConstant](Branch/BranchLumpedConstant/README.md))
+- `Branch` (See [Branch](Branch/README.md))
 - `LoadRL` (See [LoadRL](LoadRL/README.md))
 - `VoltageSource` (See [VoltageSource](VoltageSource/README.md))

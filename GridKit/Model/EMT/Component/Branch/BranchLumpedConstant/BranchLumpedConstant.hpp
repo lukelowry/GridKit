@@ -1,16 +1,30 @@
 #pragma once
 
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
 #include <stdexcept>
+#include <string_view>
+#include <tuple>
 
-#include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstantData.hpp>
+#include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/System/ComponentDescriptor.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
+    template <class RealT, typename IdxT>
+    struct BranchLumpedConstantData
+    {
+      PhaseMatrix<RealT> r{};      // ohm / m
+      PhaseMatrix<RealT> l{};      // H / m
+      PhaseMatrix<RealT> g{};      // S / m
+      PhaseMatrix<RealT> c{};      // F / m
+      RealT              length{}; // m
+    };
+
     template <class RealT, typename IdxT>
     class BranchLumpedConstant
     {
@@ -143,6 +157,48 @@ namespace GridKit
       PhaseMatrix<RealT>                    l_;
       PhaseMatrix<RealT>                    g_half_;
       PhaseMatrix<RealT>                    c_half_;
+    };
+
+    enum class BranchLumpedConstantMonitorVariable
+    {
+      ia,
+      ib,
+      ic,
+      dia,
+      dib,
+      dic
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentDescriptor<BranchLumpedConstant<RealT, IdxT>>
+    {
+      using Component = BranchLumpedConstant<RealT, IdxT>;
+      using Data      = BranchLumpedConstantData<RealT, IdxT>;
+
+      static constexpr std::string_view                class_name = "BranchLumpedConstant";
+      static constexpr std::array<std::string_view, 2> terminals{"from", "to"};
+      static constexpr std::array<std::string_view, 0> inputs{};
+      static constexpr std::array<std::string_view, 0> outputs{};
+
+      static constexpr auto params = std::tuple{
+          field("r", &Data::r),
+          field("l", &Data::l),
+          optionalField("g", &Data::g, PhaseMatrix<RealT>{}),
+          optionalField("c", &Data::c, PhaseMatrix<RealT>{}),
+          field("length", &Data::length),
+      };
+
+      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
+      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
+      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentMonitorTraits<BranchLumpedConstant<RealT, IdxT>>
+      : StateMonitorTable<ComponentMonitorTraits<BranchLumpedConstant<RealT, IdxT>>,
+                          BranchLumpedConstantMonitorVariable>
+    {
+      static constexpr auto entries = phaseCurrentMonitors<BranchLumpedConstantMonitorVariable>();
     };
   } // namespace EMT
 } // namespace GridKit

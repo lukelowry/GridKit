@@ -2,7 +2,7 @@
 
 #include <cstddef>
 
-#include <GridKit/Model/EMT/System/Network.hpp>
+#include <GridKit/Model/EMT/SystemModelData.hpp>
 
 namespace GridKit
 {
@@ -100,7 +100,7 @@ namespace GridKit
           return local < variable_count;
         }
 
-        static constexpr GridKit::EMT::OutputSpec output(size_t index)
+        static constexpr GridKit::EMT::SignalOutputSpec output(size_t index)
         {
           (void) index;
           return {0};

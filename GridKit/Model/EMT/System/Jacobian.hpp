@@ -550,8 +550,67 @@ namespace GridKit
       using Matrix = JacobianMatrix<RealT, IdxT>;
       using Entry  = typename Matrix::Entry;
 
-      template <class NetworkT>
-      void build(const NetworkT&             network,
+    private:
+      class BusResidualJacobianPlan
+      {
+      public:
+        template <class DataT>
+        void configure(const DataT& data, const Layout<IdxT>& layout, std::vector<Entry>& entries)
+        {
+          slots_.clear();
+          for (IdxT bus = 0; bus < static_cast<IdxT>(data.buses.size()); ++bus)
+          {
+            if (!data.buses[static_cast<size_t>(bus)].hasFaultState())
+            {
+              continue;
+            }
+
+            for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase)
+            {
+              entries.emplace_back(layout.busEquation(bus, phase), layout.busVariable(bus, phase));
+              slots_.push_back({bus, phase, INVALID_INDEX<IdxT>});
+            }
+          }
+        }
+
+        void bindSlots(const Matrix& matrix, const Layout<IdxT>& layout)
+        {
+          for (auto& slot : slots_)
+          {
+            slot.slot = matrix.slot(layout.busEquation(slot.bus, slot.phase),
+                                    layout.busVariable(slot.bus, slot.phase));
+            if (slot.slot == INVALID_INDEX<IdxT>)
+            {
+              throw std::logic_error("EMT bus residual Jacobian slot map is missing a structural entry");
+            }
+          }
+        }
+
+        template <class DataT>
+        void evaluate(const DataT& data, Matrix& matrix) const
+        {
+          for (const auto& slot : slots_)
+          {
+            const RealT value =
+                data.buses[static_cast<size_t>(slot.bus)].residualJacobian(static_cast<size_t>(slot.phase));
+            matrix.addToSlot(slot.slot, value);
+          }
+        }
+
+      private:
+        struct Slot
+        {
+          IdxT bus{INVALID_INDEX<IdxT>};
+          IdxT phase{INVALID_INDEX<IdxT>};
+          IdxT slot{INVALID_INDEX<IdxT>};
+        };
+
+        std::vector<Slot> slots_;
+      };
+
+    public:
+      template <class DataT>
+      void build(const DataT&                data,
                  const Layout<IdxT>&         layout,
                  const std::vector<ScalarT>& scratch_y,
                  const std::vector<ScalarT>& scratch_yp,
@@ -560,7 +619,7 @@ namespace GridKit
         components_.clear();
         std::vector<Entry> entries;
 
-        network.components.forEach(
+        data.components.forEach(
             [&](const auto& component, ComponentId id)
             {
               using ComponentT = std::decay_t<decltype(component)>;
@@ -580,15 +639,17 @@ namespace GridKit
               components_.push_back(std::move(plan));
             });
 
+        buses_.configure(data, layout, entries);
         matrix_.build(layout.size(), std::move(entries));
+        buses_.bindSlots(matrix_, layout);
         for (auto& component : components_)
         {
           component.bindSlots(matrix_);
         }
       }
 
-      template <class NetworkT>
-      void evaluate(NetworkT&                   network,
+      template <class DataT>
+      void evaluate(DataT&                      data,
                     const std::vector<ScalarT>& y,
                     const std::vector<ScalarT>& yp,
                     ScalarT                     time,
@@ -596,12 +657,13 @@ namespace GridKit
       {
         matrix_.clearValues();
         size_t plan_index = 0;
-        network.components.forEach(
+        data.components.forEach(
             [&](auto& component, ComponentId)
             {
               components_.at(plan_index).evaluate(component, matrix_, y, yp, time, alpha);
               ++plan_index;
             });
+        buses_.evaluate(data, matrix_);
         matrix_.markUpdated();
       }
 
@@ -618,6 +680,7 @@ namespace GridKit
     private:
       Matrix                                            matrix_;
       std::vector<ComponentJacobianPlan<ScalarT, IdxT>> components_;
+      BusResidualJacobianPlan                           buses_;
     };
   } // namespace EMT
 } // namespace GridKit

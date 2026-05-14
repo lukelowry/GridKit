@@ -5,13 +5,23 @@
 #include <complex>
 #include <cstddef>
 #include <stdexcept>
+#include <string_view>
+#include <tuple>
 
-#include <GridKit/Model/EMT/Component/LoadRL/LoadRLData.hpp>
+#include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/System/ComponentDescriptor.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
+    template <class RealT, typename IdxT>
+    struct LoadRLData
+    {
+      PhaseVector<RealT> r{RealT{0.0}, RealT{0.0}, RealT{0.0}};
+      PhaseVector<RealT> l{RealT{0.0}, RealT{0.0}, RealT{0.0}};
+    };
+
     template <class RealT, typename IdxT>
     class LoadRL
     {
@@ -94,6 +104,44 @@ namespace GridKit
 
     private:
       LoadRLData<RealT, IdxT> data_;
+    };
+
+    enum class LoadRLMonitorVariable
+    {
+      ia,
+      ib,
+      ic,
+      dia,
+      dib,
+      dic
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentDescriptor<LoadRL<RealT, IdxT>>
+    {
+      using Component = LoadRL<RealT, IdxT>;
+      using Data      = LoadRLData<RealT, IdxT>;
+
+      static constexpr std::string_view                class_name = "LoadRL";
+      static constexpr std::array<std::string_view, 1> terminals{"ac"};
+      static constexpr std::array<std::string_view, 0> inputs{};
+      static constexpr std::array<std::string_view, 0> outputs{};
+
+      static constexpr auto params = std::tuple{
+          field("r", &Data::r),
+          field("l", &Data::l),
+      };
+
+      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
+      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
+      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+    };
+
+    template <class RealT, class IdxT>
+    struct ComponentMonitorTraits<LoadRL<RealT, IdxT>>
+      : StateMonitorTable<ComponentMonitorTraits<LoadRL<RealT, IdxT>>, LoadRLMonitorVariable>
+    {
+      static constexpr auto entries = phaseCurrentMonitors<LoadRLMonitorVariable>();
     };
   } // namespace EMT
 } // namespace GridKit

@@ -1,20 +1,38 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <stdexcept>
 
-#include <GridKit/Model/EMT/Bus/BusData.hpp>
+#include <GridKit/Model/Events.hpp>
 
 namespace GridKit
 {
   namespace EMT
   {
     template <class RealT, typename IdxT>
+    struct BusData
+    {
+      RealT vm0{0.0};   ///< Initial RMS phase voltage magnitude
+      RealT va0{0.0};   ///< Initial phase-a voltage angle [rad]
+      RealT freq{60.0}; ///< Initial bus frequency [Hz]
+    };
+
+    template <class RealT, typename IdxT>
     class Bus
     {
     public:
+      struct FaultState
+      {
+        GridKit::Model::Events::PhaseMask active{GridKit::Model::Events::PhaseMask::none()};
+        RealT                             r{RealT{1.0}};
+        RealT                             minimum_resistance{RealT{1.0e-6}};
+        bool                              structural{false};
+      };
+
       static constexpr size_t variable_count = 3;
       static constexpr size_t equation_count = 3;
 
@@ -76,8 +94,81 @@ namespace GridKit
         return ScalarT{2.0} * pi * static_cast<ScalarT>(data_.freq);
       }
 
+      void fault(const GridKit::Model::Events::Fault& action)
+      {
+        if (action.x != 0.0 || action.percent != 0.0)
+        {
+          throw std::invalid_argument("EMT bus faults currently support resistance only");
+        }
+
+        const RealT r = static_cast<RealT>(action.r);
+        validateFaultResistance(r, "EMT bus fault resistance must be positive and finite");
+
+        fault_.r      = std::max(r, fault_.minimum_resistance);
+        fault_.active = fault_.active.with(action.phases);
+      }
+
+      void clear(GridKit::Model::Events::PhaseMask phases)
+      {
+        fault_.active = fault_.active.without(phases);
+      }
+
+      bool faultActive(size_t phase) const
+      {
+        return fault_.active.includes(phase);
+      }
+
+      bool hasFaultState() const
+      {
+        return fault_.structural || !fault_.active.empty();
+      }
+
+      RealT faultResistance() const
+      {
+        return fault_.r;
+      }
+
+      void prepareFaultStructure()
+      {
+        fault_.structural = true;
+      }
+
+      template <class ScalarT>
+      ScalarT faultCurrent(ScalarT voltage, size_t phase) const
+      {
+        if (!faultActive(phase))
+        {
+          return ScalarT{0.0};
+        }
+        return -voltage / static_cast<ScalarT>(fault_.r);
+      }
+
+      template <class ScalarT>
+      ScalarT residualCurrent(ScalarT voltage, size_t phase) const
+      {
+        return faultCurrent(voltage, phase);
+      }
+
+      RealT residualJacobian(size_t phase) const
+      {
+        if (!faultActive(phase))
+        {
+          return RealT{0.0};
+        }
+        return -RealT{1.0} / fault_.r;
+      }
+
     private:
+      static void validateFaultResistance(RealT value, const char* message)
+      {
+        if (!std::isfinite(value) || value <= RealT{0.0})
+        {
+          throw std::invalid_argument(message);
+        }
+      }
+
       BusData<RealT, IdxT> data_;
+      FaultState           fault_{};
     };
   } // namespace EMT
 } // namespace GridKit

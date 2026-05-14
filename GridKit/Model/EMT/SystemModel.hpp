@@ -17,8 +17,8 @@
 #include <GridKit/Model/EMT/System/Events.hpp>
 #include <GridKit/Model/EMT/System/Jacobian.hpp>
 #include <GridKit/Model/EMT/System/Layout.hpp>
-#include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/System/Views.hpp>
+#include <GridKit/Model/EMT/SystemModelData.hpp>
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Model/VariableMonitorController.hpp>
 #include <GridKit/ScalarTraits.hpp>
@@ -27,25 +27,26 @@ namespace GridKit
 {
   namespace EMT
   {
-    template <class NetworkT>
+    template <class DataT>
     class SystemModel
-      : public GridKit::Model::Evaluator<typename NetworkT::scalar_type, typename NetworkT::index_type>
+      : public GridKit::Model::Evaluator<typename DataT::scalar_type, typename DataT::index_type>
     {
     public:
-      using ScalarT    = typename NetworkT::scalar_type;
-      using IdxT       = typename NetworkT::index_type;
-      using StoreT     = typename NetworkT::component_store_type;
+      using ScalarT    = typename DataT::scalar_type;
+      using IdxT       = typename DataT::index_type;
+      using StoreT     = typename DataT::component_store_type;
+      using EventT     = typename DataT::ScheduledEvent;
       using Base       = GridKit::Model::Evaluator<ScalarT, IdxT>;
       using RealT      = typename GridKit::ScalarTraits<ScalarT>::RealT;
       using MatrixT    = typename Base::MatrixT;
       using CsrMatrixT = typename Base::CsrMatrixT;
 
-      explicit SystemModel(NetworkT network,
-                           RealT    rel_tol   = 1e-4,
-                           RealT    abs_tol   = 1e-4,
-                           bool     use_jac   = true,
-                           IdxT     max_steps = 2000)
-        : network_{std::move(network)},
+      explicit SystemModel(DataT data,
+                           RealT rel_tol   = 1e-4,
+                           RealT abs_tol   = 1e-4,
+                           bool  use_jac   = true,
+                           IdxT  max_steps = 2000)
+        : data_{std::move(data)},
           rel_tol_{rel_tol},
           abs_tol_{abs_tol},
           use_jac_{use_jac},
@@ -83,12 +84,12 @@ namespace GridKit
         std::fill(yp_.begin(), yp_.end(), ScalarT{0.0});
         std::fill(f_.begin(), f_.end(), ScalarT{0.0});
 
-        for (IdxT bus = 0; bus < static_cast<IdxT>(network_.buses.size()); ++bus)
+        for (IdxT bus = 0; bus < static_cast<IdxT>(data_.buses.size()); ++bus)
         {
-          network_.buses[static_cast<size_t>(bus)].initialize(y_.data(), yp_.data(), layout_.busVariable(bus, 0));
+          data_.buses[static_cast<size_t>(bus)].initialize(y_.data(), yp_.data(), layout_.busVariable(bus, 0));
         }
 
-        network_.components.forEach(
+        data_.components.forEach(
             [&](const auto& component, ComponentId id)
             {
               const auto&                     slot = layout_.component(id);
@@ -97,8 +98,8 @@ namespace GridKit
                                                    layout_,
                                                    slot,
                                                    layout_.terminalBuses(id),
-                                                   std::span<const Bus<ScalarT, IdxT>>(network_.buses.data(),
-                                                                                       network_.buses.size()));
+                                                   std::span<const Bus<ScalarT, IdxT>>(data_.buses.data(),
+                                                                                       data_.buses.size()));
               if constexpr (requires(InitialStateView<ScalarT, IdxT>& view) { component.initialize(view); })
               {
                 component.initialize(init);
@@ -119,7 +120,7 @@ namespace GridKit
       {
         ensureAllocated();
         std::fill(f_.begin(), f_.end(), ScalarT{0.0});
-        network_.components.forEach(
+        data_.components.forEach(
             [&](auto& component, ComponentId id)
             {
               const auto&                 slot = layout_.component(id);
@@ -133,13 +134,14 @@ namespace GridKit
               EquationView<ScalarT, IdxT> equations(f_.data(), layout_, slot, layout_.terminalBuses(id));
               component.residual(state, equations);
             });
+        evaluateBusResiduals();
         return 0;
       }
 
       int evaluateJacobian() override
       {
         ensureAllocated();
-        jacobian_.evaluate(network_, y_, yp_, static_cast<ScalarT>(time_), alpha_);
+        jacobian_.evaluate(data_, y_, yp_, static_cast<ScalarT>(time_), alpha_);
         return 0;
       }
 
@@ -386,14 +388,14 @@ namespace GridKit
         return jacobian_.matrix();
       }
 
-      NetworkT& network()
+      DataT& data()
       {
-        return network_;
+        return data_;
       }
 
-      const NetworkT& network() const
+      const DataT& data() const
       {
-        return network_;
+        return data_;
       }
 
       std::optional<RealT> nextEventTime() const
@@ -429,11 +431,71 @@ namespace GridKit
       }
 
     private:
-      struct BusMonitorBinding
+      class BusMonitorBindingContext
       {
-        const char* label{nullptr};
-        bool        derivative{false};
-        IdxT        phase{0};
+      public:
+        using scalar_type = ScalarT;
+        using real_type   = RealT;
+        using index_type  = IdxT;
+        using MonitorT    = GridKit::Model::CallbackVariableMonitor<ScalarT>;
+
+        BusMonitorBindingContext(SystemModel& system, IdxT bus, MonitorT& monitor)
+          : system_(&system),
+            bus_(bus),
+            monitor_(monitor)
+        {
+        }
+
+        template <class FuncT>
+        void add(std::string label, FuncT getter)
+        {
+          monitor_.add(std::move(label), std::move(getter));
+        }
+
+        void addVoltage(std::string label, IdxT phase)
+        {
+          addVectorValue(std::move(label), false, phase);
+        }
+
+        void addVoltageDerivative(std::string label, IdxT phase)
+        {
+          addVectorValue(std::move(label), true, phase);
+        }
+
+        IdxT voltageIndex(IdxT phase) const
+        {
+          validatePhase(phase);
+          return system_->layout_.busVariable(bus_, phase);
+        }
+
+        const std::vector<ScalarT>* y() const
+        {
+          return &system_->y_;
+        }
+
+      private:
+        void addVectorValue(std::string label, bool derivative, IdxT phase)
+        {
+          const IdxT index = voltageIndex(phase);
+          monitor_.add(std::move(label),
+                       [system = system_, index, derivative]()
+                       {
+                         const auto& values = derivative ? system->yp_ : system->y_;
+                         return values[static_cast<size_t>(index)];
+                       });
+        }
+
+        static void validatePhase(IdxT phase)
+        {
+          if (phase >= Layout<IdxT>::phases)
+          {
+            throw std::invalid_argument("EMT monitor phase index is out of range");
+          }
+        }
+
+        SystemModel* system_{nullptr};
+        IdxT         bus_{INVALID_INDEX<IdxT>};
+        MonitorT&    monitor_;
       };
 
       class MonitorBindingContext
@@ -517,6 +579,35 @@ namespace GridKit
         MonitorT&             monitor_;
       };
 
+      class BusResidualContext
+      {
+      public:
+        BusResidualContext(SystemModel& system, IdxT bus)
+          : system_(&system),
+            bus_(bus)
+        {
+        }
+
+        size_t phaseCount() const
+        {
+          return static_cast<size_t>(Layout<IdxT>::phases);
+        }
+
+        ScalarT voltage(IdxT phase) const
+        {
+          return system_->y_[static_cast<size_t>(system_->layout_.busVariable(bus_, phase))];
+        }
+
+        void addCurrent(IdxT phase, ScalarT value)
+        {
+          system_->f_[static_cast<size_t>(system_->layout_.busEquation(bus_, phase))] += value;
+        }
+
+      private:
+        SystemModel* system_{nullptr};
+        IdxT         bus_{INVALID_INDEX<IdxT>};
+      };
+
       void ensureAllocated()
       {
         if (!allocated_)
@@ -527,8 +618,8 @@ namespace GridKit
 
       void buildLayout()
       {
-        layout_.reset(static_cast<IdxT>(network_.buses.size()), StoreT::typeCount());
-        network_.components.forEach(
+        layout_.reset(static_cast<IdxT>(data_.buses.size()), StoreT::typeCount());
+        data_.components.forEach(
             [&](const auto& component, ComponentId id)
             {
               using ComponentT = std::decay_t<decltype(component)>;
@@ -543,7 +634,7 @@ namespace GridKit
 
         layout_.allocateConnections();
         bindTerminalConnections();
-        bindPortConnections();
+        bindSignalConnections();
         layout_.validateConnections();
       }
 
@@ -553,7 +644,7 @@ namespace GridKit
         monitor_objects_.clear();
         monitor_active_ = false;
 
-        for (const auto& sink : network_.monitor_sinks)
+        for (const auto& sink : data_.monitor_sinks)
         {
           monitor_.addSink(sink);
         }
@@ -561,7 +652,7 @@ namespace GridKit
         bindBusMonitors();
         bindComponentMonitors();
 
-        if (!network_.monitor_sinks.empty())
+        if (!data_.monitor_sinks.empty())
         {
           startMonitor();
         }
@@ -569,7 +660,7 @@ namespace GridKit
 
       void initializeEvents()
       {
-        event_schedule_ = network_.component_events;
+        event_schedule_ = data_.events;
         for (const auto& event : event_schedule_)
         {
           validateEventTime(event);
@@ -587,13 +678,18 @@ namespace GridKit
                          });
         event_cursor_ = 0;
 
-        for (const auto& event : event_schedule_)
+        for (auto& event : event_schedule_)
         {
-          validateEvent(event);
+          if (!event.validate || !event.prepare || !event.apply)
+          {
+            throw std::invalid_argument("EMT scheduled event is incomplete");
+          }
+          event.validate(data_);
+          event.prepare(data_);
         }
       }
 
-      void validateEventTime(const ComponentEventRequest& event)
+      void validateEventTime(const EventT& event)
       {
         if (!std::isfinite(event.time) || event.time < 0.0)
         {
@@ -601,94 +697,30 @@ namespace GridKit
         }
       }
 
-      void validateEvent(const ComponentEventRequest& event)
+      void applyEvent(const EventT& event)
       {
-        const bool found = network_.components.visit(
-            event.component,
-            [&](auto& component)
-            {
-              using ComponentT = std::decay_t<decltype(component)>;
-              (void) component;
-
-              std::visit(
-                  [&](const auto& action)
-                  {
-                    using ActionT = std::decay_t<decltype(action)>;
-                    if constexpr (!ComponentEventTraits<ComponentT>::template supports<ActionT>())
-                    {
-                      throw std::invalid_argument("EMT component does not support scheduled event action");
-                    }
-                  },
-                  event.action);
-            });
-
-        if (!found)
+        if (!event.apply)
         {
-          throw std::invalid_argument("EMT event target component does not exist");
+          throw std::invalid_argument("EMT scheduled event is incomplete");
         }
-      }
-
-      void applyEvent(const ComponentEventRequest& event)
-      {
-        const bool found = network_.components.visit(
-            event.component,
-            [&](auto& component)
-            {
-              using ComponentT = std::decay_t<decltype(component)>;
-              std::visit(
-                  [&](const auto& action)
-                  {
-                    ComponentEventTraits<ComponentT>::apply(component, action);
-                  },
-                  event.action);
-            });
-
-        if (!found)
-        {
-          throw std::invalid_argument("EMT event target component does not exist");
-        }
-      }
-
-      static BusMonitorBinding resolveBusMonitor(BusMonitorVariable variable)
-      {
-        switch (variable)
-        {
-        case BusMonitorVariable::va:
-          return {"va", false, 0};
-        case BusMonitorVariable::vb:
-          return {"vb", false, 1};
-        case BusMonitorVariable::vc:
-          return {"vc", false, 2};
-        case BusMonitorVariable::dva:
-          return {"dva", true, 0};
-        case BusMonitorVariable::dvb:
-          return {"dvb", true, 1};
-        case BusMonitorVariable::dvc:
-          return {"dvc", true, 2};
-        }
-        throw std::invalid_argument("Invalid EMT bus monitor variable");
+        event.apply(data_);
       }
 
       void bindBusMonitors()
       {
-        for (const auto& request : network_.bus_monitors)
+        for (const auto& request : data_.bus_monitors)
         {
           if (request.bus >= layout_.busCount())
           {
             throw std::invalid_argument("EMT monitor bus index is out of range");
           }
 
-          auto monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
+          auto                     monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
+          BusMonitorBindingContext context(*this, request.bus, *monitor);
+          const auto&              bus = data_.buses[static_cast<size_t>(request.bus)];
           for (auto variable : request.variables)
           {
-            const auto binding = resolveBusMonitor(variable);
-            const IdxT index   = layout_.busVariable(request.bus, binding.phase);
-            monitor->add(binding.label,
-                         [this, index, derivative = binding.derivative]()
-                         {
-                           const auto& values = derivative ? yp_ : y_;
-                           return values[static_cast<size_t>(index)];
-                         });
+            BusMonitorTraits<Bus<ScalarT, IdxT>>::bind(context, bus, variable);
           }
 
           auto* raw = monitor.get();
@@ -699,9 +731,9 @@ namespace GridKit
 
       void bindComponentMonitors()
       {
-        for (const auto& request : network_.component_monitors)
+        for (const auto& request : data_.component_monitors)
         {
-          const bool found = network_.components.visit(
+          const bool found = data_.components.visit(
               request.component,
               [&](const auto& component)
               {
@@ -739,14 +771,14 @@ namespace GridKit
 
       void bindTerminalConnections()
       {
-        for (const auto& connection : network_.terminal_connections)
+        for (const auto& connection : data_.terminal_connections)
         {
-          if (connection.bus >= static_cast<IdxT>(network_.buses.size()))
+          if (connection.bus >= static_cast<IdxT>(data_.buses.size()))
           {
             throw std::invalid_argument("EMT terminal connection references a bus that does not exist");
           }
 
-          const bool found = network_.components.visit(
+          const bool found = data_.components.visit(
               connection.terminal.component,
               [&](const auto& component)
               {
@@ -768,20 +800,30 @@ namespace GridKit
         }
       }
 
-      void bindPortConnections()
+      void bindSignalConnections()
       {
-        for (const auto& connection : network_.port_connections)
+        for (const auto& connection : data_.signal_connections)
         {
           layout_.connectInput(connection.input.component,
                                connection.input.index,
-                               resolveOutputVariable(connection.output));
+                               resolveSignalOutputVariable(connection.output));
         }
       }
 
-      IdxT resolveOutputVariable(const OutputRef& output) const
+      void evaluateBusResiduals()
+      {
+        using BusT = Bus<ScalarT, IdxT>;
+        for (IdxT bus = 0; bus < static_cast<IdxT>(data_.buses.size()); ++bus)
+        {
+          BusResidualContext context(*this, bus);
+          ResidualTraits<BusT>::evaluate(context, data_.buses[static_cast<size_t>(bus)]);
+        }
+      }
+
+      IdxT resolveSignalOutputVariable(const SignalOutputRef& output) const
       {
         IdxT       variable = INVALID_INDEX<IdxT>;
-        const bool found    = network_.components.visit(
+        const bool found    = data_.components.visit(
             output.component,
             [&](const auto& component)
             {
@@ -792,7 +834,7 @@ namespace GridKit
                 throw std::invalid_argument("EMT output index is out of range");
               }
 
-              const OutputSpec spec = ComponentTraits<ComponentT>::output(output.index);
+              const SignalOutputSpec spec = ComponentTraits<ComponentT>::output(output.index);
               if (spec.variable >= ComponentTraits<ComponentT>::variable_count)
               {
                 throw std::invalid_argument("EMT output variable is out of range");
@@ -809,7 +851,7 @@ namespace GridKit
 
       void markDifferentialVariables()
       {
-        network_.components.forEach(
+        data_.components.forEach(
             [&](const auto& component, ComponentId id)
             {
               using ComponentT = std::decay_t<decltype(component)>;
@@ -828,7 +870,7 @@ namespace GridKit
         std::vector<ScalarT> scratch_y(static_cast<size_t>(layout_.size()), ScalarT{0.0});
         std::vector<ScalarT> scratch_yp(static_cast<size_t>(layout_.size()), ScalarT{0.0});
         initializeScratchState(scratch_y, scratch_yp);
-        jacobian_.build(network_, layout_, scratch_y, scratch_yp, ScalarT{0.125});
+        jacobian_.build(data_, layout_, scratch_y, scratch_yp, ScalarT{0.125});
       }
 
       static ScalarT deterministicScratchValue(IdxT index)
@@ -846,7 +888,7 @@ namespace GridKit
         }
       }
 
-      NetworkT                    network_;
+      DataT                       data_;
       Layout<IdxT>                layout_;
       JacobianPlan<ScalarT, IdxT> jacobian_;
 
@@ -873,7 +915,7 @@ namespace GridKit
       RealT                                                             alpha_{0.0};
       GridKit::Model::VariableMonitorController<ScalarT>                monitor_{time_};
       std::vector<std::unique_ptr<GridKit::Model::VariableMonitorBase>> monitor_objects_;
-      std::vector<ComponentEventRequest>                                event_schedule_;
+      std::vector<EventT>                                               event_schedule_;
       size_t                                                            event_cursor_{0};
       bool                                                              monitor_active_{false};
       bool                                                              use_jac_{true};
