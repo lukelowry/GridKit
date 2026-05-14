@@ -12,6 +12,7 @@
 #include <GridKit/Constants.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
 #include <GridKit/Model/EMT/System/Monitor.hpp>
+#include <GridKit/Model/Events.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
 
 namespace GridKit
@@ -136,6 +137,14 @@ namespace GridKit
       ComponentRef        component;
       std::string         label;
       std::vector<size_t> variables;
+    };
+
+    struct ComponentEventRequest
+    {
+      double                         time{0.0};
+      ComponentRef                   component;
+      GridKit::Model::Events::Action action;
+      size_t                         order{0};
     };
 
     namespace Detail
@@ -340,6 +349,7 @@ namespace GridKit
       std::vector<MonitorSinkSpec>          monitor_sinks;
       std::vector<BusMonitorRequest<IdxT>>  bus_monitors;
       std::vector<ComponentMonitorRequest>  component_monitors;
+      std::vector<ComponentEventRequest>    component_events;
 
       IdxT addBus(BusData<RealT, IdxT> data)
       {
@@ -388,6 +398,17 @@ namespace GridKit
           encoded.push_back(static_cast<size_t>(variable));
         }
         component_monitors.push_back({ComponentRef{component.id}, std::move(label), std::move(encoded)});
+      }
+
+      template <class ComponentT>
+      void schedule(double                         time,
+                    TypedComponentRef<ComponentT>  component,
+                    GridKit::Model::Events::Action action)
+      {
+        component_events.push_back({time,
+                                    ComponentRef{component.id},
+                                    std::move(action),
+                                    component_events.size()});
       }
     };
   } // namespace EMT

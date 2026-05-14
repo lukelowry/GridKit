@@ -54,6 +54,19 @@ install(
     include/GridKit/Model/EMT/Component/VoltageSource)
 install(
   FILES
+    Component/Breaker/Breaker.hpp
+    Component/Breaker/BreakerData.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/Component/Breaker)
+install(
+  FILES
+    Component/BusFault/BusFault.hpp
+    Component/BusFault/BusFaultData.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/Component/BusFault)
+install(
+  FILES
+    System/Events.hpp
     System/Jacobian.hpp
     System/Layout.hpp
     System/Monitor.hpp

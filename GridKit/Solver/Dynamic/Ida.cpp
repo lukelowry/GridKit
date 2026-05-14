@@ -255,7 +255,9 @@ namespace AnalysisManager
      * @tparam IdxT
      */
     template <class ScalarT, typename IdxT>
-    int Ida<ScalarT, IdxT>::initializeSimulation(RealT t0, bool findConsistent)
+    int Ida<ScalarT, IdxT>::initializeSimulation(RealT                t0,
+                                                 bool                 findConsistent,
+                                                 std::optional<RealT> consistent_tout)
     {
       int retval = 0;
 
@@ -273,7 +275,7 @@ namespace AnalysisManager
         if (tag_)
           initType = IDA_YA_YDP_INIT;
 
-        retval = IDACalcIC(solver_, initType, t0 + 0.1);
+        retval = IDACalcIC(solver_, initType, consistent_tout.value_or(t0 + 0.1));
         checkOutput(retval, "IDACalcIC");
 
         retval = IDAGetConsistentIC(solver_, yy_, yp_);

@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
+#include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -12,6 +14,7 @@
 #include <GridKit/Constants.hpp>
 #include <GridKit/Definitions.hpp>
 #include <GridKit/Model/CallbackVariableMonitor.hpp>
+#include <GridKit/Model/EMT/System/Events.hpp>
 #include <GridKit/Model/EMT/System/Jacobian.hpp>
 #include <GridKit/Model/EMT/System/Layout.hpp>
 #include <GridKit/Model/EMT/System/Network.hpp>
@@ -66,6 +69,7 @@ namespace GridKit
         differential_variables_.assign(static_cast<size_t>(layout_.size()), false);
 
         markDifferentialVariables();
+        initializeEvents();
         initializeMonitor();
         buildJacobianPlan();
         allocated_ = true;
@@ -100,6 +104,7 @@ namespace GridKit
                 component.initialize(init);
               }
             });
+        resetEventCursor();
         return 0;
       }
 
@@ -391,6 +396,38 @@ namespace GridKit
         return network_;
       }
 
+      std::optional<RealT> nextEventTime() const
+      {
+        if (event_cursor_ >= event_schedule_.size())
+        {
+          return std::nullopt;
+        }
+        return static_cast<RealT>(event_schedule_[event_cursor_].time);
+      }
+
+      bool applyNextEventBatch()
+      {
+        ensureAllocated();
+        if (event_cursor_ >= event_schedule_.size())
+        {
+          return false;
+        }
+
+        const double event_time = event_schedule_[event_cursor_].time;
+        while (event_cursor_ < event_schedule_.size()
+               && event_schedule_[event_cursor_].time == event_time)
+        {
+          applyEvent(event_schedule_[event_cursor_]);
+          ++event_cursor_;
+        }
+        return true;
+      }
+
+      void resetEventCursor()
+      {
+        event_cursor_ = 0;
+      }
+
     private:
       struct BusMonitorBinding
       {
@@ -527,6 +564,88 @@ namespace GridKit
         if (!network_.monitor_sinks.empty())
         {
           startMonitor();
+        }
+      }
+
+      void initializeEvents()
+      {
+        event_schedule_ = network_.component_events;
+        for (const auto& event : event_schedule_)
+        {
+          validateEventTime(event);
+        }
+
+        std::stable_sort(event_schedule_.begin(),
+                         event_schedule_.end(),
+                         [](const auto& lhs, const auto& rhs)
+                         {
+                           if (lhs.time == rhs.time)
+                           {
+                             return lhs.order < rhs.order;
+                           }
+                           return lhs.time < rhs.time;
+                         });
+        event_cursor_ = 0;
+
+        for (const auto& event : event_schedule_)
+        {
+          validateEvent(event);
+        }
+      }
+
+      void validateEventTime(const ComponentEventRequest& event)
+      {
+        if (!std::isfinite(event.time) || event.time < 0.0)
+        {
+          throw std::invalid_argument("EMT event time must be finite and nonnegative");
+        }
+      }
+
+      void validateEvent(const ComponentEventRequest& event)
+      {
+        const bool found = network_.components.visit(
+            event.component,
+            [&](auto& component)
+            {
+              using ComponentT = std::decay_t<decltype(component)>;
+              (void) component;
+
+              std::visit(
+                  [&](const auto& action)
+                  {
+                    using ActionT = std::decay_t<decltype(action)>;
+                    if constexpr (!ComponentEventTraits<ComponentT>::template supports<ActionT>())
+                    {
+                      throw std::invalid_argument("EMT component does not support scheduled event action");
+                    }
+                  },
+                  event.action);
+            });
+
+        if (!found)
+        {
+          throw std::invalid_argument("EMT event target component does not exist");
+        }
+      }
+
+      void applyEvent(const ComponentEventRequest& event)
+      {
+        const bool found = network_.components.visit(
+            event.component,
+            [&](auto& component)
+            {
+              using ComponentT = std::decay_t<decltype(component)>;
+              std::visit(
+                  [&](const auto& action)
+                  {
+                    ComponentEventTraits<ComponentT>::apply(component, action);
+                  },
+                  event.action);
+            });
+
+        if (!found)
+        {
+          throw std::invalid_argument("EMT event target component does not exist");
         }
       }
 
@@ -754,6 +873,8 @@ namespace GridKit
       RealT                                                             alpha_{0.0};
       GridKit::Model::VariableMonitorController<ScalarT>                monitor_{time_};
       std::vector<std::unique_ptr<GridKit::Model::VariableMonitorBase>> monitor_objects_;
+      std::vector<ComponentEventRequest>                                event_schedule_;
+      size_t                                                            event_cursor_{0};
       bool                                                              monitor_active_{false};
       bool                                                              use_jac_{true};
       bool                                                              allocated_{false};

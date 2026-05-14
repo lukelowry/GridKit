@@ -14,6 +14,7 @@ endif()
 
 install(FILES
   CallbackVariableMonitor.hpp
+  Events.hpp
   Evaluator.hpp
   VariableMonitor.hpp
   VariableMonitorController.hpp

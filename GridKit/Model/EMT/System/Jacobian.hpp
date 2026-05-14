@@ -11,6 +11,7 @@
 #include <memory>
 #include <stdexcept>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -18,6 +19,7 @@
 #include <GridKit/AutomaticDifferentiation/Enzyme/EnzymeDefinitions.hpp>
 #include <GridKit/Constants.hpp>
 #include <GridKit/LinearAlgebra/SparseMatrix/CsrMatrix.hpp>
+#include <GridKit/Model/EMT/System/Events.hpp>
 #include <GridKit/Model/EMT/System/Layout.hpp>
 #include <GridKit/Model/EMT/System/Views.hpp>
 #include <GridKit/ScalarTraits.hpp>
@@ -338,13 +340,31 @@ namespace GridKit
                            ScalarT                     time,
                            std::vector<Entry>&         entries)
       {
+        nonzeros_.clear();
+        discoverPatternUnion(model, y, yp, time);
+        flushPattern(entries);
+      }
+
+      template <class ModelT>
+      void discoverPatternUnion(const ModelT&               model,
+                                const std::vector<ScalarT>& y,
+                                const std::vector<ScalarT>& yp,
+                                ScalarT                     time)
+      {
         if (active_count_ == IdxT{0} || residual_count_ == IdxT{0})
         {
           return;
         }
 
         updateLocalState(y, yp, ScalarT{1.0});
-        discoverLocalPattern(model, time);
+        auto mode_nonzeros = discoverLocalPattern(model, time);
+        nonzeros_.insert(nonzeros_.end(), mode_nonzeros.begin(), mode_nonzeros.end());
+        std::sort(nonzeros_.begin(), nonzeros_.end());
+        nonzeros_.erase(std::unique(nonzeros_.begin(), nonzeros_.end()), nonzeros_.end());
+      }
+
+      void flushPattern(std::vector<Entry>& entries) const
+      {
         for (const auto& nonzero : nonzeros_)
         {
           entries.emplace_back(row_indices_[static_cast<size_t>(nonzero.row)],
@@ -436,7 +456,7 @@ namespace GridKit
       }
 
       template <class ModelT>
-      void discoverLocalPattern(const ModelT& model, ScalarT time)
+      std::vector<Nonzero> discoverLocalPattern(const ModelT& model, ScalarT time)
       {
         using TrackingScalar = GridKit::DependencyTracking::Variable;
 
@@ -467,7 +487,7 @@ namespace GridKit
                                                                   component_.equation_count);
         model.residual(state, equations);
 
-        nonzeros_.clear();
+        std::vector<Nonzero> nonzeros;
         for (IdxT row = 0; row < residual_count_; ++row)
         {
           const auto& dependencies = residual[static_cast<size_t>(row)].getDependencies();
@@ -475,13 +495,14 @@ namespace GridKit
           {
             if (derivative != 0.0)
             {
-              nonzeros_.push_back({row, static_cast<IdxT>(source), INVALID_INDEX<IdxT>});
+              nonzeros.push_back({row, static_cast<IdxT>(source), INVALID_INDEX<IdxT>});
             }
           }
         }
 
-        std::sort(nonzeros_.begin(), nonzeros_.end());
-        nonzeros_.erase(std::unique(nonzeros_.begin(), nonzeros_.end()), nonzeros_.end());
+        std::sort(nonzeros.begin(), nonzeros.end());
+        nonzeros.erase(std::unique(nonzeros.begin(), nonzeros.end()), nonzeros.end());
+        return nonzeros;
       }
 
       template <class ModelT>
@@ -542,9 +563,20 @@ namespace GridKit
         network.components.forEach(
             [&](const auto& component, ComponentId id)
             {
+              using ComponentT = std::decay_t<decltype(component)>;
+
               ComponentJacobianPlan<ScalarT, IdxT> plan;
               plan.configure(layout, id);
-              plan.discoverPattern(component, scratch_y, scratch_yp, scratch_time, entries);
+              ComponentStructuralModes<ComponentT>::visit(
+                  component,
+                  [&](const auto& structural_component)
+                  {
+                    plan.discoverPatternUnion(structural_component,
+                                              scratch_y,
+                                              scratch_yp,
+                                              scratch_time);
+                  });
+              plan.flushPattern(entries);
               components_.push_back(std::move(plan));
             });
 

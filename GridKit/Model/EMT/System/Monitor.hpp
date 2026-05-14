@@ -8,6 +8,8 @@
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
+#include <GridKit/Model/EMT/Component/Breaker/Breaker.hpp>
+#include <GridKit/Model/EMT/Component/BusFault/BusFault.hpp>
 #include <GridKit/Model/EMT/Component/LoadRL/LoadRL.hpp>
 #include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
 
@@ -43,6 +45,23 @@ namespace GridKit
       dia,
       dib,
       dic
+    };
+
+    enum class BreakerMonitorVariable
+    {
+      ia,
+      ib,
+      ic,
+      dia,
+      dib,
+      dic
+    };
+
+    enum class BusFaultMonitorVariable
+    {
+      ia,
+      ib,
+      ic
     };
 
     enum class VoltageSourceMonitorVariable
@@ -128,6 +147,80 @@ namespace GridKit
         default:
           throw std::invalid_argument("Invalid EMT BranchLumpedConstant monitor variable");
         }
+      }
+    };
+
+    template <class RealT, typename IdxT>
+    struct ComponentMonitorTraits<Breaker<RealT, IdxT>>
+    {
+      using Variable = BreakerMonitorVariable;
+
+      template <class Context>
+      static void bind(Context& ctx, const Breaker<RealT, IdxT>&, size_t raw)
+      {
+        switch (static_cast<Variable>(raw))
+        {
+        case Variable::ia:
+          ctx.addState("ia", 0);
+          break;
+        case Variable::ib:
+          ctx.addState("ib", 1);
+          break;
+        case Variable::ic:
+          ctx.addState("ic", 2);
+          break;
+        case Variable::dia:
+          ctx.addDerivative("dia", 0);
+          break;
+        case Variable::dib:
+          ctx.addDerivative("dib", 1);
+          break;
+        case Variable::dic:
+          ctx.addDerivative("dic", 2);
+          break;
+        default:
+          throw std::invalid_argument("Invalid EMT Breaker monitor variable");
+        }
+      }
+    };
+
+    template <class RealT, typename IdxT>
+    struct ComponentMonitorTraits<BusFault<RealT, IdxT>>
+    {
+      using Variable = BusFaultMonitorVariable;
+
+      template <class Context>
+      static void bind(Context& ctx, const BusFault<RealT, IdxT>& fault, size_t raw)
+      {
+        IdxT        phase = 0;
+        const char* label = nullptr;
+        switch (static_cast<Variable>(raw))
+        {
+        case Variable::ia:
+          phase = 0;
+          label = "ia";
+          break;
+        case Variable::ib:
+          phase = 1;
+          label = "ib";
+          break;
+        case Variable::ic:
+          phase = 2;
+          label = "ic";
+          break;
+        default:
+          throw std::invalid_argument("Invalid EMT BusFault monitor variable");
+        }
+
+        const auto bus_voltage = ctx.terminalVoltageIndex(0, phase);
+        const auto y           = ctx.y();
+
+        ctx.add(label,
+                [&fault, y, bus_voltage, phase]()
+                {
+                  const RealT v = static_cast<RealT>((*y)[static_cast<size_t>(bus_voltage)]);
+                  return fault.current(v, static_cast<size_t>(phase));
+                });
       }
     };
 

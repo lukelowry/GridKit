@@ -14,10 +14,13 @@
 #include <GridKit/Model/CallbackVariableMonitor.hpp>
 #include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/Component/Breaker/Breaker.hpp>
+#include <GridKit/Model/EMT/Component/BusFault/BusFault.hpp>
 #include <GridKit/Model/EMT/Component/LoadRL/LoadRL.hpp>
 #include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
 #include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
+#include <GridKit/Model/Events.hpp>
 #include <GridKit/Model/VariableMonitorController.hpp>
 #include <GridKit/Testing/Testing.hpp>
 
@@ -35,6 +38,36 @@ namespace GridKit
       using SourceData    = EMT::VoltageSourceData<RealT, IdxT>;
       using Branch        = EMT::BranchLumpedConstant<RealT, IdxT>;
       using BranchData    = EMT::BranchLumpedConstantData<RealT, IdxT>;
+      using Breaker       = EMT::Breaker<RealT, IdxT>;
+      using BreakerData   = EMT::BreakerData<RealT, IdxT>;
+      using BusFault      = EMT::BusFault<RealT, IdxT>;
+      using BusFaultData  = EMT::BusFaultData<RealT, IdxT>;
+      using PhaseMask     = GridKit::Model::Events::PhaseMask;
+
+      TestOutcome eventPhaseMask()
+      {
+        TestStatus success = true;
+
+        success *= (GridKit::Model::Events::Open::name == "open");
+        success *= (GridKit::Model::Events::Close::name == "close");
+        success *= (GridKit::Model::Events::Fault::name == "fault");
+        success *= (GridKit::Model::Events::Clear::name == "clear");
+
+        success *= PhaseMask::a().includes(0);
+        success *= !PhaseMask::a().includes(1);
+        success *= PhaseMask::b().includes(1);
+        success *= PhaseMask::c().includes(2);
+        success *= PhaseMask::abc().includes(0);
+        success *= PhaseMask::abc().includes(1);
+        success *= PhaseMask::abc().includes(2);
+        success *= !PhaseMask::abc().includes(3);
+        success *= PhaseMask::none().empty();
+        success *= (PhaseMask::a().with(PhaseMask::c()).bits() == 0b101);
+        success *= (PhaseMask::abc().without(PhaseMask::b()).bits() == 0b101);
+        success *= (PhaseMask::fromBits(0b11110000).bits() == 0b000);
+
+        return success.report(__func__);
+      }
 
       TestOutcome busInitialization()
       {
@@ -314,6 +347,439 @@ namespace GridKit
           success *= isEqual(f[system.layout().busEquation(from_bus, phase)], from_injection, tol);
           success *= isEqual(f[system.layout().busEquation(to_bus, phase)], to_injection, tol);
         }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome breakerResidual()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
+        Network network;
+
+        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = network.add(Breaker(BreakerData{}));
+        network.connect(breaker.terminal(Breaker::from), from_bus);
+        network.connect(breaker.terminal(Breaker::to), to_bus);
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+
+        auto&       y    = system.y();
+        const auto& slot = system.layout().component(breaker);
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          y[system.layout().busVariable(from_bus, phase)] = RealT{10.0} + static_cast<RealT>(phase);
+          y[system.layout().busVariable(to_bus, phase)]   = RealT{4.0} + RealT{2.0} * static_cast<RealT>(phase);
+          y[slot.variable_offset + phase]                 = RealT{0.5} + RealT{0.25} * static_cast<RealT>(phase);
+        }
+
+        system.evaluateResidual();
+        const auto& closed_f = system.getResidual();
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          const RealT current = y[slot.variable_offset + phase];
+          const RealT delta   = y[system.layout().busVariable(to_bus, phase)]
+                              - y[system.layout().busVariable(from_bus, phase)];
+          success *= isEqual(closed_f[slot.equation_offset + phase], delta, RealT{1.0e-12});
+          success *= isEqual(closed_f[system.layout().busEquation(from_bus, phase)], -current, RealT{1.0e-12});
+          success *= isEqual(closed_f[system.layout().busEquation(to_bus, phase)], current, RealT{1.0e-12});
+        }
+
+        auto& state = system.network().components.template get<Breaker>()[0];
+        state.open(PhaseMask::a());
+        success *= !state.closed(0);
+        success *= state.closed(1);
+        success *= state.closed(2);
+
+        system.evaluateResidual();
+        const auto& open_f  = system.getResidual();
+        success            *= isEqual(open_f[slot.equation_offset + 0],
+                           y[slot.variable_offset + 0],
+                           RealT{1.0e-12});
+        for (IdxT phase = 1; phase < 3; ++phase)
+        {
+          const RealT delta = y[system.layout().busVariable(to_bus, phase)]
+                              - y[system.layout().busVariable(from_bus, phase)];
+          success *= isEqual(open_f[slot.equation_offset + phase], delta, RealT{1.0e-12});
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome breakerEvents()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
+        Network network;
+
+        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = network.add(Breaker(BreakerData{}));
+        network.connect(breaker.terminal(Breaker::from), from_bus);
+        network.connect(breaker.terminal(Breaker::to), to_bus);
+
+        network.schedule(0.50, breaker, GridKit::Model::Events::Open{PhaseMask::abc()});
+        network.schedule(0.50, breaker, GridKit::Model::Events::Close{PhaseMask::a()});
+        network.schedule(0.75, breaker, GridKit::Model::Events::Close{PhaseMask::abc()});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+
+        auto event_time  = system.nextEventTime();
+        success         *= event_time.has_value();
+        if (event_time)
+        {
+          success *= isEqual(*event_time, RealT{0.50}, RealT{1.0e-12});
+        }
+
+        success     *= system.applyNextEventBatch();
+        auto& state  = system.network().components.template get<Breaker>()[0];
+        success     *= state.closed(0);
+        success     *= !state.closed(1);
+        success     *= !state.closed(2);
+
+        event_time  = system.nextEventTime();
+        success    *= event_time.has_value();
+        if (event_time)
+        {
+          success *= isEqual(*event_time, RealT{0.75}, RealT{1.0e-12});
+        }
+
+        success *= system.applyNextEventBatch();
+        success *= state.closed(0);
+        success *= state.closed(1);
+        success *= state.closed(2);
+        success *= !system.nextEventTime().has_value();
+        success *= !system.applyNextEventBatch();
+
+        system.resetEventCursor();
+        success *= system.nextEventTime().has_value();
+
+        {
+          Network                         invalid;
+          EMT::TypedComponentRef<Breaker> missing{{0, 0}};
+          invalid.schedule(0.10, missing, GridKit::Model::Events::Open{PhaseMask::abc()});
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> bad_system(invalid);
+                bad_system.allocate();
+              });
+        }
+
+        {
+          Network    unsupported;
+          const IdxT a      = unsupported.addBus({1.0, 0.0, 60.0});
+          const IdxT b      = unsupported.addBus({1.0, 0.0, 60.0});
+          const auto target = unsupported.add(Breaker(BreakerData{}));
+          unsupported.connect(target.terminal(Breaker::from), a);
+          unsupported.connect(target.terminal(Breaker::to), b);
+          unsupported.schedule(0.10, target, GridKit::Model::Events::Fault{});
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> bad_system(unsupported);
+                bad_system.allocate();
+              });
+        }
+
+        {
+          Network    negative_time;
+          const IdxT a      = negative_time.addBus({1.0, 0.0, 60.0});
+          const IdxT b      = negative_time.addBus({1.0, 0.0, 60.0});
+          const auto target = negative_time.add(Breaker(BreakerData{}));
+          negative_time.connect(target.terminal(Breaker::from), a);
+          negative_time.connect(target.terminal(Breaker::to), b);
+          negative_time.schedule(-0.10, target, GridKit::Model::Events::Open{PhaseMask::abc()});
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> bad_system(negative_time);
+                bad_system.allocate();
+              });
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome breakerMonitorCsv()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
+
+        const std::string file = "EMTBreakerMonitorTest.csv";
+        std::filesystem::remove(file);
+
+        Network    network;
+        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = network.add(Breaker(BreakerData{}));
+        network.connect(breaker.terminal(Breaker::from), from_bus);
+        network.connect(breaker.terminal(Breaker::to), to_bus);
+        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        network.monitorComponent(breaker,
+                                 "breaker",
+                                 {EMT::BreakerMonitorVariable::ia,
+                                  EMT::BreakerMonitorVariable::ib,
+                                  EMT::BreakerMonitorVariable::ic,
+                                  EMT::BreakerMonitorVariable::dia,
+                                  EMT::BreakerMonitorVariable::dib,
+                                  EMT::BreakerMonitorVariable::dic});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+
+        const auto& slot = system.layout().component(breaker);
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          system.y()[slot.variable_offset + phase]  = RealT{1.0} + static_cast<RealT>(phase);
+          system.yp()[slot.variable_offset + phase] = RealT{4.0} + static_cast<RealT>(phase);
+        }
+        system.updateTime(0.25, 1.0);
+        system.printMonitoredVariables();
+        system.stopMonitor();
+
+        std::ifstream input(file);
+        std::string   header;
+        std::string   row;
+        std::getline(input, header);
+        std::getline(input, row);
+        const auto values = csvNumbers(row);
+
+        success *= (header == "t,breaker_ia,breaker_ib,breaker_ic,breaker_dia,breaker_dib,breaker_dic");
+        success *= (values.size() == 7);
+        if (values.size() == 7)
+        {
+          success *= isEqual(values[0], RealT{0.25}, RealT{1.0e-12});
+          for (IdxT phase = 0; phase < 3; ++phase)
+          {
+            success *= isEqual(values[1 + phase],
+                               system.y()[slot.variable_offset + phase],
+                               RealT{1.0e-12});
+            success *= isEqual(values[4 + phase],
+                               system.yp()[slot.variable_offset + phase],
+                               RealT{1.0e-12});
+          }
+        }
+
+        std::filesystem::remove(file);
+        return success.report(__func__);
+      }
+
+      TestOutcome busFaultEvents()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, BusFault>;
+        Network network;
+
+        const IdxT bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto fault = network.add(BusFault(BusFaultData{}));
+        network.connect(fault.terminal(0), bus);
+        network.schedule(0.05,
+                         fault,
+                         GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
+        network.schedule(0.07, fault, GridKit::Model::Events::Clear{PhaseMask::a()});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+
+        success *= (system.nnz() == 3);
+
+        auto& y = system.y();
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          y[system.layout().busVariable(bus, phase)] = RealT{10.0} + RealT{10.0} * static_cast<RealT>(phase);
+        }
+
+        system.evaluateResidual();
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          success *= isEqual(system.getResidual()[system.layout().busEquation(bus, phase)], RealT{0.0});
+        }
+
+        const auto* csr  = system.getCsrJacobian();
+        success         *= system.applyNextEventBatch();
+        auto& state      = system.network().components.template get<BusFault>()[0];
+        success         *= state.active(0);
+        success         *= !state.active(1);
+        success         *= !state.active(2);
+
+        system.evaluateResidual();
+        success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 0)], RealT{-5.0});
+        success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 1)], RealT{0.0});
+        success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 2)], RealT{0.0});
+
+        system.evaluateJacobian();
+        success *= isEqual(csrValue(system,
+                                    system.layout().busEquation(bus, 0),
+                                    system.layout().busVariable(bus, 0)),
+                           RealT{-0.5});
+        success *= isEqual(csrValue(system,
+                                    system.layout().busEquation(bus, 1),
+                                    system.layout().busVariable(bus, 1)),
+                           RealT{0.0});
+
+        success *= system.applyNextEventBatch();
+        success *= !state.active(0);
+        system.evaluateResidual();
+        success *= isEqual(system.getResidual()[system.layout().busEquation(bus, 0)], RealT{0.0});
+        system.evaluateJacobian();
+        success *= (system.getCsrJacobian() == csr);
+        success *= (system.nnz() == 3);
+        success *= isEqual(csrValue(system,
+                                    system.layout().busEquation(bus, 0),
+                                    system.layout().busVariable(bus, 0)),
+                           RealT{0.0});
+
+        {
+          Network    unsupported;
+          const IdxT bad_bus   = unsupported.addBus({1.0, 0.0, 60.0});
+          const auto bad_fault = unsupported.add(BusFault(BusFaultData{}));
+          unsupported.connect(bad_fault.terminal(0), bad_bus);
+          unsupported.schedule(0.01, bad_fault, GridKit::Model::Events::Open{PhaseMask::a()});
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> bad_system(unsupported);
+                bad_system.allocate();
+              });
+        }
+
+        {
+          Network    reactive;
+          const IdxT bad_bus   = reactive.addBus({1.0, 0.0, 60.0});
+          const auto bad_fault = reactive.add(BusFault(BusFaultData{}));
+          reactive.connect(bad_fault.terminal(0), bad_bus);
+          reactive.schedule(0.01,
+                            bad_fault,
+                            GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 1.0, 0.0});
+          EMT::SystemModel<Network> reactive_system(reactive);
+          reactive_system.allocate();
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                reactive_system.applyNextEventBatch();
+              });
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome busFaultMonitorCsv()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, BusFault>;
+
+        const std::string file = "EMTBusFaultMonitorTest.csv";
+        std::filesystem::remove(file);
+
+        BusFaultData data{};
+        data.active = PhaseMask::abc();
+        data.r      = RealT{2.0};
+
+        Network    network;
+        const IdxT bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto fault = network.add(BusFault(data));
+        network.connect(fault.terminal(0), bus);
+        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        network.monitorComponent(fault,
+                                 "fault",
+                                 {EMT::BusFaultMonitorVariable::ia,
+                                  EMT::BusFaultMonitorVariable::ib,
+                                  EMT::BusFaultMonitorVariable::ic});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          system.y()[system.layout().busVariable(bus, phase)] = RealT{10.0} + static_cast<RealT>(phase);
+        }
+        system.updateTime(0.125, 1.0);
+        system.printMonitoredVariables();
+        system.stopMonitor();
+
+        std::ifstream input(file);
+        std::string   header;
+        std::string   row;
+        std::getline(input, header);
+        std::getline(input, row);
+        const auto values = csvNumbers(row);
+
+        success *= (header == "t,fault_ia,fault_ib,fault_ic");
+        success *= (values.size() == 4);
+        if (values.size() == 4)
+        {
+          success *= isEqual(values[0], RealT{0.125}, RealT{1.0e-12});
+          for (IdxT phase = 0; phase < 3; ++phase)
+          {
+            const RealT expected  = -system.y()[system.layout().busVariable(bus, phase)] / RealT{2.0};
+            success              *= isEqual(values[1 + phase], expected, RealT{1.0e-12});
+          }
+        }
+
+        std::filesystem::remove(file);
+        return success.report(__func__);
+      }
+
+      TestOutcome breakerJacobian()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, Breaker>;
+        Network network;
+
+        const IdxT from_bus = network.addBus({1.0, 0.0, 60.0});
+        const IdxT to_bus   = network.addBus({1.0, 0.0, 60.0});
+        const auto breaker  = network.add(Breaker(BreakerData{}));
+        network.connect(breaker.terminal(Breaker::from), from_bus);
+        network.connect(breaker.terminal(Breaker::to), to_bus);
+        network.schedule(0.10, breaker, GridKit::Model::Events::Open{PhaseMask::a()});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+        const auto* csr = system.getCsrJacobian();
+        const IdxT  nnz = system.nnz();
+
+        success *= (nnz == 15);
+
+        auto&       y    = system.y();
+        const auto& slot = system.layout().component(breaker);
+        for (IdxT phase = 0; phase < 3; ++phase)
+        {
+          y[system.layout().busVariable(from_bus, phase)] = RealT{10.0} + static_cast<RealT>(phase);
+          y[system.layout().busVariable(to_bus, phase)]   = RealT{4.0} + RealT{2.0} * static_cast<RealT>(phase);
+          y[slot.variable_offset + phase]                 = RealT{0.5} + RealT{0.25} * static_cast<RealT>(phase);
+        }
+
+        system.evaluateJacobian();
+        const IdxT row_a      = slot.equation_offset;
+        const IdxT current_a  = slot.variable_offset;
+        success              *= isEqual(csrValue(system, row_a, system.layout().busVariable(from_bus, 0)), RealT{-1.0});
+        success              *= isEqual(csrValue(system, row_a, system.layout().busVariable(to_bus, 0)), RealT{1.0});
+        success              *= isEqual(csrValue(system, row_a, current_a), RealT{0.0});
+        success              *= isEqual(csrValue(system, system.layout().busEquation(from_bus, 0), current_a), RealT{-1.0});
+        success              *= isEqual(csrValue(system, system.layout().busEquation(to_bus, 0), current_a), RealT{1.0});
+
+        success *= system.applyNextEventBatch();
+        system.evaluateJacobian();
+        success *= (system.getCsrJacobian() == csr);
+        success *= (system.nnz() == nnz);
+        success *= isEqual(csrValue(system, row_a, system.layout().busVariable(from_bus, 0)), RealT{0.0});
+        success *= isEqual(csrValue(system, row_a, system.layout().busVariable(to_bus, 0)), RealT{0.0});
+        success *= isEqual(csrValue(system, row_a, current_a), RealT{1.0});
+
+        const IdxT row_b      = slot.equation_offset + 1;
+        const IdxT current_b  = slot.variable_offset + 1;
+        success              *= isEqual(csrValue(system, row_b, system.layout().busVariable(from_bus, 1)), RealT{-1.0});
+        success              *= isEqual(csrValue(system, row_b, system.layout().busVariable(to_bus, 1)), RealT{1.0});
+        success              *= isEqual(csrValue(system, row_b, current_b), RealT{0.0});
 
         return success.report(__func__);
       }
@@ -630,6 +1096,23 @@ namespace GridKit
       }
 
     private:
+      template <class System>
+      RealT csrValue(System& system, IdxT row, IdxT col) const
+      {
+        auto*        csr      = system.getCsrJacobian();
+        const IdxT*  row_ptrs = csr->getRowData();
+        const IdxT*  cols     = csr->getColData();
+        const RealT* values   = csr->getValues();
+        for (IdxT k = row_ptrs[row]; k < row_ptrs[row + 1]; ++k)
+        {
+          if (cols[k] == col)
+          {
+            return values[k];
+          }
+        }
+        return RealT{0.0};
+      }
+
       std::vector<RealT> csvNumbers(const std::string& row) const
       {
         std::vector<RealT> values;
