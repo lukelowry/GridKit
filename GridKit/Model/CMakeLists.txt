@@ -13,6 +13,7 @@ if(GRIDKIT_ENABLE_ENZYME)
 endif()
 
 install(FILES
+  CallbackVariableMonitor.hpp
   Evaluator.hpp
   VariableMonitor.hpp
   VariableMonitorController.hpp

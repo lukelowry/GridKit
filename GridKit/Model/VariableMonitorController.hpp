@@ -4,8 +4,18 @@
  * @file
  */
 
+#include <fstream>
+#include <limits>
+#include <memory>
 #include <ostream>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
+#include <utility>
+#include <variant>
+#include <vector>
+
+#include <GridKit/Model/VariableMonitor.hpp>
 
 namespace GridKit
 {
@@ -106,10 +116,11 @@ namespace GridKit
        */
       void start()
       {
-        if (!empty())
+        if (!empty() && !started_)
         {
           startSinks();
           printHeader();
+          started_ = true;
         }
       }
 
@@ -118,11 +129,23 @@ namespace GridKit
        */
       void stop()
       {
-        if (!empty())
+        if (started_)
         {
           printFooter();
           stopSinks();
+          started_ = false;
         }
+      }
+
+      /**
+       * @brief Remove all sinks, submonitors, and top-level variables.
+       */
+      void clear()
+      {
+        stop();
+        sinks_.clear();
+        monitors_.clear();
+        variables_.clear();
       }
 
       /// @copydoc VariableMonitorBase::printHeader
@@ -425,6 +448,8 @@ namespace GridKit
       std::vector<SinkVariant>                sinks_;
       /// Collection of submonitors
       std::vector<const VariableMonitorBase*> monitors_;
+      /// True after sinks have been started and headers printed.
+      bool                                    started_{false};
 
       /**
        * @brief Key/Value object for extra top-level variables

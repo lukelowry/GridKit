@@ -14,6 +14,9 @@ int main()
   result += test.discoveredStructure();
   result += test.zeroStateSparsity();
   result += test.enzymeJacobian();
+  result += test.callbackVariableMonitor();
+  result += test.emtMonitorCsv();
+  result += test.emtMonitorValidation();
 
   return result.summary();
 }

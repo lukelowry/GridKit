@@ -4,15 +4,21 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <filesystem>
+#include <fstream>
 #include <limits>
+#include <sstream>
+#include <string>
 #include <vector>
 
+#include <GridKit/Model/CallbackVariableMonitor.hpp>
 #include <GridKit/Model/EMT/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
 #include <GridKit/Model/EMT/Component/LoadRL/LoadRL.hpp>
 #include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
 #include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
+#include <GridKit/Model/VariableMonitorController.hpp>
 #include <GridKit/Testing/Testing.hpp>
 
 namespace GridKit
@@ -444,7 +450,198 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome callbackVariableMonitor()
+      {
+        TestStatus success = true;
+
+        const std::string file = "EMTCallbackMonitorTest.csv";
+        std::filesystem::remove(file);
+
+        RealT time = RealT{0.5};
+        RealT a    = RealT{1.25};
+        RealT b    = RealT{-2.5};
+
+        GridKit::Model::VariableMonitorController<RealT> controller(time);
+        GridKit::Model::CallbackVariableMonitor<RealT>   monitor("sample");
+        monitor.add("a", [&]()
+                    { return a; });
+        monitor.add("b", [&]()
+                    { return b; });
+
+        controller.addSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        controller.addMonitor(&monitor);
+        controller.start();
+        controller.print();
+        controller.stop();
+
+        std::ifstream input(file);
+        std::string   header;
+        std::string   row;
+        std::getline(input, header);
+        std::getline(input, row);
+        const auto values = csvNumbers(row);
+
+        success *= (header == "t,sample_a,sample_b");
+        success *= (values.size() == 3);
+        if (values.size() == 3)
+        {
+          success *= isEqual(values[0], time, RealT{1.0e-12});
+          success *= isEqual(values[1], a, RealT{1.0e-12});
+          success *= isEqual(values[2], b, RealT{1.0e-12});
+        }
+
+        std::filesystem::remove(file);
+        return success.report(__func__);
+      }
+
+      TestOutcome emtMonitorCsv()
+      {
+        TestStatus success = true;
+
+        using Network = EMT::NetworkData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
+
+        const std::string file = "EMTMonitorBindingTest.csv";
+        std::filesystem::remove(file);
+
+        Network    network;
+        const IdxT from_bus = network.addBus({120.0, 0.15, 60.0});
+        const IdxT to_bus   = network.addBus({118.0, 0.02, 60.0});
+        const auto load     = network.add(LoadRL(loadData()));
+        const auto source   = network.add(VoltageSource(sourceData()));
+        const auto branch   = network.add(Branch(fullBranchData()));
+        network.connect(load.terminal(0), to_bus);
+        network.connect(source.terminal(0), from_bus);
+        network.connect(branch.terminal(Branch::from), from_bus);
+        network.connect(branch.terminal(Branch::to), to_bus);
+
+        network.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
+        network.monitorBus(from_bus, "source_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
+        network.monitorBus(to_bus, "load_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
+        network.monitorComponent(source, "source", {EMT::VoltageSourceMonitorVariable::ia, EMT::VoltageSourceMonitorVariable::ib, EMT::VoltageSourceMonitorVariable::ic});
+        network.monitorComponent(load, "load", {EMT::LoadRLMonitorVariable::ia, EMT::LoadRLMonitorVariable::ib, EMT::LoadRLMonitorVariable::ic});
+        network.monitorComponent(branch, "line", {EMT::BranchLumpedConstantMonitorVariable::ia, EMT::BranchLumpedConstantMonitorVariable::ib, EMT::BranchLumpedConstantMonitorVariable::ic});
+
+        EMT::SystemModel<Network> system(network);
+        system.allocate();
+        system.initialize();
+        system.updateTime(0.0, 1.0);
+        system.evaluateResidual();
+        system.printMonitoredVariables();
+        system.stopMonitor();
+
+        std::ifstream input(file);
+        std::string   header;
+        std::string   row;
+        std::getline(input, header);
+        std::getline(input, row);
+        const auto values = csvNumbers(row);
+
+        success *= (header == "t,source_bus_va,source_bus_vb,source_bus_vc,load_bus_va,load_bus_vb,load_bus_vc,source_ia,source_ib,source_ic,load_ia,load_ib,load_ic,line_ia,line_ib,line_ic");
+        success *= (values.size() == 16);
+
+        if (values.size() == 16)
+        {
+          const auto& y          = system.y();
+          const auto& sourceData = system.network().components.template get<VoltageSource>()[0].data();
+          const auto& loadSlot   = system.layout().component(load);
+          const auto& lineSlot   = system.layout().component(branch);
+          const RealT sqrt2      = std::sqrt(RealT{2.0});
+
+          success *= isEqual(values[0], RealT{0.0}, RealT{1.0e-12});
+          for (IdxT phase = 0; phase < 3; ++phase)
+          {
+            success *= isEqual(values[1 + phase],
+                               y[system.layout().busVariable(from_bus, phase)],
+                               RealT{1.0e-12});
+            success *= isEqual(values[4 + phase],
+                               y[system.layout().busVariable(to_bus, phase)],
+                               RealT{1.0e-12});
+
+            const RealT e = sqrt2 * sourceData.e[phase] * std::cos(sourceData.phi[phase]);
+            const RealT sourceCurrent =
+                (e - y[system.layout().busVariable(from_bus, phase)]) / sourceData.r[phase];
+            success *= isEqual(values[7 + phase], sourceCurrent, RealT{1.0e-12});
+            success *= isEqual(values[10 + phase],
+                               y[loadSlot.variable_offset + phase],
+                               RealT{1.0e-12});
+            success *= isEqual(values[13 + phase],
+                               y[lineSlot.variable_offset + phase],
+                               RealT{1.0e-12});
+          }
+        }
+
+        std::filesystem::remove(file);
+        return success.report(__func__);
+      }
+
+      TestOutcome emtMonitorValidation()
+      {
+        TestStatus success = true;
+
+        {
+          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
+          Network network;
+          network.addBus({120.0, 0.0, 60.0});
+          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          network.monitorBus(IdxT{99}, "missing", {EMT::BusMonitorVariable::va});
+
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> system(network);
+                system.allocate();
+              });
+        }
+
+        {
+          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
+          Network    network;
+          const IdxT bus  = network.addBus({120.0, 0.0, 60.0});
+          const auto load = network.add(LoadRL(loadData()));
+          network.connect(load.terminal(0), bus);
+          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          network.monitorComponent(load, "load", {static_cast<EMT::LoadRLMonitorVariable>(99)});
+
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> system(network);
+                system.allocate();
+              });
+        }
+
+        {
+          using Network = EMT::NetworkData<RealT, IdxT, LoadRL>;
+          Network network;
+          network.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
+          EMT::TypedComponentRef<LoadRL> missing{{99, 0}};
+          network.monitorComponent(missing, "missing", {EMT::LoadRLMonitorVariable::ia});
+
+          success *= throws<std::invalid_argument>(
+              [&]()
+              {
+                EMT::SystemModel<Network> system(network);
+                system.allocate();
+              });
+        }
+
+        std::filesystem::remove("unused.csv");
+        return success.report(__func__);
+      }
+
     private:
+      std::vector<RealT> csvNumbers(const std::string& row) const
+      {
+        std::vector<RealT> values;
+        std::stringstream  stream(row);
+        std::string        field;
+        while (std::getline(stream, field, ','))
+        {
+          values.push_back(static_cast<RealT>(std::stod(field)));
+        }
+        return values;
+      }
+
       template <class System>
       bool checkJacobian(System& system, RealT alpha, RealT eps, RealT tol)
       {

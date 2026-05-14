@@ -56,6 +56,7 @@ install(
   FILES
     System/Jacobian.hpp
     System/Layout.hpp
+    System/Monitor.hpp
     System/Network.hpp
     System/Views.hpp
   DESTINATION

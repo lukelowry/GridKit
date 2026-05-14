@@ -2,6 +2,8 @@
 
 #include <concepts>
 #include <cstddef>
+#include <initializer_list>
+#include <string>
 #include <tuple>
 #include <type_traits>
 #include <utility>
@@ -9,6 +11,8 @@
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/System/Monitor.hpp>
+#include <GridKit/Model/VariableMonitor.hpp>
 
 namespace GridKit
 {
@@ -93,6 +97,46 @@ namespace GridKit
     {
       return {id, local};
     }
+
+    template <class ComponentT>
+    struct TypedComponentRef
+    {
+      using component_type = ComponentT;
+
+      ComponentId id;
+
+      constexpr operator ComponentId() const
+      {
+        return id;
+      }
+
+      constexpr operator ComponentRef() const
+      {
+        return {id};
+      }
+
+      constexpr TerminalRef terminal(size_t local) const
+      {
+        return {id, local};
+      }
+
+      constexpr InputRef input(size_t local) const
+      {
+        return {id, local};
+      }
+
+      constexpr OutputRef output(size_t local) const
+      {
+        return {id, local};
+      }
+    };
+
+    struct ComponentMonitorRequest
+    {
+      ComponentRef        component;
+      std::string         label;
+      std::vector<size_t> variables;
+    };
 
     namespace Detail
     {
@@ -181,7 +225,7 @@ namespace GridKit
     {
     public:
       template <class T>
-      ComponentRef add(T component)
+      auto add(T component)
       {
         using ComponentT = std::decay_t<T>;
         static_assert(Detail::Contains<ComponentT, Ts...>,
@@ -189,8 +233,8 @@ namespace GridKit
         static_assert(ComponentTraits<ComponentT>::is_valid,
                       "EMT components with local variables must define static constexpr bool differential(size_t)");
 
-        auto&        components = std::get<std::vector<ComponentT>>(components_);
-        ComponentRef ref{{Detail::TypeIndex<ComponentT, Ts...>::value, components.size()}};
+        auto&                         components = std::get<std::vector<ComponentT>>(components_);
+        TypedComponentRef<ComponentT> ref{{Detail::TypeIndex<ComponentT, Ts...>::value, components.size()}};
         components.push_back(std::move(component));
         return ref;
       }
@@ -287,11 +331,15 @@ namespace GridKit
       using scalar_type          = RealT;
       using index_type           = IdxT;
       using component_store_type = ComponentStore<ComponentTs...>;
+      using MonitorSinkSpec      = GridKit::Model::VariableMonitorBase::SinkSpec;
 
       std::vector<Bus<RealT, IdxT>>         buses;
       component_store_type                  components;
       std::vector<TerminalConnection<IdxT>> terminal_connections;
       std::vector<PortConnection>           port_connections;
+      std::vector<MonitorSinkSpec>          monitor_sinks;
+      std::vector<BusMonitorRequest<IdxT>>  bus_monitors;
+      std::vector<ComponentMonitorRequest>  component_monitors;
 
       IdxT addBus(BusData<RealT, IdxT> data)
       {
@@ -301,7 +349,7 @@ namespace GridKit
       }
 
       template <class T>
-      ComponentRef add(T component)
+      auto add(T component)
       {
         return components.add(std::move(component));
       }
@@ -314,6 +362,32 @@ namespace GridKit
       void connect(OutputRef output, InputRef input)
       {
         port_connections.push_back({output, input});
+      }
+
+      void addMonitorSink(MonitorSinkSpec sink)
+      {
+        monitor_sinks.push_back(std::move(sink));
+      }
+
+      void monitorBus(IdxT                                      bus,
+                      std::string                               label,
+                      std::initializer_list<BusMonitorVariable> variables)
+      {
+        bus_monitors.push_back({bus, std::move(label), {variables.begin(), variables.end()}});
+      }
+
+      template <class ComponentT>
+      void monitorComponent(TypedComponentRef<ComponentT>                                                component,
+                            std::string                                                                  label,
+                            std::initializer_list<typename ComponentMonitorTraits<ComponentT>::Variable> variables)
+      {
+        std::vector<size_t> encoded;
+        encoded.reserve(variables.size());
+        for (auto variable : variables)
+        {
+          encoded.push_back(static_cast<size_t>(variable));
+        }
+        component_monitors.push_back({ComponentRef{component.id}, std::move(label), std::move(encoded)});
       }
     };
   } // namespace EMT

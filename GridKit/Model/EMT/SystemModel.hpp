@@ -1,19 +1,23 @@
 #pragma once
 
 #include <algorithm>
+#include <memory>
 #include <span>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/Definitions.hpp>
+#include <GridKit/Model/CallbackVariableMonitor.hpp>
 #include <GridKit/Model/EMT/System/Jacobian.hpp>
 #include <GridKit/Model/EMT/System/Layout.hpp>
 #include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/System/Views.hpp>
 #include <GridKit/Model/Evaluator.hpp>
+#include <GridKit/Model/VariableMonitorController.hpp>
 #include <GridKit/ScalarTraits.hpp>
 
 namespace GridKit
@@ -62,6 +66,7 @@ namespace GridKit
         differential_variables_.assign(static_cast<size_t>(layout_.size()), false);
 
         markDifferentialVariables();
+        initializeMonitor();
         buildJacobianPlan();
         allocated_ = true;
         return 0;
@@ -166,6 +171,42 @@ namespace GridKit
       CsrMatrixT* getCsrJacobian() const override
       {
         return jacobian_.matrix().matrix();
+      }
+
+      bool monitoring() const override
+      {
+        return monitor_active_;
+      }
+
+      void printMonitoredVariables() const override
+      {
+        if (monitor_active_)
+        {
+          monitor_.print();
+        }
+      }
+
+      const GridKit::Model::VariableMonitorBase* getMonitor() const override
+      {
+        return &monitor_;
+      }
+
+      void startMonitor() override
+      {
+        if (!monitor_.empty())
+        {
+          monitor_.start();
+          monitor_active_ = true;
+        }
+      }
+
+      void stopMonitor() override
+      {
+        if (monitor_active_)
+        {
+          monitor_.stop();
+          monitor_active_ = false;
+        }
       }
 
       bool hasJacobian() override
@@ -351,6 +392,94 @@ namespace GridKit
       }
 
     private:
+      struct BusMonitorBinding
+      {
+        const char* label{nullptr};
+        bool        derivative{false};
+        IdxT        phase{0};
+      };
+
+      class MonitorBindingContext
+      {
+      public:
+        using scalar_type = ScalarT;
+        using real_type   = RealT;
+        using index_type  = IdxT;
+        using MonitorT    = GridKit::Model::CallbackVariableMonitor<ScalarT>;
+
+        MonitorBindingContext(SystemModel&                 system,
+                              const ComponentLayout<IdxT>& component,
+                              std::span<const IdxT>        terminal_buses,
+                              MonitorT&                    monitor)
+          : system_(&system),
+            component_(component),
+            terminal_buses_(terminal_buses),
+            monitor_(monitor)
+        {
+        }
+
+        template <class FuncT>
+        void add(std::string label, FuncT getter)
+        {
+          monitor_.add(std::move(label), std::move(getter));
+        }
+
+        void addState(std::string label, size_t local)
+        {
+          addVectorValue(std::move(label), false, local);
+        }
+
+        void addDerivative(std::string label, size_t local)
+        {
+          addVectorValue(std::move(label), true, local);
+        }
+
+        IdxT terminalVoltageIndex(size_t terminal, IdxT phase) const
+        {
+          if (terminal >= terminal_buses_.size())
+          {
+            throw std::invalid_argument("EMT monitor terminal index is out of range");
+          }
+          if (phase >= Layout<IdxT>::phases)
+          {
+            throw std::invalid_argument("EMT monitor phase index is out of range");
+          }
+          return system_->layout_.busVariable(terminal_buses_[terminal], phase);
+        }
+
+        const std::vector<ScalarT>* y() const
+        {
+          return &system_->y_;
+        }
+
+        const RealT* time() const
+        {
+          return &system_->time_;
+        }
+
+      private:
+        void addVectorValue(std::string label, bool derivative, size_t local)
+        {
+          if (local >= static_cast<size_t>(component_.variable_count))
+          {
+            throw std::invalid_argument("EMT monitor component variable index is out of range");
+          }
+
+          const IdxT index = component_.variable_offset + static_cast<IdxT>(local);
+          monitor_.add(std::move(label),
+                       [system = system_, index, derivative]()
+                       {
+                         const auto& values = derivative ? system->yp_ : system->y_;
+                         return values[static_cast<size_t>(index)];
+                       });
+        }
+
+        SystemModel*          system_{nullptr};
+        ComponentLayout<IdxT> component_{};
+        std::span<const IdxT> terminal_buses_;
+        MonitorT&             monitor_;
+      };
+
       void ensureAllocated()
       {
         if (!allocated_)
@@ -379,6 +508,114 @@ namespace GridKit
         bindTerminalConnections();
         bindPortConnections();
         layout_.validateConnections();
+      }
+
+      void initializeMonitor()
+      {
+        monitor_.clear();
+        monitor_objects_.clear();
+        monitor_active_ = false;
+
+        for (const auto& sink : network_.monitor_sinks)
+        {
+          monitor_.addSink(sink);
+        }
+
+        bindBusMonitors();
+        bindComponentMonitors();
+
+        if (!network_.monitor_sinks.empty())
+        {
+          startMonitor();
+        }
+      }
+
+      static BusMonitorBinding resolveBusMonitor(BusMonitorVariable variable)
+      {
+        switch (variable)
+        {
+        case BusMonitorVariable::va:
+          return {"va", false, 0};
+        case BusMonitorVariable::vb:
+          return {"vb", false, 1};
+        case BusMonitorVariable::vc:
+          return {"vc", false, 2};
+        case BusMonitorVariable::dva:
+          return {"dva", true, 0};
+        case BusMonitorVariable::dvb:
+          return {"dvb", true, 1};
+        case BusMonitorVariable::dvc:
+          return {"dvc", true, 2};
+        }
+        throw std::invalid_argument("Invalid EMT bus monitor variable");
+      }
+
+      void bindBusMonitors()
+      {
+        for (const auto& request : network_.bus_monitors)
+        {
+          if (request.bus >= layout_.busCount())
+          {
+            throw std::invalid_argument("EMT monitor bus index is out of range");
+          }
+
+          auto monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
+          for (auto variable : request.variables)
+          {
+            const auto binding = resolveBusMonitor(variable);
+            const IdxT index   = layout_.busVariable(request.bus, binding.phase);
+            monitor->add(binding.label,
+                         [this, index, derivative = binding.derivative]()
+                         {
+                           const auto& values = derivative ? yp_ : y_;
+                           return values[static_cast<size_t>(index)];
+                         });
+          }
+
+          auto* raw = monitor.get();
+          monitor_objects_.push_back(std::move(monitor));
+          monitor_.addMonitor(raw);
+        }
+      }
+
+      void bindComponentMonitors()
+      {
+        for (const auto& request : network_.component_monitors)
+        {
+          const bool found = network_.components.visit(
+              request.component,
+              [&](const auto& component)
+              {
+                using ComponentT = std::decay_t<decltype(component)>;
+
+                if constexpr (requires { typename ComponentMonitorTraits<ComponentT>::Variable; })
+                {
+                  auto                  monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
+                  MonitorBindingContext context(*this,
+                                                layout_.component(request.component),
+                                                layout_.terminalBuses(request.component),
+                                                *monitor);
+
+                  for (auto raw_variable : request.variables)
+                  {
+                    ComponentMonitorTraits<ComponentT>::bind(context, component, raw_variable);
+                  }
+
+                  auto* raw = monitor.get();
+                  monitor_objects_.push_back(std::move(monitor));
+                  monitor_.addMonitor(raw);
+                }
+                else
+                {
+                  throw std::invalid_argument("EMT component type does not define monitor variables");
+                }
+              });
+
+          if (!found)
+          {
+            throw std::invalid_argument("EMT monitor component does not exist");
+          }
+        }
       }
 
       void bindTerminalConnections()
@@ -511,13 +748,16 @@ namespace GridKit
 
       MatrixT coo_jacobian_;
 
-      RealT rel_tol_{1e-4};
-      RealT abs_tol_{1e-4};
-      RealT time_{0.0};
-      RealT alpha_{0.0};
-      bool  use_jac_{true};
-      bool  allocated_{false};
-      IdxT  max_steps_{2000};
+      RealT                                                             rel_tol_{1e-4};
+      RealT                                                             abs_tol_{1e-4};
+      RealT                                                             time_{0.0};
+      RealT                                                             alpha_{0.0};
+      GridKit::Model::VariableMonitorController<ScalarT>                monitor_{time_};
+      std::vector<std::unique_ptr<GridKit::Model::VariableMonitorBase>> monitor_objects_;
+      bool                                                              monitor_active_{false};
+      bool                                                              use_jac_{true};
+      bool                                                              allocated_{false};
+      IdxT                                                              max_steps_{2000};
     };
   } // namespace EMT
 } // namespace GridKit

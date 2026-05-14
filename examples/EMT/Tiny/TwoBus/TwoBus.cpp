@@ -11,6 +11,7 @@
 #include <GridKit/Model/EMT/Component/VoltageSource/VoltageSource.hpp>
 #include <GridKit/Model/EMT/System/Network.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
+#include <GridKit/Solver/Dynamic/Ida.hpp>
 
 namespace
 {
@@ -24,9 +25,20 @@ namespace
   using Source     = GridKit::EMT::VoltageSource<Real, Index>;
   using SourceData = GridKit::EMT::VoltageSourceData<Real, Index>;
   using Network    = GridKit::EMT::NetworkData<Real, Index, LoadRL, Source, Branch>;
+  using System     = GridKit::EMT::SystemModel<Network>;
+  using Ida        = AnalysisManager::Sundials::Ida<Real, Index>;
   using Complex    = std::complex<Real>;
+  using Format     = GridKit::Model::VariableMonitorFormat;
+  using BusVar     = GridKit::EMT::BusMonitorVariable;
+  using LoadVar    = GridKit::EMT::LoadRLMonitorVariable;
+  using SourceVar  = GridKit::EMT::VoltageSourceMonitorVariable;
+  using LineVar    = GridKit::EMT::BranchLumpedConstantMonitorVariable;
 
-  constexpr Real frequency = 60.0;
+  constexpr Real frequency           = 60.0;
+  constexpr Real simulation_end_time = 0.1;
+  constexpr int  output_steps        = 600;
+  constexpr Real relative_tolerance  = 1.0e-8;
+  constexpr Real absolute_tolerance  = 1.0e-8;
 
   Real pi()
   {
@@ -91,6 +103,13 @@ namespace
     network.connect(branch.terminal(Branch::from), source_bus);
     network.connect(branch.terminal(Branch::to), load_bus);
 
+    network.addMonitorSink({"EMTTinyTwoBus.csv", Format::CSV});
+    network.monitorBus(source_bus, "source_bus", {BusVar::va, BusVar::vb, BusVar::vc});
+    network.monitorBus(load_bus, "load_bus", {BusVar::va, BusVar::vb, BusVar::vc});
+    network.monitorComponent(source, "source", {SourceVar::ia, SourceVar::ib, SourceVar::ic});
+    network.monitorComponent(load, "load", {LoadVar::ia, LoadVar::ib, LoadVar::ic});
+    network.monitorComponent(branch, "line", {LineVar::ia, LineVar::ib, LineVar::ic});
+
     return network;
   }
 
@@ -110,19 +129,34 @@ int main()
 {
   auto network = makeNetwork();
 
-  GridKit::EMT::SystemModel<Network> system(std::move(network));
+  System system(std::move(network), relative_tolerance, absolute_tolerance);
   system.allocate();
-  system.initialize();
+
+  Ida ida(&system);
+  ida.configureSimulation();
+  ida.initializeSimulation(0.0, false);
+
   system.updateTime(0.0, 1.0);
   system.evaluateResidual();
   system.evaluateJacobian();
+
+  const Real initial_residual_norm = maxAbs(system.getResidual());
+
+  system.printMonitoredVariables();
+  const int simulation_status = ida.runSimulation(simulation_end_time, output_steps);
+
+  system.evaluateResidual();
+  system.stopMonitor();
 
   const Real residual_norm = maxAbs(system.getResidual());
 
   std::cout << "Example: EMT Tiny TwoBus\n";
   std::cout << "state size      : " << system.size() << '\n';
   std::cout << "jacobian nnz    : " << system.nnz() << '\n';
-  std::cout << "max |residual|  : " << residual_norm << '\n';
+  std::cout << "output file     : EMTTinyTwoBus.csv\n";
+  std::cout << "output rows     : " << output_steps + 1 << '\n';
+  std::cout << "initial residual: " << initial_residual_norm << '\n';
+  std::cout << "final residual  : " << residual_norm << '\n';
 
-  return residual_norm < 1.0e-8 ? EXIT_SUCCESS : EXIT_FAILURE;
+  return simulation_status == 0 && initial_residual_norm < 1.0e-8 ? EXIT_SUCCESS : EXIT_FAILURE;
 }
