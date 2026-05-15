@@ -267,7 +267,7 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        const auto va  = EMT::resolveBusMonitorVariable("va");
+        const auto va  = EMT::resolveBusMonitorVariable("VA");
         const auto dc  = EMT::resolveBusMonitorVariable("dvc");
         success       *= va.has_value();
         success       *= (*va == EMT::BusMonitorVariable::va);
@@ -276,25 +276,25 @@ namespace GridKit
         success       *= !EMT::resolveBusMonitorVariable("vx").has_value();
 
         const auto loadIa  = EMT::ComponentMonitorTraits<Load>::resolve("ia");
-        const auto loadDi  = EMT::ComponentMonitorTraits<Load>::resolve("dic");
+        const auto loadDi  = EMT::ComponentMonitorTraits<Load>::resolve("DIC");
         success           *= loadIa.has_value();
-        success           *= (*loadIa == static_cast<std::size_t>(EMT::LoadRLMonitorVariable::ia));
+        success           *= (*loadIa == EMT::LoadRLMonitorVariable::ia);
         success           *= loadDi.has_value();
-        success           *= (*loadDi == static_cast<std::size_t>(EMT::LoadRLMonitorVariable::dic));
+        success           *= (*loadDi == EMT::LoadRLMonitorVariable::dic);
         success           *= !EMT::ComponentMonitorTraits<Load>::resolve("v").has_value();
 
-        const auto branchIb  = EMT::ComponentMonitorTraits<Branch>::resolve("ib");
+        const auto branchIb  = EMT::ComponentMonitorTraits<Branch>::resolve("IB");
         success             *= branchIb.has_value();
-        success             *= (*branchIb == static_cast<std::size_t>(EMT::BranchLumpedConstantMonitorVariable::ib));
+        success             *= (*branchIb == EMT::BranchLumpedConstantMonitorVariable::ib);
 
-        const auto sourceIc  = EMT::ComponentMonitorTraits<Source>::resolve("ic");
+        const auto sourceIc  = EMT::ComponentMonitorTraits<Source>::resolve("IC");
         success             *= sourceIc.has_value();
-        success             *= (*sourceIc == static_cast<std::size_t>(EMT::VoltageSourceMonitorVariable::ic));
+        success             *= (*sourceIc == EMT::VoltageSourceMonitorVariable::ic);
         success             *= !EMT::ComponentMonitorTraits<Source>::resolve("dia").has_value();
 
         const auto breakerDia  = EMT::ComponentMonitorTraits<Breaker>::resolve("dia");
         success               *= breakerDia.has_value();
-        success               *= (*breakerDia == static_cast<std::size_t>(EMT::BreakerMonitorVariable::dia));
+        success               *= (*breakerDia == EMT::BreakerMonitorVariable::dia);
         success               *= !EMT::ComponentMonitorTraits<Breaker>::resolve("v").has_value();
 
         return success.report(__func__);

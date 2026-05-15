@@ -51,16 +51,31 @@ namespace GridKit
         std::filesystem::path file;
       };
 
-      struct IdaStatsOutput
+      struct IdaLogOutput
       {
         std::filesystem::path file;
-        std::string           format{"json"};
+        std::string           level{"warning"};
+      };
+
+      struct IdaOutput
+      {
+        std::filesystem::path       file;
+        std::optional<IdaLogOutput> log;
+      };
+
+      template <class StatsT>
+      struct IdaStatsSegment
+      {
+        double start_time{};
+        double end_time{};
+        int    output_steps{};
+        StatsT stats;
       };
 
       struct Output
       {
-        std::optional<MonitorOutput>  monitor;
-        std::optional<IdaStatsOutput> ida_stats;
+        std::optional<MonitorOutput> monitor;
+        std::optional<IdaOutput>     ida;
       };
 
       struct Validation
@@ -332,7 +347,7 @@ namespace GridKit
 
         if (auto output = Detail::optionalObject(root, "output", "solver file"))
         {
-          rejectUnknownKeys(output->get(), {"monitor", "ida_stats"}, "output");
+          rejectUnknownKeys(output->get(), {"monitor", "ida"}, "output");
 
           if (auto monitor = Detail::optionalObject(output->get(), "monitor", "output"))
           {
@@ -341,18 +356,25 @@ namespace GridKit
                 Detail::readPath(monitor->get(), "file", "output.monitor", base_dir)};
           }
 
-          if (auto ida_stats = Detail::optionalObject(output->get(), "ida_stats", "output"))
+          if (auto ida = Detail::optionalObject(output->get(), "ida", "output"))
           {
-            rejectUnknownKeys(ida_stats->get(), {"file", "format"}, "output.ida_stats");
-            IdaStatsOutput stats;
-            stats.file   = Detail::readPath(ida_stats->get(), "file", "output.ida_stats", base_dir);
-            stats.format = Detail::lowerAscii(
-                Detail::optionalValue<std::string>(ida_stats->get(), "format", "json", "output.ida_stats"));
-            if (stats.format != "json" && stats.format != "text")
+            rejectUnknownKeys(ida->get(), {"file", "log"}, "output.ida");
+            IdaOutput parsed;
+            parsed.file = Detail::readPath(ida->get(), "file", "output.ida", base_dir);
+            if (auto log = Detail::optionalObject(ida->get(), "log", "output.ida"))
             {
-              throw CaseError("output.ida_stats.format: expected 'json' or 'text'");
+              rejectUnknownKeys(log->get(), {"file", "level"}, "output.ida.log");
+              IdaLogOutput parsed_log;
+              parsed_log.file  = Detail::readPath(log->get(), "file", "output.ida.log", base_dir);
+              parsed_log.level = Detail::lowerAscii(
+                  Detail::optionalValue<std::string>(log->get(), "level", "warning", "output.ida.log"));
+              if (parsed_log.level != "error" && parsed_log.level != "warning")
+              {
+                throw CaseError("output.ida.log.level: expected 'error' or 'warning'");
+              }
+              parsed.log = std::move(parsed_log);
             }
-            file.output.ida_stats = std::move(stats);
+            file.output.ida = std::move(parsed);
           }
         }
 
@@ -488,16 +510,58 @@ namespace GridKit
       nlohmann::json idaStatsJson(const StatsT& stats)
       {
         return nlohmann::json{
-            {"steps", stats.num_steps_},
-            {"residual_evals", stats.num_residual_evals_},
-            {"linear_decompositions", stats.num_linear_decompositions_},
-            {"error_test_failures", stats.num_error_test_fails_},
-            {"nonlinear_iterations", stats.num_nonlinear_iters_},
-            {"nonlinear_convergence_failures", stats.num_nonlinear_convergence_fails_}};
+            {"sundials",
+             {{"version", stats.sundials_version_},
+              {"logging_level", stats.sundials_logging_level_}}},
+            {"integrator",
+             {{"steps", stats.num_steps_},
+              {"residual_evals", stats.num_residual_evals_},
+              {"linear_solver_setups", stats.num_linear_solver_setups_},
+              {"error_test_failures", stats.num_error_test_fails_},
+              {"backtrack_operations", stats.num_backtrack_operations_}}},
+            {"nonlinear_solver",
+             {{"iterations", stats.num_nonlinear_iters_},
+              {"convergence_failures", stats.num_nonlinear_convergence_fails_},
+              {"step_solve_failures", stats.num_nonlinear_step_fails_}}},
+            {"linear_solver",
+             {{"jacobian_evals", stats.num_jacobian_evals_},
+              {"last_jacobian_eval_step", stats.num_jacobian_eval_steps_},
+              {"jacobian_time", stats.jacobian_time_},
+              {"jacobian_cj", stats.jacobian_cj_},
+              {"iterations", stats.num_linear_iters_},
+              {"convergence_failures", stats.num_linear_convergence_fails_},
+              {"residual_evals", stats.num_linear_residual_evals_},
+              {"preconditioner_evals", stats.num_preconditioner_evals_},
+              {"preconditioner_solves", stats.num_preconditioner_solves_},
+              {"jtimes_setup_evals", stats.num_jtimes_setup_evals_},
+              {"jtimes_evals", stats.num_jtimes_evals_},
+              {"last_flag", stats.last_linear_flag_},
+              {"last_flag_name", stats.last_linear_flag_name_}}},
+            {"final_state",
+             {{"last_order", stats.last_order_},
+              {"current_order", stats.current_order_},
+              {"actual_initial_step", stats.actual_initial_step_},
+              {"last_step", stats.last_step_},
+              {"current_step", stats.current_step_},
+              {"current_time", stats.current_time_},
+              {"current_cj", stats.current_cj_}}}};
       }
 
       template <class StatsT>
-      void writeIdaStats(const StatsT& stats, const IdaStatsOutput& output)
+      nlohmann::json idaStatsSegmentJson(const IdaStatsSegment<StatsT>& segment)
+      {
+        auto json = idaStatsJson(segment.stats);
+        json.erase("sundials");
+        json["start_time"]   = segment.start_time;
+        json["end_time"]     = segment.end_time;
+        json["output_steps"] = segment.output_steps;
+        return json;
+      }
+
+      template <class StatsT>
+      void writeIdaStats(const StatsT&                               stats,
+                         const std::vector<IdaStatsSegment<StatsT>>& segments,
+                         const IdaOutput&                            output)
       {
         std::ofstream stream(output.file);
         if (!stream)
@@ -505,19 +569,20 @@ namespace GridKit
           throw CaseError("failed to open IDA stats output file '" + output.file.string() + "'");
         }
 
-        if (output.format == "json")
+        auto json             = idaStatsJson(stats);
+        json["segment_count"] = segments.size();
+        json["segments"]      = nlohmann::json::array();
+        for (const auto& segment : segments)
         {
-          stream << idaStatsJson(stats).dump(2) << '\n';
-          return;
+          json["segments"].push_back(idaStatsSegmentJson(segment));
         }
-
-        if (output.format == "text")
+        if (output.log.has_value())
         {
-          stream << stats.report() << '\n';
-          return;
+          json["log"] = {
+              {"file", output.log->file.string()},
+              {"level", output.log->level}};
         }
-
-        throw CaseError("output.ida_stats.format: expected 'json' or 'text'");
+        stream << json.dump(2) << '\n';
       }
     } // namespace IO
   } // namespace EMT

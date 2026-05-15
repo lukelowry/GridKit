@@ -41,14 +41,14 @@ namespace
 
   Data makeData()
   {
-    auto loaded   = GridKit::EMT::loadCase<Data>("TwoBus.case.json");
-    auto load_bus = loaded.names.bus("load_bus");
+    auto loaded        = GridKit::EMT::loadCase<Data>("TwoBus.case.json");
+    auto receiving_bus = loaded.names.bus("receiving_bus");
 
     loaded.data.schedule(faultStartTime(),
-                         loaded.data.busRef(load_bus),
+                         loaded.data.busRef(receiving_bus),
                          Events::Fault{Events::PhaseMask::abc(), fault_resistance, 0.0, 0.0});
     loaded.data.schedule(faultClearTime(),
-                         loaded.data.busRef(load_bus),
+                         loaded.data.busRef(receiving_bus),
                          Events::Clear{Events::PhaseMask::abc()});
 
     return std::move(loaded.data);

@@ -1,59 +1,233 @@
-# EMTSim
+# EMTSim (Electromagnetic Transients Simulation)
 
-EMTSim solves an EMT case from a `.solver.json` file. The solver file is the
-small orchestration layer around an EMT case: it selects the case file, sets
-time integration controls, chooses generated outputs, installs scheduled
-events, and optionally validates the result against a reference CSV.
+EMTSim runs an electromagnetic-transients simulation defined by a *solver file*
+(`*.solver.json`) and a *case file* (`*.case.json`). The case file specifies
+the EMT system model; the solver file specifies the simulation environment —
+time and numerical controls, generated outputs, scheduled runtime events, and
+an optional reference comparison.
 
-```text
-EMTSim <file.solver.json>
-        |
-        v
-+------------------+
-| readSolverFile   |  .solver.json -> SolverFile
-+--------+---------+
-         |
-         v
-+------------------+       +------------------+
-| SolverFile       | ----> | loadCase         |
-| solve/output/... |       | EMT Case         |
-+--------+---------+       +--------+---------+
-         |                          |
-         v                          v
-+------------------+       +------------------+
-| installSchedule  | ----> | SystemModel + IDA|
-| names -> refs    |       | segmented solve  |
-+------------------+       +--------+---------+
-                                    |
-                                    v
-                        monitor output, IDA stats,
-                        optional validation
-```
+The solver-file and generated-output formats are documented below. The EMT
+case-file format is documented in
+[`GridKit/Model/EMT/README.md`](../../GridKit/Model/EMT/README.md).
+The runtime event system (action vocabulary, dispatch model, schedule
+semantics) is documented in [`EVENTS.md`](EVENTS.md).
 
 ## Usage
 
 ```sh
-EMTSim TwoBus.solver.json
+EMTSim <solver-file.solver.json>
 ```
 
-Relative paths inside the solver file are resolved relative to the directory
-containing that solver file. This keeps examples and regression fixtures
-self-contained.
+Relative paths in `case_file`, `output.monitor.file`, `output.ida.file`,
+`output.ida.log.file`, and `validation.reference_file` are resolved against
+the solver file's directory. Absolute paths are used as given.
 
-## Solver File
+## Solver file format
 
-The top-level sections are intentionally regular:
+Solver files are strict JSON objects: unknown keys are rejected. The root
+object has this shape:
 
 ```text
-format_version  file format version
-case_file       EMT case file to solve
-solve           time and numerical solver controls
-output          generated artifacts
-schedule        time-ordered runtime events
-validation      optional reference comparison
+{
+  "format_version": 1,
+  "case_file": "...",
+  "solve": { ... },
+  "output": { ... },
+  "schedule": [ ... ],
+  "validation": { ... }
+}
 ```
 
-Canonical ordering:
+### Top-level fields
+
+Field            | Required | Description
+-----------------|----------|------------------------------------------------------
+`format_version` | yes      | Solver-file format version. Must be `1`.
+`case_file`      | yes      | Path to the EMT case file.
+`solve`          | yes      | Time and numerical solver controls.
+`output`         | no       | Generated artifacts. Omitted outputs are disabled.
+`schedule`       | no       | Time-ordered runtime events. May be empty or omitted.
+`validation`     | no       | Reference comparison.
+
+### Solve
+
+Field          | Required | Default  | Description
+---------------|----------|----------|------------------------------------------
+`t0`           | no       | `0.0`    | Initial simulation time.
+`tmax`         | yes      | —        | Final simulation time. Must exceed `t0`.
+`dt`           | yes      | —        | Output step size per solve segment.
+`rel_tol`      | no       | `1e-8`   | IDA relative tolerance.
+`abs_tol`      | no       | `1e-8`   | IDA absolute tolerance.
+`max_steps`    | no       | `200000` | IDA maximum internal steps.
+`use_jacobian` | no       | `true`   | Enables the configured Jacobian path.
+
+### Output
+
+Field               | Required         | Description
+--------------------|------------------|-------------------------------------------------
+`monitor.file`      | if `monitor` set | CSV monitor output path. EMTSim adds a monitor sink if the case has none, or retargets the sink if the case has exactly one. A case with multiple sinks is rejected as ambiguous.
+`ida.file`          | if `ida` set     | IDA statistics JSON output path.
+`ida.log.file`      | if `ida.log` set | Optional SUNDIALS IDA warning/error log path.
+`ida.log.level`     | no               | `warning` (default) or `error`.
+
+### Schedule
+
+The `schedule` field is an array of events. Each event has the shape:
+
+Field    | Required           | Description
+---------|--------------------|------------------------------------------------------
+`time`   | yes                | Simulation time at which the event fires, in seconds. Must lie in `[t0, tmax]`.
+`target` | yes                | Case `name` of the bus or component receiving the event.
+`action` | yes                | Action name: `open`, `close`, `fault`, or `clear`.
+`params` | if action needs it | Action payload. `fault` requires `params.r`; `params` is optional otherwise.
+
+The action vocabulary, dispatch model, and schedule semantics (stable sort by
+time, file order on ties, same-time batching) are documented in
+[`EVENTS.md`](EVENTS.md).
+
+### Validation
+
+Field             | Required | Default | Description
+------------------|----------|---------|------------------------------------------
+`reference_file`  | yes      | —       | Reference CSV path.
+`error_tolerance` | no       | `1e-4`  | Maximum accepted CSV difference.
+
+Validation compares the generated monitor CSV against the reference and
+requires a monitor output file. EMTSim exits `0` when the maximum error is
+within `error_tolerance` and the solve succeeded, `1` otherwise.
+
+## Generated output formats
+
+### Monitor CSV
+
+When `output.monitor.file` is set, EMTSim writes a comma-delimited CSV monitor
+file.
+
+Row            | Format
+---------------|------------------------------------------------------
+Header         | `t,<label>_<variable>,...`
+Data row       | One numeric value per header column.
+Time column    | `t`, in seconds.
+Value columns  | Monitored bus/component variables selected by the case file.
+
+EMTSim writes the initial state, each requested output time, and a post-event
+state after each event batch. Event boundaries may therefore appear twice:
+once for the pre-event integrated state, and once after the scheduled mutation
+has been applied and IDA has been re-initialized.
+
+### IDA JSON
+
+When `output.ida.file` is set, EMTSim writes IDA solver statistics as JSON.
+The top-level statistics summarize the whole run. The `segments` array records
+the same statistics for each solve segment between event batches.
+
+Top-level field       | Type   | Description
+----------------------|--------|-------------------------------------------------
+`sundials`            | object | SUNDIALS metadata.
+`integrator`          | object | Accumulated IDA integrator counters.
+`nonlinear_solver`    | object | Accumulated nonlinear solver counters.
+`linear_solver`       | object | Accumulated linear solver counters and final flag.
+`final_state`         | object | IDA state at the end of the final segment.
+`segment_count`       | int    | Number of entries in `segments`.
+`segments`            | array  | Per-segment statistics.
+`log`                 | object | Present only when `output.ida.log` is configured.
+
+`sundials` fields:
+
+Field           | Type   | Description
+----------------|--------|----------------------------
+`version`       | string | SUNDIALS version used.
+`logging_level` | int    | Compile-time SUNDIALS logging level.
+
+`log` fields:
+
+Field   | Type   | Description
+--------|--------|------------------------------
+`file`  | string | IDA log path used by EMTSim.
+`level` | string | `warning` or `error`.
+
+Statistics object fields:
+
+Section              | Fields
+---------------------|-----------------------------------------------------
+`integrator`         | `steps`, `residual_evals`, `linear_solver_setups`, `error_test_failures`, `backtrack_operations`
+`nonlinear_solver`   | `iterations`, `convergence_failures`, `step_solve_failures`
+`linear_solver`      | `jacobian_evals`, `last_jacobian_eval_step`, `jacobian_time`, `jacobian_cj`, `iterations`, `convergence_failures`, `residual_evals`, `preconditioner_evals`, `preconditioner_solves`, `jtimes_setup_evals`, `jtimes_evals`, `last_flag`, `last_flag_name`
+`final_state`        | `last_order`, `current_order`, `actual_initial_step`, `last_step`, `current_step`, `current_time`, `current_cj`
+
+Each `segments[]` entry has `start_time`, `end_time`, `output_steps`, and the
+same `integrator`, `nonlinear_solver`, `linear_solver`, and `final_state`
+objects. `start_time`/`end_time` are EMTSim segment boundaries; `final_state`
+reports IDA's actual final internal state for that segment.
+
+Compact example:
+
+```json
+{
+  "sundials": { "version": "7.4.0", "logging_level": 2 },
+  "segment_count": 2,
+  "integrator": {
+    "steps": 388,
+    "residual_evals": 550,
+    "linear_solver_setups": 43,
+    "error_test_failures": 1,
+    "backtrack_operations": 0
+  },
+  "nonlinear_solver": {
+    "iterations": 550,
+    "convergence_failures": 1,
+    "step_solve_failures": 0
+  },
+  "linear_solver": {
+    "jacobian_evals": 43,
+    "last_jacobian_eval_step": 237,
+    "jacobian_time": 0.01079,
+    "jacobian_cj": 72364.58,
+    "iterations": 0,
+    "convergence_failures": 0,
+    "residual_evals": 0,
+    "preconditioner_evals": 0,
+    "preconditioner_solves": 0,
+    "jtimes_setup_evals": 0,
+    "jtimes_evals": 0,
+    "last_flag": 0,
+    "last_flag_name": "IDALS_SUCCESS"
+  },
+  "final_state": {
+    "last_order": 5,
+    "current_order": 5,
+    "actual_initial_step": 1.0e-11,
+    "last_step": 2.3e-7,
+    "current_step": 2.3e-7,
+    "current_time": 0.0600002,
+    "current_cj": 9751556.8
+  },
+  "segments": [
+    {
+      "start_time": 0.0,
+      "end_time": 0.01,
+      "output_steps": 100,
+      "integrator": { "...": "same fields as top-level integrator" },
+      "nonlinear_solver": { "...": "same fields as top-level nonlinear_solver" },
+      "linear_solver": { "...": "same fields as top-level linear_solver" },
+      "final_state": { "...": "same fields as top-level final_state" }
+    }
+  ],
+  "log": { "file": "TwoBus.ida.log", "level": "warning" }
+}
+```
+
+### IDA log
+
+When `output.ida.log.file` is set, EMTSim configures the SUNDIALS logger before
+creating the IDA memory block. The log is plain text and captures SUNDIALS
+warnings and errors using the normal SUNDIALS logging level shipped by typical
+builds. A successful run may produce an empty log. Detailed step-by-step
+info/debug traces are intentionally not part of this solver-file contract; use
+the structured `output.ida.file` JSON for solve statistics and behavior
+summaries.
+
+## Example
 
 ```json
 {
@@ -70,109 +244,28 @@ Canonical ordering:
   },
 
   "output": {
-    "monitor": { "file": "TwoBusFault.csv" },
-    "ida_stats": { "file": "TwoBusFault.ida-stats.json", "format": "json" }
+    "monitor": { "file": "TwoBus.csv" },
+    "ida": {
+      "file": "TwoBus.ida.json",
+      "log": { "file": "TwoBus.ida.log", "level": "warning" }
+    }
   },
 
   "schedule": [
-    { "time": 0.010, "target": "load_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
-    { "time": 0.011, "target": "load_bus", "action": "clear" },
+    { "time": 0.010, "target": "receiving_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
+    { "time": 0.011, "target": "receiving_bus", "action": "clear" },
     { "time": 0.011, "target": "load_breaker", "action": "open" }
   ],
 
   "validation": {
-    "reference_file": "TwoBusFault.ref.csv",
+    "reference_file": "TwoBus.ref.csv",
     "error_tolerance": 1e-4
   }
 }
 ```
 
-## Sections
-
-`format_version` is required and must be `1`.
-
-`case_file` is required. It points to an EMT case JSON file.
-
-`solve` is required. It contains numerical controls for one solve:
-
-| Field | Required | Default | Meaning |
-| --- | --- | --- | --- |
-| `t0` | no | `0.0` | Initial simulation time. |
-| `tmax` | yes | none | Final simulation time. |
-| `dt` | yes | none | Output step size for each solve segment. |
-| `rel_tol` | no | `1e-8` | IDA relative tolerance. |
-| `abs_tol` | no | `1e-8` | IDA absolute tolerance. |
-| `max_steps` | no | `200000` | IDA maximum internal steps. |
-| `use_jacobian` | no | `true` | Enables the configured Jacobian path. |
-
-`output` is optional. Omitted outputs are disabled.
-
-| Field | Meaning |
-| --- | --- |
-| `monitor.file` | CSV monitor output path. If the case has no monitor sink, EMTSim adds one. If the case has one sink, EMTSim overrides it. Multiple existing sinks are rejected because the target is ambiguous. |
-| `ida_stats.file` | IDA statistics output path. |
-| `ida_stats.format` | `json` or `text`; defaults to `json`. |
-
-`schedule` is optional. Events are applied in file order for events with the
-same time. V1 targets EMT case names: bus names and component names.
-
-| Action | Parameters | Intended target |
-| --- | --- | --- |
-| `fault` | `r` required; `x`, `percent`, and `phases` optional | Bus |
-| `clear` | `phases` optional | Bus or supported components |
-| `open` | `phases` optional | Switching components |
-| `close` | `phases` optional | Switching components |
-
-`phases` may be `a`, `b`, `c`, any combination such as `ab`, or `abc`. It
-defaults to `abc`.
-
-`validation` is optional. It compares the generated monitor CSV against a
-reference CSV:
-
-| Field | Required | Default | Meaning |
-| --- | --- | --- | --- |
-| `reference_file` | yes | none | Reference CSV path. |
-| `error_tolerance` | no | `1e-4` | Maximum accepted CSV difference. |
-
-## IDA Statistics
-
-JSON statistics are written as:
-
-```json
-{
-  "steps": 1200,
-  "residual_evals": 1408,
-  "linear_decompositions": 1200,
-  "error_test_failures": 2,
-  "nonlinear_iterations": 1401,
-  "nonlinear_convergence_failures": 0
-}
-```
-
-Text statistics use the existing `IdaStats::report()` output.
-
-## Implementation Shape
-
-`GridKit/Model/EMT/IO/SolverFile.hpp` owns the file contract:
-
-```cpp
-namespace GridKit::EMT::IO
-{
-  struct SolverFile
-  {
-    int format_version{1};
-    std::filesystem::path path;
-    std::filesystem::path case_file;
-    Solve solve;
-    Output output;
-    std::vector<Event> schedule;
-    std::optional<Validation> validation;
-  };
-
-  SolverFile readSolverFile(const std::filesystem::path& path);
-}
-```
-
-The executable stays thin: load the solver file, load the EMT case, apply the
-requested outputs, install the schedule, solve the segmented event timeline,
-write optional IDA statistics, and run optional validation.
+This run faults `receiving_bus` through a 15 Ω resistance at `t = 0.010`, then
+at `t = 0.011` clears the fault and trips `load_breaker` simultaneously, and
+integrates to `t = 0.06`. The two events at `t = 0.011` batch into one IDA
+re-initialization. The monitor CSV is written to `TwoBus.csv` and compared
+against `TwoBus.ref.csv` with tolerance `1e-4`.

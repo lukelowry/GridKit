@@ -999,7 +999,7 @@ namespace GridKit
 
         data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
         data.monitorBus(from_bus, "source_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
-        data.monitorBus(to_bus, "load_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
+        data.monitorBus(to_bus, "receiving_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
         data.monitorComponent(source, "source", {EMT::VoltageSourceMonitorVariable::ia, EMT::VoltageSourceMonitorVariable::ib, EMT::VoltageSourceMonitorVariable::ic});
         data.monitorComponent(load, "load", {EMT::LoadRLMonitorVariable::ia, EMT::LoadRLMonitorVariable::ib, EMT::LoadRLMonitorVariable::ic});
         data.monitorComponent(branch, "line", {EMT::BranchLumpedConstantMonitorVariable::ia, EMT::BranchLumpedConstantMonitorVariable::ib, EMT::BranchLumpedConstantMonitorVariable::ic});
@@ -1019,7 +1019,7 @@ namespace GridKit
         std::getline(input, row);
         const auto values = csvNumbers(row);
 
-        success *= (header == "t,source_bus_va,source_bus_vb,source_bus_vc,load_bus_va,load_bus_vb,load_bus_vc,source_ia,source_ib,source_ic,load_ia,load_ib,load_ic,line_ia,line_ib,line_ic");
+        success *= (header == "t,source_bus_va,source_bus_vb,source_bus_vc,receiving_bus_va,receiving_bus_vb,receiving_bus_vc,source_ia,source_ib,source_ic,load_ia,load_ib,load_ic,line_ia,line_ib,line_ic");
         success *= (values.size() == 16);
 
         if (values.size() == 16)

@@ -287,21 +287,117 @@ namespace GridKit
         }
       }
 
+      inline std::vector<std::string> readMonList(const nlohmann::json& obj,
+                                                  std::string_view      entity)
+      {
+        if (!obj.is_object())
+        {
+          throwCase(entity, "expected object");
+        }
+
+        const auto it = obj.find("mon");
+        if (it == obj.end())
+        {
+          return {};
+        }
+        if (!it->is_array())
+        {
+          throwCase(fieldContext(entity, "mon"), "expected array");
+        }
+
+        std::vector<std::string> result;
+        result.reserve(it->size());
+        for (std::size_t i = 0; i < it->size(); ++i)
+        {
+          const auto context = std::string(entity) + ".mon[" + std::to_string(i) + "]";
+          auto       value   = readJsonValue<std::string>((*it)[i], context);
+          requireIdentifier(value, context);
+          result.push_back(std::move(value));
+        }
+        return result;
+      }
+
+      inline std::vector<BusMonitorVariable> encodeBusMonitorVariables(
+          const std::vector<std::string>& variables,
+          std::string_view                bus_name,
+          std::string_view                entity)
+      {
+        std::vector<BusMonitorVariable> encoded;
+        encoded.reserve(variables.size());
+        for (const auto& variable : variables)
+        {
+          const auto resolved = resolveBusMonitorVariable(variable);
+          if (!resolved.has_value())
+          {
+            throw CaseError(std::string(entity) + ": monitor variable '" + variable
+                            + "' is not valid for bus '" + std::string(bus_name) + "'");
+          }
+          encoded.push_back(*resolved);
+        }
+        return encoded;
+      }
+
+      template <class ComponentT>
+      std::vector<std::size_t> encodeComponentMonitorVariables(
+          const std::vector<std::string>& variables,
+          std::string_view                entity)
+      {
+        std::vector<std::size_t> encoded;
+        encoded.reserve(variables.size());
+
+        if constexpr (requires(std::string_view name) {
+                        ComponentMonitorTraits<ComponentT>::resolve(name);
+                      })
+        {
+          for (const auto& variable : variables)
+          {
+            const auto resolved = ComponentMonitorTraits<ComponentT>::resolve(variable);
+            if (!resolved.has_value())
+            {
+              throw CaseError(std::string(entity) + ": monitor variable '" + variable
+                              + "' is not valid for class '"
+                              + std::string(ComponentDescriptor<ComponentT>::class_name)
+                              + "'");
+            }
+            encoded.push_back(static_cast<std::size_t>(*resolved));
+          }
+        }
+        else
+        {
+          if (!variables.empty())
+          {
+            throw CaseError(std::string(entity) + ": class '"
+                            + std::string(ComponentDescriptor<ComponentT>::class_name)
+                            + "' does not define monitor variables");
+          }
+        }
+
+        return encoded;
+      }
+
       template <class DataT>
       struct AddComponentVisitor
       {
-        DataT&                data;
-        const nlohmann::json& params;
-        std::string           entity;
-        ComponentRef          ref{};
+        DataT&                   data;
+        const nlohmann::json&    params;
+        std::string              entity;
+        std::string              label;
+        std::vector<std::string> monitor_variables;
+        ComponentRef             ref{};
 
         template <class ComponentT>
         void operator()()
         {
           auto       component = constructFromParams<ComponentT>(params,
                                                            entity + ": params");
+          auto       monitors  = encodeComponentMonitorVariables<ComponentT>(monitor_variables,
+                                                                      entity);
           const auto typed_ref = data.add(std::move(component));
           ref                  = ComponentRef{typed_ref.id};
+          if (!monitors.empty())
+          {
+            data.component_monitors.push_back({ref, label, std::move(monitors)});
+          }
         }
       };
 
@@ -344,7 +440,7 @@ namespace GridKit
           {
             throwCase(entity, "expected object");
           }
-          rejectUnknownKeys(entry, {"name", "vm0", "va0", "freq"}, entity);
+          rejectUnknownKeys(entry, {"name", "vm0", "va0", "freq", "mon"}, entity);
 
           const auto name = requiredString(entry, "name", entity);
           registerUniqueName(loaded.names, name, entity);
@@ -354,7 +450,14 @@ namespace GridKit
           data.va0  = require<RealT>(entry, "va0", entity);
           data.freq = optionalValue<RealT>(entry, "freq", frequency, entity);
 
-          loaded.names.buses.emplace(name, loaded.data.addBus(data));
+          const IdxT bus = loaded.data.addBus(data);
+          loaded.names.buses.emplace(name, bus);
+
+          auto monitors = encodeBusMonitorVariables(readMonList(entry, entity), name, entity);
+          if (!monitors.empty())
+          {
+            loaded.data.bus_monitors.push_back({bus, name, std::move(monitors)});
+          }
         }
       }
 
@@ -371,7 +474,7 @@ namespace GridKit
           {
             throwCase(entity, "expected object");
           }
-          rejectUnknownKeys(entry, {"name", "class", "params", "terminals", "inputs"}, entity);
+          rejectUnknownKeys(entry, {"name", "class", "params", "terminals", "inputs", "mon"}, entity);
 
           const auto name = requiredString(entry, "name", entity);
           registerUniqueName(loaded.names, name, entity);
@@ -386,7 +489,9 @@ namespace GridKit
 
           AddComponentVisitor<DataT> visitor{loaded.data,
                                              params,
-                                             "component '" + name + "'"};
+                                             "component '" + name + "'",
+                                             name,
+                                             readMonList(entry, entity)};
           const bool                 matched = dispatchClass<typename DataT::component_types>(cls, visitor);
           if (!matched)
           {
@@ -536,183 +641,27 @@ namespace GridKit
         }
       }
 
-      inline std::vector<std::string> readVariableList(const nlohmann::json& request,
-                                                       std::string_view      entity)
-      {
-        const auto&              variables = requireArrayField(request, "variables", entity);
-        std::vector<std::string> result;
-        result.reserve(variables.size());
-        for (std::size_t i = 0; i < variables.size(); ++i)
-        {
-          const auto value = readJsonValue<std::string>(variables[i],
-                                                        std::string(entity) + ".variables["
-                                                            + std::to_string(i) + "]");
-          requireIdentifier(value,
-                            std::string(entity) + ".variables["
-                                + std::to_string(i) + "]");
-          result.push_back(value);
-        }
-        return result;
-      }
-
-      inline void validateMonitorRequestObject(const nlohmann::json& request,
-                                               std::string_view      entity)
-      {
-        if (!request.is_object())
-        {
-          throwCase(entity, "expected object");
-        }
-        rejectUnknownKeys(request, {"target", "label", "variables"}, entity);
-      }
-
-      template <class DataT>
-      void loadBusMonitorRequests(const nlohmann::json& monitors,
-                                  Case<DataT>&          loaded)
-      {
-        const auto it = monitors.find("buses");
-        if (it == monitors.end())
-        {
-          return;
-        }
-        if (!it->is_array())
-        {
-          throwCase("monitors.buses", "expected array");
-        }
-
-        for (std::size_t i = 0; i < it->size(); ++i)
-        {
-          const std::string entity  = "monitors.buses[" + std::to_string(i) + "]";
-          const auto&       request = (*it)[i];
-          validateMonitorRequestObject(request, entity);
-
-          const auto target = requiredString(request, "target", entity);
-          const auto label  = requiredString(request, "label", entity);
-          requireIdentifier(target, fieldContext(entity, "target"));
-          requireIdentifier(label, fieldContext(entity, "label"));
-
-          const auto bus_it = loaded.names.buses.find(target);
-          if (bus_it == loaded.names.buses.end())
-          {
-            throw CaseError(entity + ": unknown bus '" + target + "'");
-          }
-
-          std::vector<BusMonitorVariable> variables;
-          for (const auto& variable : readVariableList(request, entity))
-          {
-            const auto resolved = resolveBusMonitorVariable(variable);
-            if (!resolved.has_value())
-            {
-              throw CaseError(entity + ": monitor variable '" + variable
-                              + "' is not valid for bus '" + target + "'");
-            }
-            variables.push_back(*resolved);
-          }
-          loaded.data.bus_monitors.push_back({bus_it->second, label, std::move(variables)});
-        }
-      }
-
-      template <class DataT>
-      void loadComponentMonitorRequests(const nlohmann::json& monitors,
-                                        Case<DataT>&          loaded)
-      {
-        const auto it = monitors.find("components");
-        if (it == monitors.end())
-        {
-          return;
-        }
-        if (!it->is_array())
-        {
-          throwCase("monitors.components", "expected array");
-        }
-
-        for (std::size_t i = 0; i < it->size(); ++i)
-        {
-          const std::string entity  = "monitors.components[" + std::to_string(i) + "]";
-          const auto&       request = (*it)[i];
-          validateMonitorRequestObject(request, entity);
-
-          const auto target = requiredString(request, "target", entity);
-          const auto label  = requiredString(request, "label", entity);
-          requireIdentifier(target, fieldContext(entity, "target"));
-          requireIdentifier(label, fieldContext(entity, "label"));
-
-          const auto component_it = loaded.names.components.find(target);
-          if (component_it == loaded.names.components.end())
-          {
-            throw CaseError(entity + ": unknown component '" + target + "'");
-          }
-
-          const auto               variable_names = readVariableList(request, entity);
-          std::vector<std::size_t> encoded;
-          encoded.reserve(variable_names.size());
-
-          const bool found = loaded.data.components.visit(
-              component_it->second.id,
-              [&](const auto& component)
-              {
-                using ComponentT = std::decay_t<decltype(component)>;
-                (void) component;
-                if constexpr (requires(std::string_view name) {
-                                ComponentMonitorTraits<ComponentT>::resolve(name);
-                              })
-                {
-                  for (const auto& variable : variable_names)
-                  {
-                    const auto resolved = ComponentMonitorTraits<ComponentT>::resolve(variable);
-                    if (!resolved.has_value())
-                    {
-                      throw CaseError(entity + ": monitor variable '" + variable
-                                      + "' is not valid for class '"
-                                      + std::string(ComponentDescriptor<ComponentT>::class_name)
-                                      + "'");
-                    }
-                    encoded.push_back(*resolved);
-                  }
-                }
-                else
-                {
-                  throw CaseError(entity + ": class '"
-                                  + std::string(ComponentDescriptor<ComponentT>::class_name)
-                                  + "' does not define monitor variables");
-                }
-              });
-          if (!found)
-          {
-            throw CaseError(entity + ": component '" + target + "' was not constructed");
-          }
-
-          loaded.data.component_monitors.push_back({component_it->second,
-                                                    label,
-                                                    std::move(encoded)});
-        }
-      }
-
       template <class DataT>
       void loadMonitorSinks(const nlohmann::json&        monitors,
                             Case<DataT>&                 loaded,
                             const std::filesystem::path& base_dir)
       {
-        const auto it = monitors.find("sinks");
-        if (it == monitors.end())
+        if (!monitors.is_array())
         {
-          return;
-        }
-        if (!it->is_array())
-        {
-          throwCase("monitors.sinks", "expected array");
+          throwCase("monitors", "expected array");
         }
 
-        for (std::size_t i = 0; i < it->size(); ++i)
+        for (std::size_t i = 0; i < monitors.size(); ++i)
         {
-          const std::string entity = "monitors.sinks[" + std::to_string(i) + "]";
-          const auto&       sink   = (*it)[i];
+          const std::string entity = "monitors[" + std::to_string(i) + "]";
+          const auto&       sink   = monitors[i];
           if (!sink.is_object())
           {
             throwCase(entity, "expected object");
           }
-          rejectUnknownKeys(sink, {"file", "format", "delim"}, entity);
+          rejectUnknownKeys(sink, {"file_name", "format", "delim"}, entity);
 
-          auto file   = requiredString(sink, "file", entity);
+          auto file   = optionalValue<std::string>(sink, "file_name", std::string{}, entity);
           auto format = parseMonitorFormat(requiredString(sink, "format", entity),
                                            fieldContext(entity, "format"));
           auto delim  = optionalValue<std::string>(sink, "delim", ",", entity);
@@ -733,15 +682,7 @@ namespace GridKit
         {
           return;
         }
-        if (!it->is_object())
-        {
-          throwCase("monitors", "expected object");
-        }
-        rejectUnknownKeys(*it, {"sinks", "buses", "components"}, "monitors");
-
         loadMonitorSinks(*it, loaded, base_dir);
-        loadBusMonitorRequests(*it, loaded);
-        loadComponentMonitorRequests(*it, loaded);
       }
 
       template <class DataT>

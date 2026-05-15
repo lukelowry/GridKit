@@ -146,17 +146,17 @@ namespace GridKit
         success *= (loaded.names.buses.size() == 2u);
         success *= (loaded.names.components.size() == 3u);
         success *= (loaded.names.bus("source_bus") == IdxT{0});
-        success *= (loaded.names.bus("load_bus") == IdxT{1});
+        success *= (loaded.names.bus("receiving_bus") == IdxT{1});
         success *= (loaded.data.components.template get<EMT::VoltageSource<RealT, IdxT>>().size() == 1u);
         success *= (loaded.data.components.template get<EMT::LoadRL<RealT, IdxT>>().size() == 1u);
         success *= (loaded.data.components.template get<EMT::BranchLumpedConstant<RealT, IdxT>>().size() == 1u);
         success *= (loaded.data.terminal_connections.size() == 4u);
         success *= loaded.data.signal_connections.empty();
         success *= (loaded.data.monitor_sinks.size() == 1u);
-        success *= (loaded.data.bus_monitors.size() == 3u);
+        success *= (loaded.data.bus_monitors.size() == 2u);
         success *= (loaded.data.component_monitors.size() == 3u);
-        success *= (loaded.data.bus_monitors[2].label == "fault");
-        success *= (loaded.data.bus_monitors[2].variables.size() == 3u);
+        success *= (loaded.data.bus_monitors[1].label == "receiving_bus");
+        success *= (loaded.data.bus_monitors[1].variables.size() == 6u);
 
         EMT::SystemModel<Data> system(std::move(loaded.data), RealT{1.0e-8}, RealT{1.0e-8});
         system.allocate();
@@ -296,7 +296,7 @@ namespace GridKit
             [&]()
             {
               auto bad                     = twoBusJson();
-              bad["components"][0]["name"] = "load_bus";
+              bad["components"][0]["name"] = "receiving_bus";
               (void) EMT::loadCase<Data>(bad);
             },
             "already used");
@@ -359,7 +359,7 @@ namespace GridKit
             [&]()
             {
               auto bad                                 = twoBusJson();
-              bad["components"][1]["terminals"]["bad"] = "load_bus";
+              bad["components"][1]["terminals"]["bad"] = "receiving_bus";
               (void) EMT::loadCase<Data>(bad);
             },
             "unknown terminal 'bad'");
@@ -376,8 +376,8 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                                    = twoBusJson();
-              bad["monitors"]["buses"][0]["variables"][0] = "vx";
+              auto bad                  = twoBusJson();
+              bad["buses"][0]["mon"][0] = "vx";
               (void) EMT::loadCase<Data>(bad);
             },
             "monitor variable 'vx'");
@@ -385,8 +385,17 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                              = twoBusJson();
-              bad["monitors"]["sinks"][0]["format"] = "binary";
+              auto bad                       = twoBusJson();
+              bad["components"][1]["mon"][0] = "vx";
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "monitor variable 'vx'");
+
+        success *= caseErrorContains(
+            [&]()
+            {
+              auto bad                     = twoBusJson();
+              bad["monitors"][0]["format"] = "binary";
               (void) EMT::loadCase<Data>(bad);
             },
             "unsupported monitor format");
@@ -406,8 +415,10 @@ namespace GridKit
     "frequency": 60.0
   },
   "buses": [
-    { "name": "source_bus", "vm0": 120.32988891054056, "va0": 0.0095877412086657603 },
-    { "name": "load_bus",   "vm0": 120.0,              "va0": 0.0 }
+    { "name": "source_bus", "vm0": 120.32988891054056, "va0": 0.0095877412086657603,
+      "mon": ["VA", "VB", "VC"] },
+    { "name": "receiving_bus", "vm0": 120.0,           "va0": 0.0,
+      "mon": ["va", "vb", "vc", "ifa", "ifb", "ifc"] }
   ],
   "components": [
     {
@@ -419,7 +430,8 @@ namespace GridKit
         "r": [0.10, 0.10, 0.10],
         "frequency": 60.0
       },
-      "terminals": { "ac": "source_bus" }
+      "terminals": { "ac": "source_bus" },
+      "mon": ["IA", "IB", "IC"]
     },
     {
       "name": "line",
@@ -431,7 +443,8 @@ namespace GridKit
         "c": [[1.0e-4, 0.0, 0.0], [0.0, 1.0e-4, 0.0], [0.0, 0.0, 1.0e-4]],
         "length": 1.0
       },
-      "terminals": { "from": "source_bus", "to": "load_bus" }
+      "terminals": { "from": "source_bus", "to": "receiving_bus" },
+      "mon": ["ia", "ib", "ic"]
     },
     {
       "name": "load",
@@ -440,22 +453,11 @@ namespace GridKit
         "r": [25.0, 25.0, 25.0],
         "l": [5.0e-2, 5.0e-2, 5.0e-2]
       },
-      "terminals": { "ac": "load_bus" }
+      "terminals": { "ac": "receiving_bus" },
+      "mon": ["ia", "ib", "ic"]
     }
   ],
-  "monitors": {
-    "sinks": [{ "file": "EMTTinyTwoBus.csv", "format": "csv" }],
-    "buses": [
-      { "target": "source_bus", "label": "source_bus", "variables": ["va", "vb", "vc"] },
-      { "target": "load_bus",   "label": "load_bus",   "variables": ["va", "vb", "vc"] },
-      { "target": "load_bus",   "label": "fault",      "variables": ["ifa", "ifb", "ifc"] }
-    ],
-    "components": [
-      { "target": "source", "label": "source", "variables": ["ia", "ib", "ic"] },
-      { "target": "load",   "label": "load",   "variables": ["ia", "ib", "ic"] },
-      { "target": "line",   "label": "line",   "variables": ["ia", "ib", "ic"] }
-    ]
-  }
+  "monitors": [{ "file_name": "EMTTinyTwoBus.csv", "format": "csv" }]
 }
 )json");
       }

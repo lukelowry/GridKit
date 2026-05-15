@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <GridKit/Constants.hpp>
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
 
@@ -29,95 +31,79 @@ namespace GridKit
       ifc
     };
 
-    inline std::optional<BusMonitorVariable> resolveBusMonitorVariable(std::string_view name)
+    template <class Enum>
+    std::optional<Enum> resolveMonitorVariable(std::string_view name)
     {
-      if (name == "va")
-      {
-        return BusMonitorVariable::va;
-      }
-      if (name == "vb")
-      {
-        return BusMonitorVariable::vb;
-      }
-      if (name == "vc")
-      {
-        return BusMonitorVariable::vc;
-      }
-      if (name == "dva")
-      {
-        return BusMonitorVariable::dva;
-      }
-      if (name == "dvb")
-      {
-        return BusMonitorVariable::dvb;
-      }
-      if (name == "dvc")
-      {
-        return BusMonitorVariable::dvc;
-      }
-      if (name == "ifa")
-      {
-        return BusMonitorVariable::ifa;
-      }
-      if (name == "ifb")
-      {
-        return BusMonitorVariable::ifb;
-      }
-      if (name == "ifc")
-      {
-        return BusMonitorVariable::ifc;
-      }
-      return std::nullopt;
+      return magic_enum::enum_cast<Enum>(name, magic_enum::case_insensitive);
     }
 
+    inline std::optional<BusMonitorVariable> resolveBusMonitorVariable(std::string_view name)
+    {
+      return resolveMonitorVariable<BusMonitorVariable>(name);
+    }
+
+    template <class Enum>
     struct MonitorEntry
     {
+      using Variable = Enum;
+
+      Enum             variable;
       std::string_view name;
       bool             derivative;
       std::size_t      local;
     };
 
     template <class Enum>
-    constexpr std::array<MonitorEntry, 6> phaseCurrentMonitors()
+    constexpr std::array<MonitorEntry<Enum>, 6> phaseCurrentMonitors()
     {
-      return {{{"ia", false, 0u},
-               {"ib", false, 1u},
-               {"ic", false, 2u},
-               {"dia", true, 0u},
-               {"dib", true, 1u},
-               {"dic", true, 2u}}};
+      return {{{Enum::ia, "ia", false, 0u},
+               {Enum::ib, "ib", false, 1u},
+               {Enum::ic, "ic", false, 2u},
+               {Enum::dia, "dia", true, 0u},
+               {Enum::dib, "dib", true, 1u},
+               {Enum::dic, "dic", true, 2u}}};
     }
 
     template <class Entries>
-    std::optional<std::size_t> resolveMonitor(const Entries& entries, std::string_view name)
+    std::optional<typename Entries::value_type::Variable> resolveMonitor(const Entries& entries, std::string_view name)
     {
-      for (std::size_t index = 0; index < entries.size(); ++index)
+      using Variable    = typename Entries::value_type::Variable;
+      const auto parsed = resolveMonitorVariable<Variable>(name);
+      if (!parsed.has_value())
       {
-        if (entries[index].name == name)
+        return std::nullopt;
+      }
+
+      for (const auto& entry : entries)
+      {
+        if (entry.variable == *parsed)
         {
-          return index;
+          return parsed;
         }
       }
       return std::nullopt;
     }
 
     template <class Context, class Entries>
-    void bindStateMonitors(Context& ctx, const Entries& entries, std::size_t raw)
+    void bindStateMonitors(Context& ctx, const Entries& entries, typename Entries::value_type::Variable variable)
     {
-      if (raw >= entries.size())
+      for (const auto& entry : entries)
       {
-        throw std::invalid_argument("Invalid EMT component monitor variable");
+        if (entry.variable == variable)
+        {
+          if (entry.derivative)
+          {
+            ctx.addDerivative(std::string(entry.name), entry.local);
+          }
+          else
+          {
+            ctx.addState(std::string(entry.name), entry.local);
+          }
+          return;
+        }
       }
 
-      const auto& entry = entries[raw];
-      if (entry.derivative)
-      {
-        ctx.addDerivative(std::string(entry.name), entry.local);
-      }
-      else
-      {
-        ctx.addState(std::string(entry.name), entry.local);
-      }
+      throw std::invalid_argument("Invalid EMT component monitor variable");
     }
 
     template <class Derived, class Enum>
@@ -126,12 +112,12 @@ namespace GridKit
       using Variable = Enum;
 
       template <class Context, class Component>
-      static void bind(Context& ctx, const Component&, std::size_t raw)
+      static void bind(Context& ctx, const Component&, Variable variable)
       {
-        bindStateMonitors(ctx, Derived::entries, raw);
+        bindStateMonitors(ctx, Derived::entries, variable);
       }
 
-      static std::optional<std::size_t> resolve(std::string_view name)
+      static std::optional<Variable> resolve(std::string_view name)
       {
         return resolveMonitor(Derived::entries, name);
       }

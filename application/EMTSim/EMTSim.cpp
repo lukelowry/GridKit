@@ -6,6 +6,7 @@
 #include <iostream>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include <GridKit/Model/EMT/Case.hpp>
 #include <GridKit/Model/EMT/IO/SolverFile.hpp>
@@ -22,8 +23,10 @@ namespace
 
   struct SolveResult
   {
-    int                                  status{0};
-    AnalysisManager::Sundials::IdaStats  ida_stats;
+    int                                 status{0};
+    AnalysisManager::Sundials::IdaStats ida_summary;
+    std::vector<GridKit::EMT::IO::IdaStatsSegment<AnalysisManager::Sundials::IdaStats>>
+                                         ida_segments;
     std::optional<std::filesystem::path> monitor_file;
   };
 
@@ -38,7 +41,36 @@ namespace
     return static_cast<int>(std::max<long long>(1, raw));
   }
 
-  SolveResult solveCase(Data data, const GridKit::EMT::IO::Solve& solve)
+  std::optional<AnalysisManager::Sundials::IdaLogOptions> idaLogOptions(
+      const GridKit::EMT::IO::Output& output)
+  {
+    if (!output.ida.has_value() || !output.ida->log.has_value())
+    {
+      return std::nullopt;
+    }
+
+    AnalysisManager::Sundials::IdaLogOptions options;
+    options.file  = output.ida->log->file;
+    options.level = output.ida->log->level == "error"
+                        ? AnalysisManager::Sundials::IdaLogLevel::Error
+                        : AnalysisManager::Sundials::IdaLogLevel::Warning;
+    return options;
+  }
+
+  void recordIdaStatsSegment(SolveResult& result,
+                             const Ida&   ida,
+                             Real         start_time,
+                             Real         end_time,
+                             int          output_steps)
+  {
+    auto stats          = ida.getStats();
+    result.ida_summary += stats;
+    result.ida_segments.push_back({start_time, end_time, output_steps, std::move(stats)});
+  }
+
+  SolveResult solveCase(Data                            data,
+                        const GridKit::EMT::IO::Solve&  solve,
+                        const GridKit::EMT::IO::Output& output)
   {
     SolveResult result;
     result.monitor_file = GridKit::EMT::IO::monitorOutputFile(data);
@@ -50,7 +82,7 @@ namespace
                                            static_cast<Idx>(solve.max_steps));
     system.allocate();
 
-    Ida ida(&system);
+    Ida ida(&system, idaLogOptions(output));
     ida.configureSimulation();
     ida.initializeSimulation(solve.t0, false);
     system.updateTime(solve.t0, 0.0);
@@ -68,8 +100,8 @@ namespace
       const int segment_steps = outputSteps(current_time, *event_time, solve.dt);
       if (segment_steps > 0)
       {
-        result.status     = ida.runSimulation(*event_time, segment_steps);
-        result.ida_stats += ida.getStats();
+        result.status = ida.runSimulation(*event_time, segment_steps);
+        recordIdaStatsSegment(result, ida, current_time, *event_time, segment_steps);
       }
       if (result.status != 0)
       {
@@ -88,8 +120,8 @@ namespace
       const int segment_steps = outputSteps(current_time, solve.tmax, solve.dt);
       if (segment_steps > 0)
       {
-        result.status     = ida.runSimulation(solve.tmax, segment_steps);
-        result.ida_stats += ida.getStats();
+        result.status = ida.runSimulation(solve.tmax, segment_steps);
+        recordIdaStatsSegment(result, ida, current_time, solve.tmax, segment_steps);
       }
     }
 
@@ -127,11 +159,11 @@ int main(int argc, const char* argv[])
     GridKit::EMT::IO::applyOutput(emt_case.data, file.output);
     GridKit::EMT::IO::installSchedule(emt_case, file.schedule);
 
-    const auto result = solveCase(std::move(emt_case.data), file.solve);
+    const auto result = solveCase(std::move(emt_case.data), file.solve, file.output);
 
-    if (file.output.ida_stats.has_value())
+    if (file.output.ida.has_value())
     {
-      GridKit::EMT::IO::writeIdaStats(result.ida_stats, *file.output.ida_stats);
+      GridKit::EMT::IO::writeIdaStats(result.ida_summary, result.ida_segments, *file.output.ida);
     }
 
     bool validation_passed = true;

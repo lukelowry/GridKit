@@ -706,6 +706,17 @@ namespace GridKit
         event.apply(data_);
       }
 
+      template <class BinderT>
+      void addCallbackMonitor(const std::string& label, BinderT&& binder)
+      {
+        auto monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(label);
+        binder(*monitor);
+
+        auto* raw = monitor.get();
+        monitor_objects_.push_back(std::move(monitor));
+        monitor_.addMonitor(raw);
+      }
+
       void bindBusMonitors()
       {
         for (const auto& request : data_.bus_monitors)
@@ -715,17 +726,16 @@ namespace GridKit
             throw std::invalid_argument("EMT monitor bus index is out of range");
           }
 
-          auto                     monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
-          BusMonitorBindingContext context(*this, request.bus, *monitor);
-          const auto&              bus = data_.buses[static_cast<size_t>(request.bus)];
-          for (auto variable : request.variables)
-          {
-            BusMonitorTraits<Bus<ScalarT, IdxT>>::bind(context, bus, variable);
-          }
-
-          auto* raw = monitor.get();
-          monitor_objects_.push_back(std::move(monitor));
-          monitor_.addMonitor(raw);
+          addCallbackMonitor(request.label,
+                             [&](auto& monitor)
+                             {
+                               BusMonitorBindingContext context(*this, request.bus, monitor);
+                               const auto&              bus = data_.buses[static_cast<size_t>(request.bus)];
+                               for (auto variable : request.variables)
+                               {
+                                 BusMonitorTraits<Bus<ScalarT, IdxT>>::bind(context, bus, variable);
+                               }
+                             });
         }
       }
 
@@ -741,20 +751,22 @@ namespace GridKit
 
                 if constexpr (requires { typename ComponentMonitorTraits<ComponentT>::Variable; })
                 {
-                  auto                  monitor = std::make_unique<GridKit::Model::CallbackVariableMonitor<ScalarT>>(request.label);
-                  MonitorBindingContext context(*this,
-                                                layout_.component(request.component),
-                                                layout_.terminalBuses(request.component),
-                                                *monitor);
+                  using Variable = typename ComponentMonitorTraits<ComponentT>::Variable;
+                  addCallbackMonitor(request.label,
+                                     [&](auto& monitor)
+                                     {
+                                       MonitorBindingContext context(*this,
+                                                                     layout_.component(request.component),
+                                                                     layout_.terminalBuses(request.component),
+                                                                     monitor);
 
-                  for (auto raw_variable : request.variables)
-                  {
-                    ComponentMonitorTraits<ComponentT>::bind(context, component, raw_variable);
-                  }
-
-                  auto* raw = monitor.get();
-                  monitor_objects_.push_back(std::move(monitor));
-                  monitor_.addMonitor(raw);
+                                       for (auto raw_variable : request.variables)
+                                       {
+                                         ComponentMonitorTraits<ComponentT>::bind(context,
+                                                                                  component,
+                                                                                  static_cast<Variable>(raw_variable));
+                                       }
+                                     });
                 }
                 else
                 {

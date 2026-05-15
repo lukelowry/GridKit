@@ -6,6 +6,7 @@ add_library(emt INTERFACE)
 target_include_directories(emt
   INTERFACE
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include>
     $<INSTALL_INTERFACE:include>)
 target_compile_features(emt INTERFACE cxx_std_20)
 target_link_libraries(emt

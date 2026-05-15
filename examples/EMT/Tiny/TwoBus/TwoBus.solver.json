@@ -12,12 +12,15 @@
   },
 
   "output": {
-    "monitor": { "file": "EMTTinyTwoBusSolver.csv" },
-    "ida_stats": { "file": "EMTTinyTwoBus.ida-stats.json", "format": "json" }
+    "monitor": { "file": "TwoBus.csv" },
+    "ida": {
+      "file": "TwoBus.ida.json",
+      "log": { "file": "TwoBus.ida.log", "level": "warning" }
+    }
   },
 
   "schedule": [
-    { "time": 0.010, "target": "load_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
-    { "time": 0.011, "target": "load_bus", "action": "clear" }
+    { "time": 0.010, "target": "receiving_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
+    { "time": 0.011, "target": "receiving_bus", "action": "clear" }
   ]
 }

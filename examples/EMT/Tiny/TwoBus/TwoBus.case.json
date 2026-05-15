@@ -9,12 +9,14 @@
     {
       "name": "source_bus",
       "vm0": 120.73827496404608,
-      "va0": 0.0043834011508009401
+      "va0": 0.0043834011508009401,
+      "mon": ["va", "vb", "vc"]
     },
     {
-      "name": "load_bus",
+      "name": "receiving_bus",
       "vm0": 120.0,
-      "va0": 0.0
+      "va0": 0.0,
+      "mon": ["va", "vb", "vc", "ifa", "ifb", "ifc"]
     }
   ],
   "components": [
@@ -29,7 +31,8 @@
       },
       "terminals": {
         "ac": "source_bus"
-      }
+      },
+      "mon": ["ia", "ib", "ic"]
     },
     {
       "name": "line",
@@ -59,8 +62,9 @@
       },
       "terminals": {
         "from": "source_bus",
-        "to": "load_bus"
-      }
+        "to": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
     },
     {
       "name": "load",
@@ -70,50 +74,15 @@
         "l": [3.9938145972382134e-2, 5.3715312062417496e-2, 5.2353658750919525e-2]
       },
       "terminals": {
-        "ac": "load_bus"
-      }
+        "ac": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
     }
   ],
-  "monitors": {
-    "sinks": [
-      {
-        "file": "EMTTinyTwoBus.csv",
-        "format": "csv"
-      }
-    ],
-    "buses": [
-      {
-        "target": "source_bus",
-        "label": "source_bus",
-        "variables": ["va", "vb", "vc"]
-      },
-      {
-        "target": "load_bus",
-        "label": "load_bus",
-        "variables": ["va", "vb", "vc"]
-      },
-      {
-        "target": "load_bus",
-        "label": "fault",
-        "variables": ["ifa", "ifb", "ifc"]
-      }
-    ],
-    "components": [
-      {
-        "target": "source",
-        "label": "source",
-        "variables": ["ia", "ib", "ic"]
-      },
-      {
-        "target": "load",
-        "label": "load",
-        "variables": ["ia", "ib", "ic"]
-      },
-      {
-        "target": "line",
-        "label": "line",
-        "variables": ["ia", "ib", "ic"]
-      }
-    ]
-  }
+  "monitors": [
+    {
+      "file_name": "EMTTinyTwoBus.csv",
+      "format": "csv"
+    }
+  ]
 }

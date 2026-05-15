@@ -125,11 +125,11 @@ namespace GridKit
       using Variable = VoltageSourceMonitorVariable;
 
       template <class Context>
-      static void bind(Context& ctx, const VoltageSource<RealT, IdxT>& source, std::size_t raw)
+      static void bind(Context& ctx, const VoltageSource<RealT, IdxT>& source, Variable variable)
       {
         IdxT        phase = 0;
         const char* label = nullptr;
-        switch (static_cast<Variable>(raw))
+        switch (variable)
         {
         case Variable::ia:
           phase = 0;
@@ -162,21 +162,9 @@ namespace GridKit
                 });
       }
 
-      static std::optional<std::size_t> resolve(std::string_view name)
+      static std::optional<Variable> resolve(std::string_view name)
       {
-        if (name == "ia")
-        {
-          return static_cast<std::size_t>(Variable::ia);
-        }
-        if (name == "ib")
-        {
-          return static_cast<std::size_t>(Variable::ib);
-        }
-        if (name == "ic")
-        {
-          return static_cast<std::size_t>(Variable::ic);
-        }
-        return std::nullopt;
+        return resolveMonitorVariable<Variable>(name);
       }
     };
   } // namespace EMT

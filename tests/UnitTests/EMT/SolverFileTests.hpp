@@ -45,18 +45,23 @@ namespace GridKit
         success           *= solver.output.monitor.has_value();
         if (solver.output.monitor)
         {
-          success *= (solver.output.monitor->file == dir / "TwoBusFault.csv");
+          success *= (solver.output.monitor->file == dir / "TwoBus.csv");
         }
-        success *= solver.output.ida_stats.has_value();
-        if (solver.output.ida_stats)
+        success *= solver.output.ida.has_value();
+        if (solver.output.ida)
         {
-          success *= (solver.output.ida_stats->file == dir / "TwoBusFault.ida-stats.json");
-          success *= (solver.output.ida_stats->format == "json");
+          success *= (solver.output.ida->file == dir / "TwoBus.ida.json");
+          success *= solver.output.ida->log.has_value();
+          if (solver.output.ida->log)
+          {
+            success *= (solver.output.ida->log->file == dir / "TwoBus.ida.log");
+            success *= (solver.output.ida->log->level == "warning");
+          }
         }
         success *= solver.validation.has_value();
         if (solver.validation)
         {
-          success *= (solver.validation->reference_file == dir / "TwoBusFault.ref.csv");
+          success *= (solver.validation->reference_file == dir / "TwoBus.ref.csv");
           success *= isEqual(solver.validation->error_tolerance, 1.0e-4);
         }
         success *= (solver.schedule.size() == 3u);
@@ -94,7 +99,7 @@ namespace GridKit
         success           *= (solver.solve.max_steps == 200000u);
         success           *= solver.solve.use_jacobian;
         success           *= !solver.output.monitor.has_value();
-        success           *= !solver.output.ida_stats.has_value();
+        success           *= !solver.output.ida.has_value();
         success           *= solver.schedule.empty();
         success           *= !solver.validation.has_value();
 
@@ -158,9 +163,17 @@ namespace GridKit
             withMutation(
                 [](Json& json)
                 {
-                  json["output"]["ida_stats"]["format"] = "xml";
+                  json["output"]["ida"]["format"] = "text";
                 }),
-            "json' or 'text");
+            "unknown key 'format'");
+
+        success *= solverErrorContains(
+            withMutation(
+                [](Json& json)
+                {
+                  json["output"]["ida"]["log"]["level"] = "trace";
+                }),
+            "output.ida.log.level");
 
         success *= solverErrorContains(
             withMutation(
@@ -251,36 +264,70 @@ namespace GridKit
 
         struct Stats
         {
-          long int num_steps_{7};
-          long int num_residual_evals_{8};
-          long int num_linear_decompositions_{9};
-          long int num_error_test_fails_{1};
-          long int num_nonlinear_iters_{10};
-          long int num_nonlinear_convergence_fails_{2};
-
-          std::string report() const
-          {
-            return "mock stats";
-          }
+          long int    num_steps_{7};
+          std::string sundials_version_{"7.mock"};
+          int         sundials_logging_level_{4};
+          long int    num_residual_evals_{8};
+          long int    num_linear_solver_setups_{9};
+          long int    num_error_test_fails_{1};
+          long int    num_backtrack_operations_{4};
+          long int    num_nonlinear_iters_{10};
+          long int    num_nonlinear_convergence_fails_{2};
+          long int    num_nonlinear_step_fails_{5};
+          long int    num_jacobian_evals_{11};
+          long int    num_jacobian_eval_steps_{6};
+          long int    num_linear_iters_{12};
+          long int    num_linear_convergence_fails_{3};
+          long int    num_linear_residual_evals_{13};
+          long int    num_preconditioner_evals_{14};
+          long int    num_preconditioner_solves_{15};
+          long int    num_jtimes_setup_evals_{16};
+          long int    num_jtimes_evals_{17};
+          long int    last_linear_flag_{0};
+          std::string last_linear_flag_name_{"SUN_SUCCESS"};
+          int         last_order_{2};
+          int         current_order_{3};
+          double      actual_initial_step_{1.0e-6};
+          double      last_step_{2.0e-6};
+          double      current_step_{3.0e-6};
+          double      current_time_{0.06};
+          double      current_cj_{4.0};
+          double      jacobian_time_{0.05};
+          double      jacobian_cj_{5.0};
         };
 
         const auto dir = std::filesystem::path("EMTSolverFileStatsTest");
         std::filesystem::remove_all(dir);
         std::filesystem::create_directory(dir);
 
-        EMT::IO::writeIdaStats(Stats{}, {dir / "stats.json", "json"});
+        Stats segment_stats;
+        segment_stats.num_steps_ = 4;
+        std::vector<EMT::IO::IdaStatsSegment<Stats>> segments{
+            {0.0, 0.01, 100, segment_stats}};
+
+        EMT::IO::writeIdaStats(Stats{}, segments, {dir / "stats.json", std::nullopt});
         std::ifstream json_in(dir / "stats.json");
         Json          parsed;
         json_in >> parsed;
-        success *= (parsed["steps"].get<int>() == 7);
-        success *= (parsed["residual_evals"].get<int>() == 8);
-        success *= (parsed["nonlinear_convergence_failures"].get<int>() == 2);
-
-        EMT::IO::writeIdaStats(Stats{}, {dir / "stats.txt", "text"});
-        std::ifstream text_in(dir / "stats.txt");
-        std::string   text;
-        std::getline(text_in, text);
-        success *= (text == "mock stats");
+        success *= (parsed["sundials"]["version"].get<std::string>() == "7.mock");
+        success *= (parsed["segment_count"].get<int>() == 1);
+        success *= (parsed["integrator"]["steps"].get<int>() == 7);
+        success *= (parsed["integrator"]["residual_evals"].get<int>() == 8);
+        success *= (parsed["nonlinear_solver"]["convergence_failures"].get<int>() == 2);
+        success *= (parsed["linear_solver"]["jacobian_evals"].get<int>() == 11);
+        success *= (parsed["linear_solver"]["last_jacobian_eval_step"].get<int>() == 6);
+        success *= (parsed["linear_solver"]["last_flag_name"].get<std::string>() == "SUN_SUCCESS");
+        success *= isEqual(parsed["final_state"]["current_time"].get<double>(), 0.06);
+        success *= (parsed["segments"].size() == 1u);
+        if (parsed["segments"].size() == 1u)
+        {
+          success *= isEqual(parsed["segments"][0]["start_time"].get<double>(), 0.0);
+          success *= isEqual(parsed["segments"][0]["end_time"].get<double>(), 0.01);
+          success *= (parsed["segments"][0]["output_steps"].get<int>() == 100);
+          success *= (parsed["segments"][0]["integrator"]["steps"].get<int>() == 4);
+          success *= !parsed["segments"][0].contains("sundials");
+          success *= !parsed["segments"][0].contains("segment_count");
+        }
 
         std::filesystem::remove_all(dir);
         return success.report(__func__);
@@ -302,16 +349,16 @@ namespace GridKit
     "use_jacobian": true
   },
   "output": {
-    "monitor": { "file": "TwoBusFault.csv" },
-    "ida_stats": { "file": "TwoBusFault.ida-stats.json", "format": "json" }
+    "monitor": { "file": "TwoBus.csv" },
+    "ida": { "file": "TwoBus.ida.json", "log": { "file": "TwoBus.ida.log" } }
   },
   "schedule": [
-    { "time": 0.010, "target": "load_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
-    { "time": 0.011, "target": "load_bus", "action": "clear" },
+    { "time": 0.010, "target": "receiving_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
+    { "time": 0.011, "target": "receiving_bus", "action": "clear" },
     { "time": 0.011, "target": "breaker", "action": "open" }
   ],
   "validation": {
-    "reference_file": "TwoBusFault.ref.csv",
+    "reference_file": "TwoBus.ref.csv",
     "error_tolerance": 1e-4
   }
 }
@@ -322,8 +369,8 @@ namespace GridKit
       {
         auto json        = solverJson();
         json["output"]   = Json{{"monitor", Json{{"file", "out.csv"}}}};
-        json["schedule"] = Json::array({Json{{"time", 0.010}, {"target", "load_bus"}, {"action", "fault"}, {"params", Json{{"r", 15.0}}}},
-                                        Json{{"time", 0.011}, {"target", "load_bus"}, {"action", "clear"}},
+        json["schedule"] = Json::array({Json{{"time", 0.010}, {"target", "receiving_bus"}, {"action", "fault"}, {"params", Json{{"r", 15.0}}}},
+                                        Json{{"time", 0.011}, {"target", "receiving_bus"}, {"action", "clear"}},
                                         Json{{"time", 0.012}, {"target", "breaker"}, {"action", "open"}},
                                         Json{{"time", 0.013}, {"target", "breaker"}, {"action", "close"}}});
         json.erase("validation");
@@ -337,14 +384,14 @@ namespace GridKit
   "header": { "format_version": 1, "frequency": 60.0 },
   "buses": [
     { "name": "source_bus", "vm0": 120.0, "va0": 0.0 },
-    { "name": "load_bus", "vm0": 120.0, "va0": 0.0 }
+    { "name": "receiving_bus", "vm0": 120.0, "va0": 0.0 }
   ],
   "components": [
     {
       "name": "breaker",
       "class": "Breaker",
       "params": {},
-      "terminals": { "from": "source_bus", "to": "load_bus" }
+      "terminals": { "from": "source_bus", "to": "receiving_bus" }
     }
   ]
 }

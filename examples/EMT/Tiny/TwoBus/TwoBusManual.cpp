@@ -110,36 +110,36 @@ namespace
     const Complex source_internal_voltage = source_bus_voltage + source_resistance * source_injection;
 
     Data        data;
-    const Index source_bus = data.addBus({std::abs(source_bus_voltage),
-                                          std::arg(source_bus_voltage),
-                                          frequency});
-    const Index load_bus   = data.addBus({std::abs(load_voltage),
-                                          std::arg(load_voltage),
-                                          frequency});
+    const Index source_bus    = data.addBus({std::abs(source_bus_voltage),
+                                             std::arg(source_bus_voltage),
+                                             frequency});
+    const Index receiving_bus = data.addBus({std::abs(load_voltage),
+                                             std::arg(load_voltage),
+                                             frequency});
 
     const auto source = data.add(Source(sourceData(source_internal_voltage)));
     const auto load   = data.add(LoadRL(loadData()));
     const auto branch = data.add(Branch(branchData()));
 
     data.connect(source.terminal(0), source_bus);
-    data.connect(load.terminal(0), load_bus);
+    data.connect(load.terminal(0), receiving_bus);
     data.connect(branch.terminal(Branch::from), source_bus);
-    data.connect(branch.terminal(Branch::to), load_bus);
+    data.connect(branch.terminal(Branch::to), receiving_bus);
 
     data.schedule(faultStartTime(),
-                  data.busRef(load_bus),
+                  data.busRef(receiving_bus),
                   Events::Fault{Events::PhaseMask::abc(), fault_resistance, 0.0, 0.0});
     data.schedule(faultClearTime(),
-                  data.busRef(load_bus),
+                  data.busRef(receiving_bus),
                   Events::Clear{Events::PhaseMask::abc()});
 
     data.addMonitorSink({output_file, Format::CSV});
     data.monitorBus(source_bus, "source_bus", {BusVar::va, BusVar::vb, BusVar::vc});
-    data.monitorBus(load_bus, "load_bus", {BusVar::va, BusVar::vb, BusVar::vc});
+    data.monitorBus(receiving_bus, "receiving_bus", {BusVar::va, BusVar::vb, BusVar::vc});
     data.monitorComponent(source, "source", {SourceVar::ia, SourceVar::ib, SourceVar::ic});
     data.monitorComponent(load, "load", {LoadVar::ia, LoadVar::ib, LoadVar::ic});
     data.monitorComponent(branch, "line", {LineVar::ia, LineVar::ib, LineVar::ic});
-    data.monitorBus(load_bus, "fault", {BusVar::ifa, BusVar::ifb, BusVar::ifc});
+    data.monitorBus(receiving_bus, "fault", {BusVar::ifa, BusVar::ifb, BusVar::ifc});
 
     return data;
   }

@@ -18,6 +18,10 @@ https://github.com/dss-extensions/electricdss-tst/blob/master/Version8/Distrib/I
 
 The nonzero `g` matrix is derived from the capacitance matrix with a small dielectric loss tangent of `1e-3`.
 
+CSV monitor variables are declared inline in `TwoBus.case.json` with `mon`
+arrays on the buses and components. The top-level `monitors` array only selects
+the output sink.
+
 ## Events
 
 The following event type is provided for this case.

@@ -49,6 +49,25 @@ Electrical wiring is represented by
 wiring is represented by direction-specific `SignalOutputRef` to `SignalInputRef`
 `SignalConnection` entries.
 
+## Monitoring
+
+EMT case files declare monitored variables inline on the entity that owns them.
+Buses and components accept an optional `mon` array, for example
+`"mon": ["va", "vb"]` on a bus or `"mon": ["ia", "ib"]` on a component.
+The output label is always the entity `name`, so CSV headers are emitted as
+`<name>_<variable>`.
+
+The top-level `monitors` key is only the sink list:
+
+```json
+"monitors": [
+  { "file_name": "case.csv", "format": "csv", "delim": "," }
+]
+```
+
+The former EMT case shape with `monitors.sinks`, `monitors.buses`, and
+`monitors.components` is intentionally unsupported.
+
 ## Open Design Notes
 
 Distributed parameter lines are placeholders until internal signal delay support
