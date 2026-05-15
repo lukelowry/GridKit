@@ -24,13 +24,13 @@ namespace GridKit
                        ScalarT*              yp,
                        const Layout<IdxT>&   layout,
                        ComponentLayout<IdxT> component,
-                       std::span<const IdxT> terminal_buses,
+                       std::span<const IdxT> port_buses,
                        std::span<const BusT> buses)
         : y_{y},
           yp_{yp},
           layout_{layout},
           component_{component},
-          terminal_buses_{terminal_buses},
+          port_buses_{port_buses},
           buses_{buses}
       {
       }
@@ -65,27 +65,27 @@ namespace GridKit
         return {yp_ + component_.variable_offset + first, static_cast<size_t>(count)};
       }
 
-      std::array<std::complex<ScalarT>, 3> voltagePhasor(IdxT terminal) const
+      std::array<std::complex<ScalarT>, 3> voltagePhasor(IdxT port) const
       {
-        return buses_[terminal_buses_[terminal]].template initialVoltagePhasor<ScalarT>();
+        return buses_[port_buses_[port]].template initialVoltagePhasor<ScalarT>();
       }
 
-      ScalarT omega(IdxT terminal) const
+      ScalarT omega(IdxT port) const
       {
-        return buses_[terminal_buses_[terminal]].template omega<ScalarT>();
+        return buses_[port_buses_[port]].template omega<ScalarT>();
       }
 
-      std::array<ScalarT, 3> voltage(IdxT terminal) const
+      std::array<ScalarT, 3> voltage(IdxT port) const
       {
-        const IdxT bus = terminal_buses_[terminal];
+        const IdxT bus = port_buses_[port];
         return {y_[layout_.busVariable(bus, 0)],
                 y_[layout_.busVariable(bus, 1)],
                 y_[layout_.busVariable(bus, 2)]};
       }
 
-      std::array<ScalarT, 3> voltageDerivative(IdxT terminal) const
+      std::array<ScalarT, 3> voltageDerivative(IdxT port) const
       {
-        const IdxT bus = terminal_buses_[terminal];
+        const IdxT bus = port_buses_[port];
         return {yp_[layout_.busVariable(bus, 0)],
                 yp_[layout_.busVariable(bus, 1)],
                 yp_[layout_.busVariable(bus, 2)]};
@@ -96,7 +96,7 @@ namespace GridKit
       ScalarT*              yp_{nullptr};
       const Layout<IdxT>&   layout_;
       ComponentLayout<IdxT> component_;
-      std::span<const IdxT> terminal_buses_;
+      std::span<const IdxT> port_buses_;
       std::span<const BusT> buses_;
     };
 
@@ -111,15 +111,15 @@ namespace GridKit
                 const ScalarT*        yp,
                 const Layout<IdxT>&   layout,
                 ComponentLayout<IdxT> component,
-                std::span<const IdxT> terminal_buses,
-                std::span<const IdxT> input_variables,
+                std::span<const IdxT> port_buses,
+                std::span<const IdxT> input_port_variables,
                 ScalarT               time)
         : y_{y},
           yp_{yp},
           layout_{layout},
           component_{component},
-          terminal_buses_{terminal_buses},
-          input_variables_{input_variables},
+          port_buses_{port_buses},
+          input_port_variables_{input_port_variables},
           time_{time}
       {
       }
@@ -166,25 +166,25 @@ namespace GridKit
         return values;
       }
 
-      std::array<ScalarT, 3> voltage(IdxT terminal) const
+      std::array<ScalarT, 3> voltage(IdxT port) const
       {
-        const IdxT bus = terminal_buses_[terminal];
+        const IdxT bus = port_buses_[port];
         return {y_[layout_.busVariable(bus, 0)],
                 y_[layout_.busVariable(bus, 1)],
                 y_[layout_.busVariable(bus, 2)]};
       }
 
-      std::array<ScalarT, 3> voltageDerivative(IdxT terminal) const
+      std::array<ScalarT, 3> voltageDerivative(IdxT port) const
       {
-        const IdxT bus = terminal_buses_[terminal];
+        const IdxT bus = port_buses_[port];
         return {yp_[layout_.busVariable(bus, 0)],
                 yp_[layout_.busVariable(bus, 1)],
                 yp_[layout_.busVariable(bus, 2)]};
       }
 
-      ScalarT input(IdxT input) const
+      ScalarT inputPort(IdxT input) const
       {
-        const IdxT global = input_variables_[input];
+        const IdxT global = input_port_variables_[input];
         if (global == INVALID_INDEX<IdxT>)
         {
           throw std::logic_error("EMT input is not connected");
@@ -202,8 +202,8 @@ namespace GridKit
       const ScalarT*        yp_{nullptr};
       const Layout<IdxT>&   layout_;
       ComponentLayout<IdxT> component_;
-      std::span<const IdxT> terminal_buses_;
-      std::span<const IdxT> input_variables_;
+      std::span<const IdxT> port_buses_;
+      std::span<const IdxT> input_port_variables_;
       ScalarT               time_{0.0};
     };
 
@@ -214,11 +214,11 @@ namespace GridKit
       EquationView(ScalarT*              f,
                    const Layout<IdxT>&   layout,
                    ComponentLayout<IdxT> component,
-                   std::span<const IdxT> terminal_buses)
+                   std::span<const IdxT> port_buses)
         : f_{f},
           layout_{layout},
           component_{component},
-          terminal_buses_{terminal_buses}
+          port_buses_{port_buses}
       {
       }
 
@@ -249,9 +249,9 @@ namespace GridKit
       }
 
       template <class ValueT>
-      void injectCurrent(IdxT terminal, const std::array<ValueT, 3>& current)
+      void injectCurrent(IdxT port, const std::array<ValueT, 3>& current)
       {
-        const IdxT bus = terminal_buses_[terminal];
+        const IdxT bus = port_buses_[port];
         for (IdxT phase = 0; phase < 3; ++phase)
         {
           f_[layout_.busEquation(bus, phase)] += static_cast<ScalarT>(current[phase]);
@@ -259,14 +259,14 @@ namespace GridKit
       }
 
       template <class ValueT>
-      void injectCurrent(IdxT terminal, std::initializer_list<ValueT> current)
+      void injectCurrent(IdxT port, std::initializer_list<ValueT> current)
       {
         if (current.size() != 3)
         {
           throw std::invalid_argument("EMT current injection must have three phases");
         }
 
-        const IdxT bus   = terminal_buses_[terminal];
+        const IdxT bus   = port_buses_[port];
         auto       value = current.begin();
         for (IdxT phase = 0; phase < 3; ++phase, ++value)
         {
@@ -278,7 +278,7 @@ namespace GridKit
       ScalarT*              f_{nullptr};
       const Layout<IdxT>&   layout_;
       ComponentLayout<IdxT> component_;
-      std::span<const IdxT> terminal_buses_;
+      std::span<const IdxT> port_buses_;
     };
 
     namespace Detail
@@ -289,15 +289,15 @@ namespace GridKit
       public:
         LocalStateView(const ScalarT* y,
                        const ScalarT* yp,
-                       const ScalarT* terminal_v,
-                       const ScalarT* terminal_vp,
-                       const ScalarT* inputs,
+                       const ScalarT* port_v,
+                       const ScalarT* port_vp,
+                       const ScalarT* input_ports,
                        ScalarT        time)
           : y_{y},
             yp_{yp},
-            terminal_v_{terminal_v},
-            terminal_vp_{terminal_vp},
-            inputs_{inputs},
+            port_v_{port_v},
+            port_vp_{port_vp},
+            input_ports_{input_ports},
             time_{time}
         {
         }
@@ -344,21 +344,21 @@ namespace GridKit
           return values;
         }
 
-        std::array<ScalarT, 3> voltage(IdxT terminal) const
+        std::array<ScalarT, 3> voltage(IdxT port) const
         {
-          const IdxT first = 3 * terminal;
-          return {terminal_v_[first + 0], terminal_v_[first + 1], terminal_v_[first + 2]};
+          const IdxT first = 3 * port;
+          return {port_v_[first + 0], port_v_[first + 1], port_v_[first + 2]};
         }
 
-        std::array<ScalarT, 3> voltageDerivative(IdxT terminal) const
+        std::array<ScalarT, 3> voltageDerivative(IdxT port) const
         {
-          const IdxT first = 3 * terminal;
-          return {terminal_vp_[first + 0], terminal_vp_[first + 1], terminal_vp_[first + 2]};
+          const IdxT first = 3 * port;
+          return {port_vp_[first + 0], port_vp_[first + 1], port_vp_[first + 2]};
         }
 
-        ScalarT input(IdxT input) const
+        ScalarT inputPort(IdxT input) const
         {
-          return inputs_[input];
+          return input_ports_[input];
         }
 
         ScalarT time() const
@@ -369,9 +369,9 @@ namespace GridKit
       private:
         const ScalarT* y_{nullptr};
         const ScalarT* yp_{nullptr};
-        const ScalarT* terminal_v_{nullptr};
-        const ScalarT* terminal_vp_{nullptr};
-        const ScalarT* inputs_{nullptr};
+        const ScalarT* port_v_{nullptr};
+        const ScalarT* port_vp_{nullptr};
+        const ScalarT* input_ports_{nullptr};
         ScalarT        time_{0.0};
       };
 
@@ -412,9 +412,9 @@ namespace GridKit
         }
 
         template <class ValueT>
-        void injectCurrent(IdxT terminal, const std::array<ValueT, 3>& current)
+        void injectCurrent(IdxT port, const std::array<ValueT, 3>& current)
         {
-          const IdxT first = equation_count_ + 3 * terminal;
+          const IdxT first = equation_count_ + 3 * port;
           for (IdxT phase = 0; phase < 3; ++phase)
           {
             residual_[first + phase] += static_cast<ScalarT>(current[phase]);
@@ -422,14 +422,14 @@ namespace GridKit
         }
 
         template <class ValueT>
-        void injectCurrent(IdxT terminal, std::initializer_list<ValueT> current)
+        void injectCurrent(IdxT port, std::initializer_list<ValueT> current)
         {
           if (current.size() != 3)
           {
             throw std::invalid_argument("EMT current injection must have three phases");
           }
 
-          const IdxT first = equation_count_ + 3 * terminal;
+          const IdxT first = equation_count_ + 3 * port;
           auto       value = current.begin();
           for (IdxT phase = 0; phase < 3; ++phase, ++value)
           {

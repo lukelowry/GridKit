@@ -24,11 +24,11 @@ namespace GridKit
     class Breaker
     {
     public:
-      static constexpr size_t variable_count = 3;
-      static constexpr size_t equation_count = 3;
-      static constexpr size_t terminal_count = 2;
-      static constexpr size_t input_count    = 0;
-      static constexpr size_t output_count   = 0;
+      static constexpr size_t variable_count        = 3;
+      static constexpr size_t equation_count        = 3;
+      static constexpr size_t electrical_port_count = 2;
+      static constexpr size_t input_port_count      = 0;
+      static constexpr size_t output_port_count     = 0;
 
       static constexpr size_t from = 0;
       static constexpr size_t to   = 1;
@@ -119,17 +119,17 @@ namespace GridKit
       using PhaseMask = GridKit::Model::Events::PhaseMask;
 
       static constexpr std::string_view                class_name = "Breaker";
-      static constexpr std::array<std::string_view, 2> terminals{"from", "to"};
-      static constexpr std::array<std::string_view, 0> inputs{};
-      static constexpr std::array<std::string_view, 0> outputs{};
+      static constexpr std::array<std::string_view, 2> electrical_ports{"from", "to"};
+      static constexpr std::array<std::string_view, 0> input_ports{};
+      static constexpr std::array<std::string_view, 0> output_ports{};
 
       static constexpr auto params = std::tuple{
           optionalField("closed", &Data::closed, PhaseMask::abc()),
       };
 
-      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
-      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
-      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
     };
 
     template <class RealT, class IdxT>

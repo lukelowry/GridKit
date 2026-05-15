@@ -49,9 +49,9 @@ namespace GridKit
     concept Describable = requires {
       typename ComponentDescriptor<T>::Data;
       { ComponentDescriptor<T>::class_name } -> std::convertible_to<std::string_view>;
-      ComponentDescriptor<T>::terminals;
-      ComponentDescriptor<T>::inputs;
-      ComponentDescriptor<T>::outputs;
+      ComponentDescriptor<T>::electrical_ports;
+      ComponentDescriptor<T>::input_ports;
+      ComponentDescriptor<T>::output_ports;
       ComponentDescriptor<T>::params;
     };
   } // namespace EMT

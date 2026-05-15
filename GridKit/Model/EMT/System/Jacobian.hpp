@@ -161,21 +161,21 @@ namespace GridKit
                          ScalarT        time,
                          IdxT           variables,
                          IdxT           equations,
-                         IdxT           terminals)
+                         IdxT           ports)
         {
-          const IdxT     terminal_size = Layout<IdxT>::phases * terminals;
-          const ScalarT* y             = local;
-          const ScalarT* yp            = y + variables;
-          const ScalarT* terminal_v    = yp + variables;
-          const ScalarT* terminal_vp   = terminal_v + terminal_size;
-          const ScalarT* inputs        = terminal_vp + terminal_size;
+          const IdxT     port_size   = Layout<IdxT>::phases * ports;
+          const ScalarT* y           = local;
+          const ScalarT* yp          = y + variables;
+          const ScalarT* port_v      = yp + variables;
+          const ScalarT* port_vp     = port_v + port_size;
+          const ScalarT* input_ports = port_vp + port_size;
 
-          for (IdxT row = 0; row < equations + terminal_size; ++row)
+          for (IdxT row = 0; row < equations + port_size; ++row)
           {
             residual[static_cast<size_t>(row)] = ScalarT{0.0};
           }
 
-          LocalStateView<ScalarT, IdxT>    state(y, yp, terminal_v, terminal_vp, inputs, time);
+          LocalStateView<ScalarT, IdxT>    state(y, yp, port_v, port_vp, input_ports, time);
           LocalEquationView<ScalarT, IdxT> equations_view(residual, equations);
           model->residual(state, equations_view);
         }
@@ -193,15 +193,15 @@ namespace GridKit
       {
         component_ = layout.component(id);
 
-        const auto terminal_buses = layout.terminalBuses(id);
-        terminal_buses_.assign(terminal_buses.begin(), terminal_buses.end());
+        const auto port_buses = layout.portBuses(id);
+        port_buses_.assign(port_buses.begin(), port_buses.end());
 
-        const auto input_variables = layout.inputVariables(id);
-        input_variables_.assign(input_variables.begin(), input_variables.end());
+        const auto input_port_variables = layout.inputPortVariables(id);
+        input_port_variables_.assign(input_port_variables.begin(), input_port_variables.end());
 
-        residual_count_ = component_.equation_count + Layout<IdxT>::phases * component_.terminal_count;
-        terminal_size_  = Layout<IdxT>::phases * component_.terminal_count;
-        active_count_   = IdxT{2} * component_.variable_count + IdxT{2} * terminal_size_ + component_.input_count;
+        residual_count_ = component_.equation_count + Layout<IdxT>::phases * component_.electrical_port_count;
+        port_size_      = Layout<IdxT>::phases * component_.electrical_port_count;
+        active_count_   = IdxT{2} * component_.variable_count + IdxT{2} * port_size_ + component_.input_port_count;
 
         row_indices_.clear();
         row_indices_.reserve(static_cast<size_t>(residual_count_));
@@ -209,9 +209,9 @@ namespace GridKit
         {
           row_indices_.push_back(component_.equation_offset + local);
         }
-        for (IdxT terminal = 0; terminal < component_.terminal_count; ++terminal)
+        for (IdxT port = 0; port < component_.electrical_port_count; ++port)
         {
-          const IdxT bus = terminal_buses_[static_cast<size_t>(terminal)];
+          const IdxT bus = port_buses_[static_cast<size_t>(port)];
           for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase)
           {
             row_indices_.push_back(layout.busEquation(bus, phase));
@@ -228,25 +228,25 @@ namespace GridKit
         {
           addSource(true, component_.variable_offset + local);
         }
-        for (IdxT terminal = 0; terminal < component_.terminal_count; ++terminal)
+        for (IdxT port = 0; port < component_.electrical_port_count; ++port)
         {
-          const IdxT bus = terminal_buses_[static_cast<size_t>(terminal)];
+          const IdxT bus = port_buses_[static_cast<size_t>(port)];
           for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase)
           {
             addSource(false, layout.busVariable(bus, phase));
           }
         }
-        for (IdxT terminal = 0; terminal < component_.terminal_count; ++terminal)
+        for (IdxT port = 0; port < component_.electrical_port_count; ++port)
         {
-          const IdxT bus = terminal_buses_[static_cast<size_t>(terminal)];
+          const IdxT bus = port_buses_[static_cast<size_t>(port)];
           for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase)
           {
             addSource(true, layout.busVariable(bus, phase));
           }
         }
-        for (IdxT local = 0; local < component_.input_count; ++local)
+        for (IdxT local = 0; local < component_.input_port_count; ++local)
         {
-          addSource(false, input_variables_[static_cast<size_t>(local)]);
+          addSource(false, input_port_variables_[static_cast<size_t>(local)]);
         }
 
         local_.assign(static_cast<size_t>(active_count_), ScalarT{0.0});
@@ -432,15 +432,15 @@ namespace GridKit
 
         TrackingScalar* y           = local.data();
         TrackingScalar* yp          = y + component_.variable_count;
-        TrackingScalar* terminal_v  = yp + component_.variable_count;
-        TrackingScalar* terminal_vp = terminal_v + terminal_size_;
-        TrackingScalar* inputs      = terminal_vp + terminal_size_;
+        TrackingScalar* port_v      = yp + component_.variable_count;
+        TrackingScalar* port_vp     = port_v + port_size_;
+        TrackingScalar* input_ports = port_vp + port_size_;
 
         Detail::LocalStateView<TrackingScalar, IdxT>    state(y,
                                                            yp,
-                                                           terminal_v,
-                                                           terminal_vp,
-                                                           inputs,
+                                                           port_v,
+                                                           port_vp,
+                                                           input_ports,
                                                            tracking_time);
         Detail::LocalEquationView<TrackingScalar, IdxT> equations(residual.data(),
                                                                   component_.equation_count);
@@ -482,15 +482,15 @@ namespace GridKit
 
         TrackingScalar* y           = local.data();
         TrackingScalar* yp          = y + component_.variable_count;
-        TrackingScalar* terminal_v  = yp + component_.variable_count;
-        TrackingScalar* terminal_vp = terminal_v + terminal_size_;
-        TrackingScalar* inputs      = terminal_vp + terminal_size_;
+        TrackingScalar* port_v      = yp + component_.variable_count;
+        TrackingScalar* port_vp     = port_v + port_size_;
+        TrackingScalar* input_ports = port_vp + port_size_;
 
         Detail::LocalStateView<TrackingScalar, IdxT>    state(y,
                                                            yp,
-                                                           terminal_v,
-                                                           terminal_vp,
-                                                           inputs,
+                                                           port_v,
+                                                           port_vp,
+                                                           input_ports,
                                                            tracking_time);
         Detail::LocalEquationView<TrackingScalar, IdxT> equations(residual.data(),
                                                                   component_.equation_count);
@@ -570,7 +570,7 @@ namespace GridKit
               enzyme_const,
               component_.equation_count,
               enzyme_const,
-              component_.terminal_count);
+              component_.electrical_port_count);
 
           seed_[source_index] = ScalarT{0.0};
 
@@ -589,11 +589,11 @@ namespace GridKit
 
       ComponentLayout<IdxT> component_;
       IdxT                  residual_count_{0};
-      IdxT                  terminal_size_{0};
+      IdxT                  port_size_{0};
       IdxT                  active_count_{0};
 
-      std::vector<IdxT>    terminal_buses_;
-      std::vector<IdxT>    input_variables_;
+      std::vector<IdxT>    port_buses_;
+      std::vector<IdxT>    input_port_variables_;
       std::vector<IdxT>    row_indices_;
       std::vector<Source>  sources_;
       std::vector<Nonzero> nonzeros_;

@@ -26,11 +26,11 @@ namespace GridKit
     class LoadRL
     {
     public:
-      static constexpr size_t variable_count = 3;
-      static constexpr size_t equation_count = 3;
-      static constexpr size_t terminal_count = 1;
-      static constexpr size_t input_count    = 0;
-      static constexpr size_t output_count   = 0;
+      static constexpr size_t variable_count        = 3;
+      static constexpr size_t equation_count        = 3;
+      static constexpr size_t electrical_port_count = 1;
+      static constexpr size_t input_port_count      = 0;
+      static constexpr size_t output_port_count     = 0;
 
       static constexpr bool differential(size_t local)
       {
@@ -123,18 +123,18 @@ namespace GridKit
       using Data      = LoadRLData<RealT, IdxT>;
 
       static constexpr std::string_view                class_name = "LoadRL";
-      static constexpr std::array<std::string_view, 1> terminals{"ac"};
-      static constexpr std::array<std::string_view, 0> inputs{};
-      static constexpr std::array<std::string_view, 0> outputs{};
+      static constexpr std::array<std::string_view, 1> electrical_ports{"ac"};
+      static constexpr std::array<std::string_view, 0> input_ports{};
+      static constexpr std::array<std::string_view, 0> output_ports{};
 
       static constexpr auto params = std::tuple{
           field("r", &Data::r),
           field("l", &Data::l),
       };
 
-      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
-      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
-      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
     };
 
     template <class RealT, class IdxT>

@@ -16,9 +16,9 @@ namespace GridKit
     class EMTSystemModelTests
     {
     public:
-      using OneTerminal          = EMTMocks::MockOneTerminalComponent<RealT, IdxT>;
+      using OneElectricalPort    = EMTMocks::MockOneElectricalPortComponent<RealT, IdxT>;
       using BranchLumpedConstant = EMTMocks::MockBranchLumpedConstant<RealT, IdxT>;
-      using ThreeTerminal        = EMTMocks::MockThreeTerminalBranch<RealT, IdxT>;
+      using ThreeElectricalPort  = EMTMocks::MockThreeElectricalPortBranch<RealT, IdxT>;
       using Source               = EMTMocks::MockPortSource<RealT, IdxT>;
       using Sink                 = EMTMocks::MockPortSink<RealT, IdxT>;
       using MissingDifferential  = EMTMocks::MockMissingDifferential<RealT, IdxT>;
@@ -29,16 +29,16 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneTerminal, Source>;
+        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneElectricalPort, Source>;
         Data data;
 
-        const IdxT a         = data.addBus({1.0, 0.0, 60.0});
-        const IdxT b         = data.addBus({1.0, 0.1, 60.0});
+        const IdxT a         = data.addBus({1.0, 0.0});
+        const IdxT b         = data.addBus({1.0, 0.1});
         const auto branch    = data.add(BranchLumpedConstant{});
-        const auto component = data.add(OneTerminal{});
-        data.connect(branch.terminal(BranchLumpedConstant::from), a);
-        data.connect(branch.terminal(BranchLumpedConstant::to), b);
-        data.connect(component.terminal(0), a);
+        const auto component = data.add(OneElectricalPort{});
+        data.connect(branch.port(BranchLumpedConstant::from), a);
+        data.connect(branch.port(BranchLumpedConstant::to), b);
+        data.connect(component.port(0), a);
 
         success *= (a == 0);
         success *= (b == 1);
@@ -46,11 +46,11 @@ namespace GridKit
         success *= (component.id.type == 1 && component.id.index == 0);
         success *= (data.buses.size() == 2);
         success *= (data.components.template get<BranchLumpedConstant>().size() == 1);
-        success *= (data.components.template get<OneTerminal>().size() == 1);
-        success *= (data.terminal_connections.size() == 3);
+        success *= (data.components.template get<OneElectricalPort>().size() == 1);
+        success *= (data.port_connections.size() == 3);
 
         EMT::SystemModelData<RealT, IdxT> bus_only;
-        bus_only.addBus({1.0, 0.0, 60.0});
+        bus_only.addBus({1.0, 0.0});
         EMT::SystemModel<decltype(bus_only)> bus_system(bus_only);
         bus_system.allocate();
         success *= (bus_system.size() == 3);
@@ -63,16 +63,16 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneTerminal>;
+        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneElectricalPort>;
         Data data;
 
-        const IdxT a         = data.addBus({1.0, 0.0, 60.0});
-        const IdxT b         = data.addBus({1.0, 0.0, 60.0});
+        const IdxT a         = data.addBus({1.0, 0.0});
+        const IdxT b         = data.addBus({1.0, 0.0});
         const auto branch    = data.add(BranchLumpedConstant{});
-        const auto component = data.add(OneTerminal{});
-        data.connect(branch.terminal(BranchLumpedConstant::from), a);
-        data.connect(branch.terminal(BranchLumpedConstant::to), b);
-        data.connect(component.terminal(0), b);
+        const auto component = data.add(OneElectricalPort{});
+        data.connect(branch.port(BranchLumpedConstant::from), a);
+        data.connect(branch.port(BranchLumpedConstant::to), b);
+        data.connect(component.port(0), b);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -85,10 +85,10 @@ namespace GridKit
         success *= (system.layout().component(component).variable_offset == 9);
         success *= (system.layout().component(branch).equation_offset == 6);
         success *= (system.layout().component(component).equation_offset == 9);
-        success *= (system.layout().component(branch).terminal_offset == 0);
-        success *= (system.layout().component(branch).terminal_count == 2);
-        success *= (system.layout().component(component).terminal_offset == 2);
-        success *= (system.layout().component(component).terminal_count == 1);
+        success *= (system.layout().component(branch).electrical_port_offset == 0);
+        success *= (system.layout().component(branch).electrical_port_count == 2);
+        success *= (system.layout().component(component).electrical_port_offset == 2);
+        success *= (system.layout().component(component).electrical_port_count == 1);
         success *= (!system.tag()[0]);
         success *= (system.tag()[6]);
         success *= (system.tag()[9]);
@@ -100,16 +100,16 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneTerminal>;
+        using Data = EMT::SystemModelData<RealT, IdxT, BranchLumpedConstant, OneElectricalPort>;
         Data data;
 
-        const IdxT a         = data.addBus({1.0, 0.0, 60.0});
-        const IdxT b         = data.addBus({1.0, 0.0, 60.0});
+        const IdxT a         = data.addBus({1.0, 0.0});
+        const IdxT b         = data.addBus({1.0, 0.0});
         const auto branch    = data.add(BranchLumpedConstant{});
-        const auto component = data.add(OneTerminal{});
-        data.connect(branch.terminal(BranchLumpedConstant::from), a);
-        data.connect(branch.terminal(BranchLumpedConstant::to), b);
-        data.connect(component.terminal(0), a);
+        const auto component = data.add(OneElectricalPort{});
+        data.connect(branch.port(BranchLumpedConstant::from), a);
+        data.connect(branch.port(BranchLumpedConstant::to), b);
+        data.connect(component.port(0), a);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -147,20 +147,20 @@ namespace GridKit
         return success.report(__func__);
       }
 
-      TestOutcome threeTerminalComponent()
+      TestOutcome threeElectricalPortComponent()
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, ThreeTerminal>;
+        using Data = EMT::SystemModelData<RealT, IdxT, ThreeElectricalPort>;
         Data data;
 
-        const IdxT a         = data.addBus({1.0, 0.0, 60.0});
-        const IdxT b         = data.addBus({1.0, 0.0, 60.0});
-        const IdxT c         = data.addBus({1.0, 0.0, 60.0});
-        const auto component = data.add(ThreeTerminal{});
-        data.connect(component.terminal(0), a);
-        data.connect(component.terminal(1), b);
-        data.connect(component.terminal(2), c);
+        const IdxT a         = data.addBus({1.0, 0.0});
+        const IdxT b         = data.addBus({1.0, 0.0});
+        const IdxT c         = data.addBus({1.0, 0.0});
+        const auto component = data.add(ThreeElectricalPort{});
+        data.connect(component.port(0), a);
+        data.connect(component.port(1), b);
+        data.connect(component.port(2), c);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -175,15 +175,15 @@ namespace GridKit
         return success.report(__func__);
       }
 
-      TestOutcome terminalWiring()
+      TestOutcome portWiring()
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, OneTerminal>;
+        using Data = EMT::SystemModelData<RealT, IdxT, OneElectricalPort>;
 
         Data missing;
-        missing.addBus({1.0, 0.0, 60.0});
-        missing.add(OneTerminal{});
+        missing.addBus({1.0, 0.0});
+        missing.add(OneElectricalPort{});
         success *= throws<std::invalid_argument>(
             [&]()
             {
@@ -192,10 +192,10 @@ namespace GridKit
             });
 
         Data       duplicate;
-        const IdxT duplicate_bus       = duplicate.addBus({1.0, 0.0, 60.0});
-        const auto duplicate_component = duplicate.add(OneTerminal{});
-        duplicate.connect(duplicate_component.terminal(0), duplicate_bus);
-        duplicate.connect(duplicate_component.terminal(0), duplicate_bus);
+        const IdxT duplicate_bus       = duplicate.addBus({1.0, 0.0});
+        const auto duplicate_component = duplicate.add(OneElectricalPort{});
+        duplicate.connect(duplicate_component.port(0), duplicate_bus);
+        duplicate.connect(duplicate_component.port(0), duplicate_bus);
         success *= throws<std::invalid_argument>(
             [&]()
             {
@@ -204,8 +204,8 @@ namespace GridKit
             });
 
         Data       invalid_bus;
-        const auto invalid_component = invalid_bus.add(OneTerminal{});
-        invalid_bus.connect(invalid_component.terminal(0), IdxT{99});
+        const auto invalid_component = invalid_bus.add(OneElectricalPort{});
+        invalid_bus.connect(invalid_component.port(0), IdxT{99});
         success *= throws<std::invalid_argument>(
             [&]()
             {
@@ -225,7 +225,7 @@ namespace GridKit
 
         const auto source = data.add(Source{});
         const auto sink   = data.add(Sink{});
-        data.connect(source.output(0), sink.input(0));
+        data.connect(source.outputPort(0), sink.inputPort(0));
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -274,8 +274,8 @@ namespace GridKit
         Data       duplicate_input;
         const auto duplicate_source = duplicate_input.add(Source{});
         const auto duplicate_sink   = duplicate_input.add(Sink{});
-        duplicate_input.connect(duplicate_source.output(0), duplicate_sink.input(0));
-        duplicate_input.connect(duplicate_source.output(0), duplicate_sink.input(0));
+        duplicate_input.connect(duplicate_source.outputPort(0), duplicate_sink.inputPort(0));
+        duplicate_input.connect(duplicate_source.outputPort(0), duplicate_sink.inputPort(0));
         success *= throws<std::invalid_argument>(
             [&]()
             {
@@ -290,12 +290,12 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, OneTerminal>;
+        using Data = EMT::SystemModelData<RealT, IdxT, OneElectricalPort>;
         Data data;
 
-        const IdxT bus       = data.addBus({1.0, 0.0, 60.0});
-        const auto component = data.add(OneTerminal{});
-        data.connect(component.terminal(0), bus);
+        const IdxT bus       = data.addBus({1.0, 0.0});
+        const auto component = data.add(OneElectricalPort{});
+        data.connect(component.port(0), bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -364,13 +364,13 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        using Data = EMT::SystemModelData<RealT, IdxT, OneTerminal, Dynamic>;
+        using Data = EMT::SystemModelData<RealT, IdxT, OneElectricalPort, Dynamic>;
         Data data;
 
-        const IdxT bus               = data.addBus({1.0, 0.0, 60.0});
-        const auto static_component  = data.add(OneTerminal{});
+        const IdxT bus               = data.addBus({1.0, 0.0});
+        const auto static_component  = data.add(OneElectricalPort{});
         const auto dynamic_component = data.add(Dynamic{4});
-        data.connect(static_component.terminal(0), bus);
+        data.connect(static_component.port(0), bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();

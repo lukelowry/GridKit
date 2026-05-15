@@ -97,7 +97,7 @@ namespace GridKit
                                                    yp_.data(),
                                                    layout_,
                                                    slot,
-                                                   layout_.terminalBuses(id),
+                                                   layout_.portBuses(id),
                                                    std::span<const Bus<ScalarT, IdxT>>(data_.buses.data(),
                                                                                        data_.buses.size()));
               if constexpr (requires(InitialStateView<ScalarT, IdxT>& view) { component.initialize(view); })
@@ -128,10 +128,10 @@ namespace GridKit
                                              yp_.data(),
                                              layout_,
                                              slot,
-                                             layout_.terminalBuses(id),
-                                             layout_.inputVariables(id),
+                                             layout_.portBuses(id),
+                                             layout_.inputPortVariables(id),
                                              static_cast<ScalarT>(time_));
-              EquationView<ScalarT, IdxT> equations(f_.data(), layout_, slot, layout_.terminalBuses(id));
+              EquationView<ScalarT, IdxT> equations(f_.data(), layout_, slot, layout_.portBuses(id));
               component.residual(state, equations);
             });
         evaluateBusResiduals();
@@ -509,11 +509,11 @@ namespace GridKit
 
         MonitorBindingContext(SystemModel&                 system,
                               const ComponentLayout<IdxT>& component,
-                              std::span<const IdxT>        terminal_buses,
+                              std::span<const IdxT>        port_buses,
                               MonitorT&                    monitor)
           : system_(&system),
             component_(component),
-            terminal_buses_(terminal_buses),
+            port_buses_(port_buses),
             monitor_(monitor)
         {
         }
@@ -534,17 +534,17 @@ namespace GridKit
           addVectorValue(std::move(label), true, local);
         }
 
-        IdxT terminalVoltageIndex(size_t terminal, IdxT phase) const
+        IdxT portVoltageIndex(size_t port, IdxT phase) const
         {
-          if (terminal >= terminal_buses_.size())
+          if (port >= port_buses_.size())
           {
-            throw std::invalid_argument("EMT monitor terminal index is out of range");
+            throw std::invalid_argument("EMT monitor port index is out of range");
           }
           if (phase >= Layout<IdxT>::phases)
           {
             throw std::invalid_argument("EMT monitor phase index is out of range");
           }
-          return system_->layout_.busVariable(terminal_buses_[terminal], phase);
+          return system_->layout_.busVariable(port_buses_[port], phase);
         }
 
         const std::vector<ScalarT>* y() const
@@ -576,7 +576,7 @@ namespace GridKit
 
         SystemModel*          system_{nullptr};
         ComponentLayout<IdxT> component_{};
-        std::span<const IdxT> terminal_buses_;
+        std::span<const IdxT> port_buses_;
         MonitorT&             monitor_;
       };
 
@@ -629,13 +629,13 @@ namespace GridKit
               layout_.appendComponent(id.type,
                                       static_cast<IdxT>(ComponentTraits<ComponentT>::variableCount(component)),
                                       static_cast<IdxT>(ComponentTraits<ComponentT>::equationCount(component)),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::terminal_count),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::input_count));
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::electrical_port_count),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::input_port_count));
             });
 
         layout_.allocateConnections();
-        bindTerminalConnections();
-        bindSignalConnections();
+        bindPortConnections();
+        bindSignalPortConnections();
         layout_.validateConnections();
       }
 
@@ -758,7 +758,7 @@ namespace GridKit
                                      {
                                        MonitorBindingContext context(*this,
                                                                      layout_.component(request.component),
-                                                                     layout_.terminalBuses(request.component),
+                                                                     layout_.portBuses(request.component),
                                                                      monitor);
 
                                        for (auto raw_variable : request.variables)
@@ -782,44 +782,44 @@ namespace GridKit
         }
       }
 
-      void bindTerminalConnections()
+      void bindPortConnections()
       {
-        for (const auto& connection : data_.terminal_connections)
+        for (const auto& connection : data_.port_connections)
         {
           if (connection.bus >= static_cast<IdxT>(data_.buses.size()))
           {
-            throw std::invalid_argument("EMT terminal connection references a bus that does not exist");
+            throw std::invalid_argument("EMT port connection references a bus that does not exist");
           }
 
           const bool found = data_.components.visit(
-              connection.terminal.component,
+              connection.port.component,
               [&](const auto& component)
               {
                 using ComponentT = std::decay_t<decltype(component)>;
                 (void) component;
-                if (connection.terminal.index >= ComponentTraits<ComponentT>::terminal_count)
+                if (connection.port.index >= ComponentTraits<ComponentT>::electrical_port_count)
                 {
-                  throw std::invalid_argument("EMT terminal index is out of range");
+                  throw std::invalid_argument("EMT port index is out of range");
                 }
-                layout_.connectTerminal(connection.terminal.component,
-                                        connection.terminal.index,
-                                        connection.bus);
+                layout_.connectPort(connection.port.component,
+                                    connection.port.index,
+                                    connection.bus);
               });
 
           if (!found)
           {
-            throw std::invalid_argument("EMT terminal connection component does not exist");
+            throw std::invalid_argument("EMT port connection component does not exist");
           }
         }
       }
 
-      void bindSignalConnections()
+      void bindSignalPortConnections()
       {
-        for (const auto& connection : data_.signal_connections)
+        for (const auto& connection : data_.signal_port_connections)
         {
-          layout_.connectInput(connection.input.component,
-                               connection.input.index,
-                               resolveSignalOutputVariable(connection.output));
+          layout_.connectInputPort(connection.input.component,
+                                   connection.input.index,
+                                   resolveSignalOutputVariable(connection.output));
         }
       }
 
@@ -833,7 +833,7 @@ namespace GridKit
         }
       }
 
-      IdxT resolveSignalOutputVariable(const SignalOutputRef& output) const
+      IdxT resolveSignalOutputVariable(const OutputPortRef& output) const
       {
         IdxT       variable = INVALID_INDEX<IdxT>;
         const bool found    = data_.components.visit(
@@ -842,12 +842,12 @@ namespace GridKit
             {
               using ComponentT = std::decay_t<decltype(component)>;
               (void) component;
-              if (output.index >= ComponentTraits<ComponentT>::output_count)
+              if (output.index >= ComponentTraits<ComponentT>::output_port_count)
               {
                 throw std::invalid_argument("EMT output index is out of range");
               }
 
-              const SignalOutputSpec spec = ComponentTraits<ComponentT>::output(output.index);
+              const OutputPortSpec spec = ComponentTraits<ComponentT>::outputPort(output.index);
               if (spec.variable >= ComponentTraits<ComponentT>::variableCount(component))
               {
                 throw std::invalid_argument("EMT output variable is out of range");

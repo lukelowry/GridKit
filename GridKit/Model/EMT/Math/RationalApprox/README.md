@@ -59,7 +59,7 @@ S = N(M + 2Q)
 ## Model Variables
 
 `RationalApprox` is a reusable equation block and does not own electrical
-terminals. The variables below are owned by the EMT component that uses the
+ports. The variables below are owned by the EMT component that uses the
 block.
 
 ### Internal Variables
@@ -215,5 +215,5 @@ Symbol | Units | Description | Note
 $\mathbf{z}$ | [-] | Rational approximation output vector | $\mathbf{z} \in \mathbb{R}^N$
 
 For characteristic admittance convolution, $\mathbf{z}$ is interpreted as a
-terminal current contribution. For propagation-function convolution,
+port current contribution. For propagation-function convolution,
 $\mathbf{z}$ is interpreted as a propagated history-current contribution.

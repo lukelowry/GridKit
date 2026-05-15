@@ -8,8 +8,8 @@ int main()
   result += test.systemModelData();
   result += test.layout();
   result += test.residual();
-  result += test.threeTerminalComponent();
-  result += test.terminalWiring();
+  result += test.threeElectricalPortComponent();
+  result += test.portWiring();
   result += test.ports();
   result += test.jacobian();
   result += test.zeroDerivativeGeneralPattern();

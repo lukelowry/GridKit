@@ -39,14 +39,14 @@ namespace GridKit
         std::function<void(self_type&)>       apply;
       };
 
-      std::vector<Bus<RealT, IdxT>>         buses;
-      component_store_type                  components;
-      std::vector<TerminalConnection<IdxT>> terminal_connections;
-      std::vector<SignalConnection>         signal_connections;
-      std::vector<MonitorSinkSpec>          monitor_sinks;
-      std::vector<BusMonitorRequest<IdxT>>  bus_monitors;
-      std::vector<ComponentMonitorRequest>  component_monitors;
-      std::vector<ScheduledEvent>           events;
+      std::vector<Bus<RealT, IdxT>>        buses;
+      component_store_type                 components;
+      std::vector<PortConnection<IdxT>>    port_connections;
+      std::vector<SignalPortConnection>    signal_port_connections;
+      std::vector<MonitorSinkSpec>         monitor_sinks;
+      std::vector<BusMonitorRequest<IdxT>> bus_monitors;
+      std::vector<ComponentMonitorRequest> component_monitors;
+      std::vector<ScheduledEvent>          events;
 
       IdxT addBus(BusData<RealT, IdxT> data)
       {
@@ -66,14 +66,14 @@ namespace GridKit
         return components.add(std::move(component));
       }
 
-      void connect(TerminalRef terminal, IdxT bus)
+      void connect(ElectricalPortRef port, IdxT bus)
       {
-        terminal_connections.push_back({terminal, bus});
+        port_connections.push_back({port, bus});
       }
 
-      void connect(SignalOutputRef output, SignalInputRef input)
+      void connect(OutputPortRef output, InputPortRef input)
       {
-        signal_connections.push_back({output, input});
+        signal_port_connections.push_back({output, input});
       }
 
       void addMonitorSink(MonitorSinkSpec sink)

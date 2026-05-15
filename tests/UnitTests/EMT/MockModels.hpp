@@ -11,13 +11,13 @@ namespace GridKit
     namespace EMTMocks
     {
       template <class RealT, typename IdxT>
-      struct MockOneTerminalComponent
+      struct MockOneElectricalPortComponent
       {
-        static constexpr size_t variable_count = 3;
-        static constexpr size_t equation_count = 3;
-        static constexpr size_t terminal_count = 1;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 3;
+        static constexpr size_t equation_count        = 3;
+        static constexpr size_t electrical_port_count = 1;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
 
         static constexpr bool differential(size_t local)
         {
@@ -39,13 +39,13 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockBranchLumpedConstant
       {
-        static constexpr size_t variable_count = 3;
-        static constexpr size_t equation_count = 3;
-        static constexpr size_t terminal_count = 2;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
-        static constexpr size_t from           = 0;
-        static constexpr size_t to             = 1;
+        static constexpr size_t variable_count        = 3;
+        static constexpr size_t equation_count        = 3;
+        static constexpr size_t electrical_port_count = 2;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
+        static constexpr size_t from                  = 0;
+        static constexpr size_t to                    = 1;
 
         static constexpr bool differential(size_t local)
         {
@@ -67,13 +67,13 @@ namespace GridKit
       };
 
       template <class RealT, typename IdxT>
-      struct MockThreeTerminalBranch
+      struct MockThreeElectricalPortBranch
       {
-        static constexpr size_t variable_count = 0;
-        static constexpr size_t equation_count = 0;
-        static constexpr size_t terminal_count = 3;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 0;
+        static constexpr size_t equation_count        = 0;
+        static constexpr size_t electrical_port_count = 3;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
 
         template <class Variables, class Residual>
         void residual(const Variables&, Residual& r) const
@@ -87,11 +87,11 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockPortSource
       {
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 1;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 1;
 
         RealT value{10.0};
 
@@ -100,7 +100,7 @@ namespace GridKit
           return local < variable_count;
         }
 
-        static constexpr GridKit::EMT::SignalOutputSpec output(size_t index)
+        static constexpr GridKit::EMT::OutputPortSpec outputPort(size_t index)
         {
           (void) index;
           return {0};
@@ -116,11 +116,11 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockPortSink
       {
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 1;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 1;
+        static constexpr size_t output_port_count     = 0;
 
         static constexpr bool differential(size_t local)
         {
@@ -130,18 +130,18 @@ namespace GridKit
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
         {
-          r.set(0, x.variable(0) - x.input(0));
+          r.set(0, x.variable(0) - x.inputPort(0));
         }
       };
 
       template <class RealT, typename IdxT>
       struct MockMissingDifferential
       {
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
 
         template <class Variables, class Residual>
         void residual(const Variables& x, Residual& r) const
@@ -153,11 +153,11 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockZeroDerivativeNonlinear
       {
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
 
         static constexpr bool differential(size_t local)
         {
@@ -175,11 +175,11 @@ namespace GridKit
       template <class RealT, typename IdxT>
       struct MockDynamicComponent
       {
-        static constexpr size_t variable_count = GridKit::EMT::dynamic_component_count;
-        static constexpr size_t equation_count = GridKit::EMT::dynamic_component_count;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = GridKit::EMT::dynamic_component_count;
+        static constexpr size_t equation_count        = GridKit::EMT::dynamic_component_count;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 0;
 
         size_t count{2};
 

@@ -19,10 +19,10 @@ namespace GridKit
       IdxT equation_offset{INVALID_INDEX<IdxT>};
       IdxT variable_count{0};
       IdxT equation_count{0};
-      IdxT terminal_offset{INVALID_INDEX<IdxT>};
-      IdxT terminal_count{0};
-      IdxT input_offset{INVALID_INDEX<IdxT>};
-      IdxT input_count{0};
+      IdxT electrical_port_offset{INVALID_INDEX<IdxT>};
+      IdxT electrical_port_count{0};
+      IdxT input_port_offset{INVALID_INDEX<IdxT>};
+      IdxT input_port_count{0};
     };
 
     template <typename IdxT>
@@ -33,21 +33,21 @@ namespace GridKit
 
       void reset(IdxT buses, size_t component_types)
       {
-        buses_          = buses;
-        variable_count_ = phases * buses;
-        equation_count_ = phases * buses;
-        terminal_count_ = 0;
-        input_count_    = 0;
+        buses_                 = buses;
+        variable_count_        = phases * buses;
+        equation_count_        = phases * buses;
+        electrical_port_count_ = 0;
+        input_port_count_      = 0;
         component_layouts_.assign(component_types, {});
-        terminal_bus_ids_.clear();
-        input_variable_ids_.clear();
+        port_bus_ids_.clear();
+        input_port_variable_ids_.clear();
       }
 
       ComponentLayout<IdxT> appendComponent(size_t type,
                                             IdxT   variables,
                                             IdxT   equations,
-                                            IdxT   terminals,
-                                            IdxT   inputs)
+                                            IdxT   electrical_ports,
+                                            IdxT   input_ports)
       {
         if (type >= component_layouts_.size())
         {
@@ -58,22 +58,22 @@ namespace GridKit
                                    equation_count_,
                                    variables,
                                    equations,
-                                   terminal_count_,
-                                   terminals,
-                                   input_count_,
-                                   inputs};
+                                   electrical_port_count_,
+                                   electrical_ports,
+                                   input_port_count_,
+                                   input_ports};
         component_layouts_[type].push_back(slot);
-        variable_count_ += variables;
-        equation_count_ += equations;
-        terminal_count_ += terminals;
-        input_count_    += inputs;
+        variable_count_        += variables;
+        equation_count_        += equations;
+        electrical_port_count_ += electrical_ports;
+        input_port_count_      += input_ports;
         return slot;
       }
 
       void allocateConnections()
       {
-        terminal_bus_ids_.assign(static_cast<size_t>(terminal_count_), INVALID_INDEX<IdxT>);
-        input_variable_ids_.assign(static_cast<size_t>(input_count_), INVALID_INDEX<IdxT>);
+        port_bus_ids_.assign(static_cast<size_t>(electrical_port_count_), INVALID_INDEX<IdxT>);
+        input_port_variable_ids_.assign(static_cast<size_t>(input_port_count_), INVALID_INDEX<IdxT>);
       }
 
       IdxT busCount() const
@@ -91,14 +91,14 @@ namespace GridKit
         return equation_count_;
       }
 
-      IdxT terminalCount() const
+      IdxT electricalPortCount() const
       {
-        return terminal_count_;
+        return electrical_port_count_;
       }
 
-      IdxT inputCount() const
+      IdxT inputPortCount() const
       {
-        return input_count_;
+        return input_port_count_;
       }
 
       IdxT busVariable(IdxT bus, IdxT phase) const
@@ -123,34 +123,35 @@ namespace GridKit
         return component(ref.id);
       }
 
-      void connectTerminal(ComponentId component_id, size_t terminal, IdxT bus)
+      void connectPort(ComponentId component_id, size_t port, IdxT bus)
       {
         const auto& slot = component(component_id);
-        if (terminal >= static_cast<size_t>(slot.terminal_count))
+        if (port >= static_cast<size_t>(slot.electrical_port_count))
         {
-          throw std::invalid_argument("EMT terminal index is out of range");
+          throw std::invalid_argument("EMT electrical port index is out of range");
         }
 
-        IdxT& bus_id = terminal_bus_ids_[static_cast<size_t>(slot.terminal_offset) + terminal];
+        IdxT& bus_id = port_bus_ids_[static_cast<size_t>(slot.electrical_port_offset) + port];
         if (bus_id != INVALID_INDEX<IdxT>)
         {
-          throw std::invalid_argument("EMT terminal is connected more than once");
+          throw std::invalid_argument("EMT electrical port is connected more than once");
         }
         bus_id = bus;
       }
 
-      void connectInput(ComponentId component_id, size_t input, IdxT variable)
+      void connectInputPort(ComponentId component_id, size_t input_port, IdxT variable)
       {
         const auto& slot = component(component_id);
-        if (input >= static_cast<size_t>(slot.input_count))
+        if (input_port >= static_cast<size_t>(slot.input_port_count))
         {
-          throw std::invalid_argument("EMT input index is out of range");
+          throw std::invalid_argument("EMT input port index is out of range");
         }
 
-        IdxT& input_variable = input_variable_ids_[static_cast<size_t>(slot.input_offset) + input];
+        IdxT& input_variable =
+            input_port_variable_ids_[static_cast<size_t>(slot.input_port_offset) + input_port];
         if (input_variable != INVALID_INDEX<IdxT>)
         {
-          throw std::invalid_argument("EMT input is connected more than once");
+          throw std::invalid_argument("EMT input port is connected more than once");
         }
         input_variable = variable;
       }
@@ -161,42 +162,43 @@ namespace GridKit
         {
           for (const auto& slot : layouts_for_type)
           {
-            for (IdxT local = 0; local < slot.terminal_count; ++local)
+            for (IdxT local = 0; local < slot.electrical_port_count; ++local)
             {
-              if (terminal_bus_ids_[static_cast<size_t>(slot.terminal_offset + local)] == INVALID_INDEX<IdxT>)
+              if (port_bus_ids_[static_cast<size_t>(slot.electrical_port_offset + local)] == INVALID_INDEX<IdxT>)
               {
-                throw std::invalid_argument("EMT component terminal is not connected");
+                throw std::invalid_argument("EMT component electrical port is not connected");
               }
             }
-            for (IdxT local = 0; local < slot.input_count; ++local)
+            for (IdxT local = 0; local < slot.input_port_count; ++local)
             {
-              if (input_variable_ids_[static_cast<size_t>(slot.input_offset + local)] == INVALID_INDEX<IdxT>)
+              if (input_port_variable_ids_[static_cast<size_t>(slot.input_port_offset + local)] == INVALID_INDEX<IdxT>)
               {
-                throw std::invalid_argument("EMT input is not connected");
+                throw std::invalid_argument("EMT input port is not connected");
               }
             }
           }
         }
       }
 
-      std::span<const IdxT> terminalBuses(ComponentId id) const
+      std::span<const IdxT> portBuses(ComponentId id) const
       {
         const auto& slot = component(id);
-        if (slot.terminal_count == 0)
+        if (slot.electrical_port_count == 0)
         {
           return {};
         }
-        return {terminal_bus_ids_.data() + slot.terminal_offset, static_cast<size_t>(slot.terminal_count)};
+        return {port_bus_ids_.data() + slot.electrical_port_offset, static_cast<size_t>(slot.electrical_port_count)};
       }
 
-      std::span<const IdxT> inputVariables(ComponentId id) const
+      std::span<const IdxT> inputPortVariables(ComponentId id) const
       {
         const auto& slot = component(id);
-        if (slot.input_count == 0)
+        if (slot.input_port_count == 0)
         {
           return {};
         }
-        return {input_variable_ids_.data() + slot.input_offset, static_cast<size_t>(slot.input_count)};
+        return {input_port_variable_ids_.data() + slot.input_port_offset,
+                static_cast<size_t>(slot.input_port_count)};
       }
 
       const std::vector<std::vector<ComponentLayout<IdxT>>>& componentLayouts() const
@@ -217,11 +219,11 @@ namespace GridKit
       IdxT                                            buses_{0};
       IdxT                                            variable_count_{0};
       IdxT                                            equation_count_{0};
-      IdxT                                            terminal_count_{0};
-      IdxT                                            input_count_{0};
+      IdxT                                            electrical_port_count_{0};
+      IdxT                                            input_port_count_{0};
       std::vector<std::vector<ComponentLayout<IdxT>>> component_layouts_;
-      std::vector<IdxT>                               terminal_bus_ids_;
-      std::vector<IdxT>                               input_variable_ids_;
+      std::vector<IdxT>                               port_bus_ids_;
+      std::vector<IdxT>                               input_port_variable_ids_;
     };
   } // namespace EMT
 } // namespace GridKit

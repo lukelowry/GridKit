@@ -33,15 +33,20 @@ namespace GridKit
       };
 
       template <class RealT, typename IdxT>
+      struct DuplicatePortData
+      {
+      };
+
+      template <class RealT, typename IdxT>
       struct Producer
       {
         using Data = ProducerData<RealT, IdxT>;
 
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 0;
-        static constexpr size_t output_count   = 1;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 1;
 
         Producer() = default;
 
@@ -54,7 +59,7 @@ namespace GridKit
           return true;
         }
 
-        static constexpr EMT::SignalOutputSpec output(size_t)
+        static constexpr EMT::OutputPortSpec outputPort(size_t)
         {
           return {0};
         }
@@ -65,11 +70,11 @@ namespace GridKit
       {
         using Data = ConsumerData<RealT, IdxT>;
 
-        static constexpr size_t variable_count = 1;
-        static constexpr size_t equation_count = 1;
-        static constexpr size_t terminal_count = 0;
-        static constexpr size_t input_count    = 1;
-        static constexpr size_t output_count   = 0;
+        static constexpr size_t variable_count        = 1;
+        static constexpr size_t equation_count        = 1;
+        static constexpr size_t electrical_port_count = 0;
+        static constexpr size_t input_port_count      = 1;
+        static constexpr size_t output_port_count     = 0;
 
         Consumer() = default;
 
@@ -80,6 +85,29 @@ namespace GridKit
         static constexpr bool differential(size_t)
         {
           return true;
+        }
+      };
+
+      template <class RealT, typename IdxT>
+      struct DuplicatePorts
+      {
+        using Data = DuplicatePortData<RealT, IdxT>;
+
+        static constexpr size_t variable_count        = 0;
+        static constexpr size_t equation_count        = 0;
+        static constexpr size_t electrical_port_count = 1;
+        static constexpr size_t input_port_count      = 0;
+        static constexpr size_t output_port_count     = 1;
+
+        DuplicatePorts() = default;
+
+        explicit DuplicatePorts(Data)
+        {
+        }
+
+        static constexpr EMT::OutputPortSpec outputPort(size_t)
+        {
+          return {0};
         }
       };
     } // namespace EMTCaseMocks
@@ -97,14 +125,14 @@ namespace GridKit
       using Data      = Testing::EMTCaseMocks::ProducerData<RealT, IdxT>;
 
       static constexpr std::string_view                class_name = "MockPortProducer";
-      static constexpr std::array<std::string_view, 0> terminals{};
-      static constexpr std::array<std::string_view, 0> inputs{};
-      static constexpr std::array<std::string_view, 1> outputs{"out"};
+      static constexpr std::array<std::string_view, 0> electrical_ports{};
+      static constexpr std::array<std::string_view, 0> input_ports{};
+      static constexpr std::array<std::string_view, 1> output_ports{"out"};
       static constexpr auto                            params = std::tuple{};
 
-      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
-      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
-      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
     };
 
     template <class RealT, typename IdxT>
@@ -114,14 +142,31 @@ namespace GridKit
       using Data      = Testing::EMTCaseMocks::ConsumerData<RealT, IdxT>;
 
       static constexpr std::string_view                class_name = "MockPortConsumer";
-      static constexpr std::array<std::string_view, 0> terminals{};
-      static constexpr std::array<std::string_view, 1> inputs{"in"};
-      static constexpr std::array<std::string_view, 0> outputs{};
+      static constexpr std::array<std::string_view, 0> electrical_ports{};
+      static constexpr std::array<std::string_view, 1> input_ports{"in"};
+      static constexpr std::array<std::string_view, 0> output_ports{};
       static constexpr auto                            params = std::tuple{};
 
-      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
-      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
-      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
+    };
+
+    template <class RealT, typename IdxT>
+    struct ComponentDescriptor<Testing::EMTCaseMocks::DuplicatePorts<RealT, IdxT>>
+    {
+      using Component = Testing::EMTCaseMocks::DuplicatePorts<RealT, IdxT>;
+      using Data      = Testing::EMTCaseMocks::DuplicatePortData<RealT, IdxT>;
+
+      static constexpr std::string_view                class_name = "MockDuplicatePorts";
+      static constexpr std::array<std::string_view, 1> electrical_ports{"same"};
+      static constexpr std::array<std::string_view, 0> input_ports{};
+      static constexpr std::array<std::string_view, 1> output_ports{"same"};
+      static constexpr auto                            params = std::tuple{};
+
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
     };
   } // namespace EMT
 } // namespace GridKit
@@ -150,8 +195,8 @@ namespace GridKit
         success *= (loaded.data.components.template get<EMT::VoltageSource<RealT, IdxT>>().size() == 1u);
         success *= (loaded.data.components.template get<EMT::LoadRL<RealT, IdxT>>().size() == 1u);
         success *= (loaded.data.components.template get<EMT::BranchLumpedConstant<RealT, IdxT>>().size() == 1u);
-        success *= (loaded.data.terminal_connections.size() == 4u);
-        success *= loaded.data.signal_connections.empty();
+        success *= (loaded.data.port_connections.size() == 4u);
+        success *= loaded.data.signal_port_connections.empty();
         success *= (loaded.data.monitor_sinks.size() == 1u);
         success *= (loaded.data.bus_monitors.size() == 2u);
         success *= (loaded.data.component_monitors.size() == 3u);
@@ -182,12 +227,12 @@ namespace GridKit
 
         auto loaded = EMT::loadCase<Data>(portCaseJson());
 
-        success *= (loaded.data.signal_connections.size() == 1u);
-        if (!loaded.data.signal_connections.empty())
+        success *= (loaded.data.signal_port_connections.size() == 1u);
+        if (!loaded.data.signal_port_connections.empty())
         {
           const auto  producer  = loaded.names.component("producer");
           const auto  consumer  = loaded.names.component("consumer");
-          const auto& conn      = loaded.data.signal_connections.front();
+          const auto& conn      = loaded.data.signal_port_connections.front();
           success              *= (conn.output.component == producer.id);
           success              *= (conn.output.index == 0u);
           success              *= (conn.input.component == consumer.id);
@@ -197,8 +242,8 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                             = portCaseJson();
-              bad["components"][1]["inputs"]["in"] = "missing.out";
+              auto bad                            = portCaseJson();
+              bad["components"][1]["ports"]["in"] = "missing.out";
               (void) EMT::loadCase<Data>(bad);
             },
             "unknown component 'missing'");
@@ -206,29 +251,38 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                             = portCaseJson();
-              bad["components"][1]["inputs"]["in"] = "producer.bad";
+              auto bad                            = portCaseJson();
+              bad["components"][1]["ports"]["in"] = "producer.bad";
               (void) EMT::loadCase<Data>(bad);
             },
-            "unknown output 'producer.bad'");
+            "unknown output port 'producer.bad'");
 
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                       = portCaseJson();
-              bad["components"][1]["inputs"] = Json{{"bad", "producer.out"}};
+              auto bad                      = portCaseJson();
+              bad["components"][1]["ports"] = Json{{"bad", "producer.out"}};
               (void) EMT::loadCase<Data>(bad);
             },
-            "unknown input 'bad'");
+            "unknown port 'bad'");
 
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                             = portCaseJson();
-              bad["components"][1]["inputs"]["in"] = "producer";
+              auto bad                            = portCaseJson();
+              bad["components"][1]["ports"]["in"] = "producer";
               (void) EMT::loadCase<Data>(bad);
             },
-            "expected input reference");
+            "expected port reference");
+
+        using Duplicate      = EMTCaseMocks::DuplicatePorts<RealT, IdxT>;
+        using DuplicateData  = EMT::SystemModelData<RealT, IdxT, Duplicate>;
+        success             *= caseErrorContains(
+            [&]()
+            {
+              (void) EMT::loadCase<DuplicateData>(duplicatePortCaseJson());
+            },
+            "duplicate port 'same'");
 
         return success.report(__func__);
       }
@@ -313,6 +367,33 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
+              auto bad = twoBusJson();
+              bad["buses"][0].erase("init");
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "bus[0].init");
+
+        success *= caseErrorContains(
+            [&]()
+            {
+              auto bad = twoBusJson();
+              bad["buses"][0]["init"].erase("vm");
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "bus[0].init.vm");
+
+        success *= caseErrorContains(
+            [&]()
+            {
+              auto bad = twoBusJson();
+              bad["buses"][0]["init"].erase("va");
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "bus[0].init.va");
+
+        success *= caseErrorContains(
+            [&]()
+            {
               auto bad                      = twoBusJson();
               bad["components"][0]["class"] = "NoSuchComponent";
               (void) EMT::loadCase<Data>(bad);
@@ -349,8 +430,8 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                                = twoBusJson();
-              bad["components"][1]["terminals"]["to"] = "missing_bus";
+              auto bad                            = twoBusJson();
+              bad["components"][1]["ports"]["to"] = "missing_bus";
               (void) EMT::loadCase<Data>(bad);
             },
             "unknown bus 'missing_bus'");
@@ -358,20 +439,20 @@ namespace GridKit
         success *= caseErrorContains(
             [&]()
             {
-              auto bad                                 = twoBusJson();
-              bad["components"][1]["terminals"]["bad"] = "receiving_bus";
+              auto bad                             = twoBusJson();
+              bad["components"][1]["ports"]["bad"] = "receiving_bus";
               (void) EMT::loadCase<Data>(bad);
             },
-            "unknown terminal 'bad'");
+            "unknown port 'bad'");
 
         success *= caseErrorContains(
             [&]()
             {
               auto bad = twoBusJson();
-              bad["components"][1]["terminals"].erase("to");
+              bad["components"][1]["ports"].erase("to");
               (void) EMT::loadCase<Data>(bad);
             },
-            "missing terminal 'to'");
+            "missing port 'to'");
 
         success *= caseErrorContains(
             [&]()
@@ -411,13 +492,12 @@ namespace GridKit
   "header": {
     "format_version": 1,
     "case_name": "EMT Tiny TwoBus",
-    "description": "Two-bus EMT test case",
-    "frequency": 60.0
+    "description": "Two-bus EMT test case"
   },
   "buses": [
-    { "name": "source_bus", "vm0": 120.32988891054056, "va0": 0.0095877412086657603,
+    { "name": "source_bus", "init": { "vm": 120.32988891054056, "va": 0.0095877412086657603 },
       "mon": ["VA", "VB", "VC"] },
-    { "name": "receiving_bus", "vm0": 120.0,           "va0": 0.0,
+    { "name": "receiving_bus", "init": { "vm": 120.0, "va": 0.0 },
       "mon": ["va", "vb", "vc", "ifa", "ifb", "ifc"] }
   ],
   "components": [
@@ -430,7 +510,7 @@ namespace GridKit
         "r": [0.10, 0.10, 0.10],
         "frequency": 60.0
       },
-      "terminals": { "ac": "source_bus" },
+      "ports": { "bus": "source_bus" },
       "mon": ["IA", "IB", "IC"]
     },
     {
@@ -443,7 +523,7 @@ namespace GridKit
         "c": [[1.0e-4, 0.0, 0.0], [0.0, 1.0e-4, 0.0], [0.0, 0.0, 1.0e-4]],
         "length": 1.0
       },
-      "terminals": { "from": "source_bus", "to": "receiving_bus" },
+      "ports": { "from": "source_bus", "to": "receiving_bus" },
       "mon": ["ia", "ib", "ic"]
     },
     {
@@ -453,7 +533,7 @@ namespace GridKit
         "r": [25.0, 25.0, 25.0],
         "l": [5.0e-2, 5.0e-2, 5.0e-2]
       },
-      "terminals": { "ac": "receiving_bus" },
+      "ports": { "ac": "receiving_bus" },
       "mon": ["ia", "ib", "ic"]
     }
   ],
@@ -469,9 +549,22 @@ namespace GridKit
   "header": { "format_version": 1 },
   "buses": [],
   "components": [
-    { "name": "producer", "class": "MockPortProducer", "params": {}, "terminals": {} },
-    { "name": "consumer", "class": "MockPortConsumer", "params": {}, "terminals": {},
-      "inputs": { "in": "producer.out" } }
+    { "name": "producer", "class": "MockPortProducer", "params": {}, "ports": {} },
+    { "name": "consumer", "class": "MockPortConsumer", "params": {},
+      "ports": { "in": "producer.out" } }
+  ]
+}
+)json");
+      }
+
+      static Json duplicatePortCaseJson()
+      {
+        return Json::parse(R"json(
+{
+  "header": { "format_version": 1 },
+  "buses": [{ "name": "bus", "init": { "vm": 1.0, "va": 0.0 } }],
+  "components": [
+    { "name": "duplicate", "class": "MockDuplicatePorts", "params": {}, "ports": { "same": "bus" } }
   ]
 }
 )json");

@@ -28,9 +28,10 @@ Branch models such as `BranchLumpedConstant` are documented under
 `CaseNames`, `Case`, and `loadCase`. The JSON schema implementation lives in
 `IO/CaseJson.hpp`, with scalar/vector/matrix readers in `IO/JsonSupport.hpp`
 and descriptor parameter binding in `IO/ParamReader.hpp`.
+The EMT case input format is documented in [INPUT.md](INPUT.md).
 
 The EMT `SystemModel` is the IDA-facing runtime model. `SystemModelData` owns
-construction-time buses, typed component storage, terminal connections, and
+construction-time buses, typed component storage, port connections, and
 signal connections. EMT requires Enzyme; without Enzyme the EMT target is not
 configured. `Layout` assigns global `y` variables and residual rows once:
 
@@ -45,9 +46,9 @@ Models read through `StateView` and write equations and KCL injections through
 `EquationView`. Components expose only initialization and residual physics;
 `JacobianPlan` owns cached Enzyme workspaces and CSR insertion slots.
 Electrical wiring is represented by
-`TerminalConnection` entries from component terminals to buses. Signal/control
-wiring is represented by direction-specific `SignalOutputRef` to `SignalInputRef`
-`SignalConnection` entries.
+`PortConnection` entries from component ports to buses. Signal/control
+wiring is represented by direction-specific `OutputPortRef` to `InputPortRef`
+`SignalPortConnection` entries.
 
 ## Monitoring
 

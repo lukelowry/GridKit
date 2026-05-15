@@ -211,6 +211,48 @@ namespace GridKit
         }
       }
 
+      template <class Names>
+      void appendPortNames(std::vector<std::string_view>& ports,
+                           const Names&                   names)
+      {
+        for (const auto name : names)
+        {
+          ports.push_back(name);
+        }
+      }
+
+      template <class ComponentT>
+      std::vector<std::string_view> connectablePortNames()
+      {
+        std::vector<std::string_view> ports;
+        appendPortNames(ports, ComponentDescriptor<ComponentT>::electrical_ports);
+        appendPortNames(ports, ComponentDescriptor<ComponentT>::input_ports);
+        return ports;
+      }
+
+      template <class ComponentT>
+      void validatePortDescriptor(std::string_view entity)
+      {
+        std::vector<std::string_view> ports;
+        appendPortNames(ports, ComponentDescriptor<ComponentT>::electrical_ports);
+        appendPortNames(ports, ComponentDescriptor<ComponentT>::input_ports);
+        appendPortNames(ports, ComponentDescriptor<ComponentT>::output_ports);
+
+        for (std::size_t i = 0; i < ports.size(); ++i)
+        {
+          for (std::size_t j = i + 1; j < ports.size(); ++j)
+          {
+            if (ports[i] == ports[j])
+            {
+              throw CaseError(std::string(entity) + ": duplicate port '"
+                              + std::string(ports[i]) + "' in class '"
+                              + std::string(ComponentDescriptor<ComponentT>::class_name)
+                              + "'");
+            }
+          }
+        }
+      }
+
       inline void registerUniqueName(auto&            table,
                                      std::string_view name,
                                      std::string_view entity)
@@ -410,7 +452,7 @@ namespace GridKit
 
         const auto& header = requireObjectField(root, "header", "case file");
         rejectUnknownKeys(header,
-                          {"format_version", "case_name", "description", "frequency"},
+                          {"format_version", "case_name", "description"},
                           "header");
 
         const int version = require<int>(header, "format_version", "header");
@@ -429,8 +471,7 @@ namespace GridKit
           (void) require<std::string>(header, "description", "header");
         }
 
-        const RealT frequency = optionalValue<RealT>(header, "frequency", RealT{60.0}, "header");
-        const auto& buses     = requireArrayField(root, "buses", "case file");
+        const auto& buses = requireArrayField(root, "buses", "case file");
 
         for (std::size_t i = 0; i < buses.size(); ++i)
         {
@@ -440,15 +481,18 @@ namespace GridKit
           {
             throwCase(entity, "expected object");
           }
-          rejectUnknownKeys(entry, {"name", "vm0", "va0", "freq", "mon"}, entity);
+          rejectUnknownKeys(entry, {"name", "init", "mon"}, entity);
 
           const auto name = requiredString(entry, "name", entity);
           registerUniqueName(loaded.names, name, entity);
 
+          const auto& init        = requireObjectField(entry, "init", entity);
+          const auto  init_entity = fieldContext(entity, "init");
+          rejectUnknownKeys(init, {"vm", "va"}, init_entity);
+
           BusData<RealT, IdxT> data{};
-          data.vm0  = require<RealT>(entry, "vm0", entity);
-          data.va0  = require<RealT>(entry, "va0", entity);
-          data.freq = optionalValue<RealT>(entry, "freq", frequency, entity);
+          data.vm = require<RealT>(init, "vm", init_entity);
+          data.va = require<RealT>(init, "va", init_entity);
 
           const IdxT bus = loaded.data.addBus(data);
           loaded.names.buses.emplace(name, bus);
@@ -474,18 +518,14 @@ namespace GridKit
           {
             throwCase(entity, "expected object");
           }
-          rejectUnknownKeys(entry, {"name", "class", "params", "terminals", "inputs", "mon"}, entity);
+          rejectUnknownKeys(entry, {"name", "class", "params", "ports", "mon"}, entity);
 
           const auto name = requiredString(entry, "name", entity);
           registerUniqueName(loaded.names, name, entity);
 
           const auto  cls    = requiredString(entry, "class", entity);
           const auto& params = requireObjectField(entry, "params", entity);
-          (void) requireObjectField(entry, "terminals", entity);
-          if (entry.find("inputs") != entry.end())
-          {
-            (void) requireObjectField(entry, "inputs", entity);
-          }
+          (void) requireObjectField(entry, "ports", entity);
 
           AddComponentVisitor<DataT> visitor{loaded.data,
                                              params,
@@ -501,41 +541,14 @@ namespace GridKit
         }
       }
 
-      template <class DataT, class ComponentT>
-      void connectTerminalsFor(DataT&                  data,
-                               const CaseNames<DataT>& names,
-                               ComponentRef            ref,
-                               const nlohmann::json&   terminals,
-                               std::string_view        entity)
-      {
-        const auto& descriptor_terminals = ComponentDescriptor<ComponentT>::terminals;
-        requireEveryNamedKey(terminals, descriptor_terminals, entity, "terminal");
-
-        for (const auto& item : terminals.items())
-        {
-          const auto local = indexOf(descriptor_terminals, item.key());
-          const auto bus   = readJsonValue<std::string>(item.value(),
-                                                      fieldContext(entity, item.key()));
-          requireIdentifier(bus, fieldContext(entity, item.key()));
-
-          const auto bus_it = names.buses.find(bus);
-          if (bus_it == names.buses.end())
-          {
-            throw CaseError(std::string(entity) + ": terminal '" + item.key()
-                            + "' references unknown bus '" + bus + "'");
-          }
-          data.connect(ref.terminal(*local), bus_it->second);
-        }
-      }
-
-      inline std::pair<std::string, std::string> splitSignalReference(std::string_view reference,
-                                                                      std::string_view entity)
+      inline std::pair<std::string, std::string> splitPortReference(std::string_view reference,
+                                                                    std::string_view entity)
       {
         const auto first = reference.find('.');
         if (first == std::string_view::npos || first != reference.rfind('.')
             || first == 0 || first + 1 == reference.size())
         {
-          throw CaseError(std::string(entity) + ": expected input reference '<producer>.<output>'");
+          throw CaseError(std::string(entity) + ": expected port reference '<producer>.<output_port>'");
         }
 
         auto producer = std::string(reference.substr(0, first));
@@ -546,52 +559,76 @@ namespace GridKit
       }
 
       template <class DataT, class ComponentT>
-      void connectInputsFor(DataT&                  data,
-                            const CaseNames<DataT>& names,
-                            ComponentRef            consumer_ref,
-                            const nlohmann::json&   inputs,
-                            std::string_view        entity)
+      void connectPortsFor(DataT&                  data,
+                           const CaseNames<DataT>& names,
+                           ComponentRef            ref,
+                           const nlohmann::json&   ports,
+                           std::string_view        entity)
       {
-        const auto& descriptor_inputs = ComponentDescriptor<ComponentT>::inputs;
-        requireEveryNamedKey(inputs, descriptor_inputs, entity, "input");
+        validatePortDescriptor<ComponentT>(entity);
+        const auto required_ports = connectablePortNames<ComponentT>();
+        requireEveryNamedKey(ports, required_ports, entity, "port");
 
-        for (const auto& item : inputs.items())
+        for (const auto& item : ports.items())
         {
-          const auto input_index = indexOf(descriptor_inputs, item.key());
-          const auto reference   = readJsonValue<std::string>(item.value(),
+          if (const auto electrical_port = indexOf(ComponentDescriptor<ComponentT>::electrical_ports,
+                                                   item.key()))
+          {
+            const auto bus = readJsonValue<std::string>(item.value(),
+                                                        fieldContext(entity, item.key()));
+            requireIdentifier(bus, fieldContext(entity, item.key()));
+
+            const auto bus_it = names.buses.find(bus);
+            if (bus_it == names.buses.end())
+            {
+              throw CaseError(std::string(entity) + ": port '" + item.key()
+                              + "' references unknown bus '" + bus + "'");
+            }
+            data.connect(ref.port(*electrical_port), bus_it->second);
+            continue;
+          }
+
+          const auto input_port = indexOf(ComponentDescriptor<ComponentT>::input_ports,
+                                          item.key());
+          if (!input_port.has_value())
+          {
+            continue;
+          }
+
+          const auto reference = readJsonValue<std::string>(item.value(),
                                                             fieldContext(entity, item.key()));
           const auto [producer_name, output_name] =
-              splitSignalReference(reference, fieldContext(entity, item.key()));
+              splitPortReference(reference, fieldContext(entity, item.key()));
 
           const auto producer_it = names.components.find(producer_name);
           if (producer_it == names.components.end())
           {
-            throw CaseError(std::string(entity) + ": input '" + item.key()
+            throw CaseError(std::string(entity) + ": port '" + item.key()
                             + "' references unknown component '" + producer_name + "'");
           }
 
-          std::optional<std::size_t> output_index;
+          std::optional<std::size_t> output_port;
           const bool                 producer_found = data.components.visit(
               producer_it->second.id,
               [&](const auto& producer)
               {
                 using ProducerT = std::decay_t<decltype(producer)>;
                 (void) producer;
-                output_index = indexOf(ComponentDescriptor<ProducerT>::outputs, output_name);
+                output_port = indexOf(ComponentDescriptor<ProducerT>::output_ports, output_name);
               });
           if (!producer_found)
           {
-            throw CaseError(std::string(entity) + ": input '" + item.key()
+            throw CaseError(std::string(entity) + ": port '" + item.key()
                             + "' references missing producer '" + producer_name + "'");
           }
-          if (!output_index.has_value())
+          if (!output_port.has_value())
           {
-            throw CaseError(std::string(entity) + ": input '" + item.key()
-                            + "' references unknown output '" + reference + "'");
+            throw CaseError(std::string(entity) + ": port '" + item.key()
+                            + "' references unknown output port '" + reference + "'");
           }
 
-          data.connect(producer_it->second.output(*output_index),
-                       consumer_ref.input(*input_index));
+          data.connect(producer_it->second.outputPort(*output_port),
+                       ref.inputPort(*input_port));
         }
       }
 
@@ -602,10 +639,10 @@ namespace GridKit
         const auto& components = requireArrayField(root, "components", "case file");
         for (std::size_t i = 0; i < components.size(); ++i)
         {
-          const auto& entry     = components[i];
-          const auto  name      = requiredString(entry, "name", "component[" + std::to_string(i) + "]");
-          const auto  entity    = "component '" + name + "'";
-          const auto& terminals = requireObjectField(entry, "terminals", entity);
+          const auto& entry  = components[i];
+          const auto  name   = requiredString(entry, "name", "component[" + std::to_string(i) + "]");
+          const auto  entity = "component '" + name + "'";
+          const auto& ports  = requireObjectField(entry, "ports", entity);
 
           const auto ref_it = loaded.names.components.find(name);
           if (ref_it == loaded.names.components.end())
@@ -619,20 +656,11 @@ namespace GridKit
               {
                 using ComponentT = std::decay_t<decltype(component)>;
                 (void) component;
-                connectTerminalsFor<DataT, ComponentT>(loaded.data,
-                                                       loaded.names,
-                                                       ref_it->second,
-                                                       terminals,
-                                                       entity);
-
-                const auto           inputs_it    = entry.find("inputs");
-                const nlohmann::json empty_inputs = nlohmann::json::object();
-                const auto&          inputs       = inputs_it == entry.end() ? empty_inputs : *inputs_it;
-                connectInputsFor<DataT, ComponentT>(loaded.data,
-                                                    loaded.names,
-                                                    ref_it->second,
-                                                    inputs,
-                                                    entity);
+                connectPortsFor<DataT, ComponentT>(loaded.data,
+                                                   loaded.names,
+                                                   ref_it->second,
+                                                   ports,
+                                                   entity);
               });
           if (!found)
           {

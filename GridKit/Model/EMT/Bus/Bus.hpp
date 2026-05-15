@@ -16,9 +16,8 @@ namespace GridKit
     template <class RealT, typename IdxT>
     struct BusData
     {
-      RealT vm0{0.0};   ///< Initial RMS phase voltage magnitude
-      RealT va0{0.0};   ///< Initial phase-a voltage angle [rad]
-      RealT freq{60.0}; ///< Initial bus frequency [Hz]
+      RealT vm{0.0}; ///< Initial RMS phase voltage magnitude
+      RealT va{0.0}; ///< Initial phase-a voltage angle [rad]
     };
 
     template <class RealT, typename IdxT>
@@ -82,8 +81,8 @@ namespace GridKit
       {
         const ScalarT pi    = std::acos(ScalarT{-1.0});
         const ScalarT shift = ScalarT{2.0} * pi / ScalarT{3.0};
-        const ScalarT vm    = static_cast<ScalarT>(data_.vm0);
-        const ScalarT va    = static_cast<ScalarT>(data_.va0);
+        const ScalarT vm    = static_cast<ScalarT>(data_.vm);
+        const ScalarT va    = static_cast<ScalarT>(data_.va);
         return {std::polar(vm, va), std::polar(vm, va - shift), std::polar(vm, va + shift)};
       }
 
@@ -91,7 +90,7 @@ namespace GridKit
       ScalarT omega() const
       {
         const ScalarT pi = std::acos(ScalarT{-1.0});
-        return ScalarT{2.0} * pi * static_cast<ScalarT>(data_.freq);
+        return ScalarT{2.0} * pi * ScalarT{60.0};
       }
 
       void fault(const GridKit::Model::Events::Fault& action)

@@ -91,7 +91,7 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        EMT::Bus<RealT, IdxT> bus({120.0, 0.2, 60.0});
+        EMT::Bus<RealT, IdxT> bus({120.0, 0.2});
         std::array<RealT, 3>  y{};
         std::array<RealT, 3>  yp{};
         bus.initialize(y.data(), yp.data(), IdxT{0});
@@ -119,9 +119,9 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
         Data data;
 
-        const IdxT bus  = data.addBus({120.0, 0.25, 60.0});
+        const IdxT bus  = data.addBus({120.0, 0.25});
         const auto load = data.add(LoadRL({{2.0, 3.0, 4.0}, {0.01, 0.02, 0.03}}));
-        data.connect(load.terminal(0), bus);
+        data.connect(load.port(0), bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -135,7 +135,7 @@ namespace GridKit
         const auto& yp    = system.yp();
         const auto& f     = system.getResidual();
 
-        EMT::Bus<RealT, IdxT> init_bus({120.0, 0.25, 60.0});
+        EMT::Bus<RealT, IdxT> init_bus({120.0, 0.25});
         const auto            v = init_bus.template initialVoltagePhasor<RealT>();
         const RealT           w = init_bus.template omega<RealT>();
 
@@ -163,12 +163,12 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, VoltageSource>;
         Data data;
 
-        const IdxT bus    = data.addBus({1.0, 0.0, 60.0});
+        const IdxT bus    = data.addBus({1.0, 0.0});
         const auto source = data.add(VoltageSource({{120.0, 121.0, 122.0},
                                                     {0.1, -2.0, 2.2},
                                                     {2.0, 4.0, 5.0},
                                                     2.0 * std::acos(RealT{-1.0}) * 60.0}));
-        data.connect(source.terminal(0), bus);
+        data.connect(source.port(0), bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -241,19 +241,19 @@ namespace GridKit
         Data data;
 
         const auto branch_data = fullBranchData();
-        const IdxT from_bus    = data.addBus({120.0, 0.2, 60.0});
-        const IdxT to_bus      = data.addBus({118.0, 0.05, 60.0});
+        const IdxT from_bus    = data.addBus({120.0, 0.2});
+        const IdxT to_bus      = data.addBus({118.0, 0.05});
         const auto branch      = data.add(Branch(branch_data));
-        data.connect(branch.terminal(Branch::from), from_bus);
-        data.connect(branch.terminal(Branch::to), to_bus);
+        data.connect(branch.port(Branch::from), from_bus);
+        data.connect(branch.port(Branch::to), to_bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
         system.initialize();
         system.evaluateResidual();
 
-        EMT::Bus<RealT, IdxT> from_init({120.0, 0.2, 60.0});
-        EMT::Bus<RealT, IdxT> to_init({118.0, 0.05, 60.0});
+        EMT::Bus<RealT, IdxT> from_init({120.0, 0.2});
+        EMT::Bus<RealT, IdxT> to_init({118.0, 0.05});
         const auto            v_from = from_init.template initialVoltagePhasor<RealT>();
         const auto            v_to   = to_init.template initialVoltagePhasor<RealT>();
         const RealT           omega  = from_init.template omega<RealT>();
@@ -301,11 +301,11 @@ namespace GridKit
         Data data;
 
         const auto branch_data = fullBranchData();
-        const IdxT from_bus    = data.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus      = data.addBus({1.0, 0.0, 60.0});
+        const IdxT from_bus    = data.addBus({1.0, 0.0});
+        const IdxT to_bus      = data.addBus({1.0, 0.0});
         const auto branch      = data.add(Branch(branch_data));
-        data.connect(branch.terminal(Branch::from), from_bus);
-        data.connect(branch.terminal(Branch::to), to_bus);
+        data.connect(branch.port(Branch::from), from_bus);
+        data.connect(branch.port(Branch::to), to_bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -377,11 +377,11 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
         Data data;
 
-        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const IdxT from_bus = data.addBus({1.0, 0.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0});
         const auto breaker  = data.add(Breaker(BreakerData{}));
-        data.connect(breaker.terminal(Breaker::from), from_bus);
-        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.connect(breaker.port(Breaker::from), from_bus);
+        data.connect(breaker.port(Breaker::to), to_bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -435,11 +435,11 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
         Data data;
 
-        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const IdxT from_bus = data.addBus({1.0, 0.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0});
         const auto breaker  = data.add(Breaker(BreakerData{}));
-        data.connect(breaker.terminal(Breaker::from), from_bus);
-        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.connect(breaker.port(Breaker::from), from_bus);
+        data.connect(breaker.port(Breaker::to), to_bus);
 
         data.schedule(0.50, breaker, GridKit::Model::Events::Open{PhaseMask::abc()});
         data.schedule(0.50, breaker, GridKit::Model::Events::Close{PhaseMask::a()});
@@ -492,11 +492,11 @@ namespace GridKit
 
         {
           Data       unsupported;
-          const IdxT a      = unsupported.addBus({1.0, 0.0, 60.0});
-          const IdxT b      = unsupported.addBus({1.0, 0.0, 60.0});
+          const IdxT a      = unsupported.addBus({1.0, 0.0});
+          const IdxT b      = unsupported.addBus({1.0, 0.0});
           const auto target = unsupported.add(Breaker(BreakerData{}));
-          unsupported.connect(target.terminal(Breaker::from), a);
-          unsupported.connect(target.terminal(Breaker::to), b);
+          unsupported.connect(target.port(Breaker::from), a);
+          unsupported.connect(target.port(Breaker::to), b);
           unsupported.schedule(0.10, target, GridKit::Model::Events::Fault{});
           success *= throws<std::invalid_argument>(
               [&]()
@@ -508,11 +508,11 @@ namespace GridKit
 
         {
           Data       negative_time;
-          const IdxT a      = negative_time.addBus({1.0, 0.0, 60.0});
-          const IdxT b      = negative_time.addBus({1.0, 0.0, 60.0});
+          const IdxT a      = negative_time.addBus({1.0, 0.0});
+          const IdxT b      = negative_time.addBus({1.0, 0.0});
           const auto target = negative_time.add(Breaker(BreakerData{}));
-          negative_time.connect(target.terminal(Breaker::from), a);
-          negative_time.connect(target.terminal(Breaker::to), b);
+          negative_time.connect(target.port(Breaker::from), a);
+          negative_time.connect(target.port(Breaker::to), b);
           negative_time.schedule(-0.10, target, GridKit::Model::Events::Open{PhaseMask::abc()});
           success *= throws<std::invalid_argument>(
               [&]()
@@ -535,11 +535,11 @@ namespace GridKit
         std::filesystem::remove(file);
 
         Data       data;
-        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const IdxT from_bus = data.addBus({1.0, 0.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0});
         const auto breaker  = data.add(Breaker(BreakerData{}));
-        data.connect(breaker.terminal(Breaker::from), from_bus);
-        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.connect(breaker.port(Breaker::from), from_bus);
+        data.connect(breaker.port(Breaker::to), to_bus);
         data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
         data.monitorComponent(breaker,
                               "breaker",
@@ -597,7 +597,7 @@ namespace GridKit
         using BusNetwork = EMT::SystemModelData<RealT, IdxT, LoadRL>;
         BusNetwork data;
 
-        const IdxT bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT bus = data.addBus({1.0, 0.0});
         data.schedule(0.05,
                       data.busRef(bus),
                       GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
@@ -656,7 +656,7 @@ namespace GridKit
 
         {
           BusNetwork unsupported;
-          const IdxT bad_bus = unsupported.addBus({1.0, 0.0, 60.0});
+          const IdxT bad_bus = unsupported.addBus({1.0, 0.0});
           unsupported.schedule(0.01, unsupported.busRef(bad_bus), GridKit::Model::Events::Open{PhaseMask::a()});
           success *= throws<std::invalid_argument>(
               [&]()
@@ -669,11 +669,11 @@ namespace GridKit
         {
           using BreakerNetwork = EMT::SystemModelData<RealT, IdxT, Breaker>;
           BreakerNetwork unsupported;
-          const IdxT     from    = unsupported.addBus({1.0, 0.0, 60.0});
-          const IdxT     to      = unsupported.addBus({1.0, 0.0, 60.0});
+          const IdxT     from    = unsupported.addBus({1.0, 0.0});
+          const IdxT     to      = unsupported.addBus({1.0, 0.0});
           const auto     breaker = unsupported.add(Breaker(BreakerData{}));
-          unsupported.connect(breaker.terminal(Breaker::from), from);
-          unsupported.connect(breaker.terminal(Breaker::to), to);
+          unsupported.connect(breaker.port(Breaker::from), from);
+          unsupported.connect(breaker.port(Breaker::to), to);
           unsupported.schedule(0.01,
                                breaker,
                                GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 0.0, 0.0});
@@ -687,7 +687,7 @@ namespace GridKit
 
         {
           BusNetwork reactive;
-          const IdxT bad_bus = reactive.addBus({1.0, 0.0, 60.0});
+          const IdxT bad_bus = reactive.addBus({1.0, 0.0});
           reactive.schedule(0.01,
                             reactive.busRef(bad_bus),
                             GridKit::Model::Events::Fault{PhaseMask::a(), 2.0, 1.0, 0.0});
@@ -702,7 +702,7 @@ namespace GridKit
 
         {
           BusNetwork plain;
-          plain.addBus({1.0, 0.0, 60.0});
+          plain.addBus({1.0, 0.0});
           EMT::SystemModel<BusNetwork> plain_system(plain);
           plain_system.allocate();
           success *= (plain_system.nnz() == 0);
@@ -721,7 +721,7 @@ namespace GridKit
         std::filesystem::remove(file);
 
         Data       data;
-        const IdxT bus = data.addBus({1.0, 0.0, 60.0});
+        const IdxT bus = data.addBus({1.0, 0.0});
         data.schedule(0.0,
                       data.busRef(bus),
                       GridKit::Model::Events::Fault{PhaseMask::abc(), 2.0, 0.0, 0.0});
@@ -773,11 +773,11 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, Breaker>;
         Data data;
 
-        const IdxT from_bus = data.addBus({1.0, 0.0, 60.0});
-        const IdxT to_bus   = data.addBus({1.0, 0.0, 60.0});
+        const IdxT from_bus = data.addBus({1.0, 0.0});
+        const IdxT to_bus   = data.addBus({1.0, 0.0});
         const auto breaker  = data.add(Breaker(BreakerData{}));
-        data.connect(breaker.terminal(Breaker::from), from_bus);
-        data.connect(breaker.terminal(Breaker::to), to_bus);
+        data.connect(breaker.port(Breaker::from), from_bus);
+        data.connect(breaker.port(Breaker::to), to_bus);
         data.schedule(0.10, breaker, GridKit::Model::Events::Open{PhaseMask::a()});
 
         EMT::SystemModel<Data> system(data);
@@ -829,9 +829,9 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
           Data       data;
-          const IdxT bus  = data.addBus({120.0, 0.0, 60.0});
+          const IdxT bus  = data.addBus({120.0, 0.0});
           const auto load = data.add(LoadRL(loadData()));
-          data.connect(load.terminal(0), bus);
+          data.connect(load.port(0), bus);
 
           EMT::SystemModel<Data> system(data);
           system.allocate();
@@ -841,9 +841,9 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, VoltageSource>;
           Data       data;
-          const IdxT bus    = data.addBus({120.0, 0.0, 60.0});
+          const IdxT bus    = data.addBus({120.0, 0.0});
           const auto source = data.add(VoltageSource(sourceData()));
-          data.connect(source.terminal(0), bus);
+          data.connect(source.port(0), bus);
 
           EMT::SystemModel<Data> system(data);
           system.allocate();
@@ -853,11 +853,11 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
           Data       data;
-          const IdxT from_bus = data.addBus({120.0, 0.0, 60.0});
-          const IdxT to_bus   = data.addBus({118.0, 0.1, 60.0});
+          const IdxT from_bus = data.addBus({120.0, 0.0});
+          const IdxT to_bus   = data.addBus({118.0, 0.1});
           const auto branch   = data.add(Branch(fullBranchData()));
-          data.connect(branch.terminal(Branch::from), from_bus);
-          data.connect(branch.terminal(Branch::to), to_bus);
+          data.connect(branch.port(Branch::from), from_bus);
+          data.connect(branch.port(Branch::to), to_bus);
 
           EMT::SystemModel<Data> system(data);
           system.allocate();
@@ -867,11 +867,11 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, Branch>;
           Data       data;
-          const IdxT from_bus = data.addBus({120.0, 0.0, 60.0});
-          const IdxT to_bus   = data.addBus({118.0, 0.1, 60.0});
+          const IdxT from_bus = data.addBus({120.0, 0.0});
+          const IdxT to_bus   = data.addBus({118.0, 0.1});
           const auto branch   = data.add(Branch(diagonalBranchData()));
-          data.connect(branch.terminal(Branch::from), from_bus);
-          data.connect(branch.terminal(Branch::to), to_bus);
+          data.connect(branch.port(Branch::from), from_bus);
+          data.connect(branch.port(Branch::to), to_bus);
 
           EMT::SystemModel<Data> system(data);
           system.allocate();
@@ -888,15 +888,15 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
         Data data;
 
-        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const IdxT from_bus = data.addBus({120.0, 0.15});
+        const IdxT to_bus   = data.addBus({118.0, 0.02});
         const auto load     = data.add(LoadRL(loadData()));
         const auto source   = data.add(VoltageSource(sourceData()));
         const auto branch   = data.add(Branch(fullBranchData()));
-        data.connect(load.terminal(0), to_bus);
-        data.connect(source.terminal(0), from_bus);
-        data.connect(branch.terminal(Branch::from), from_bus);
-        data.connect(branch.terminal(Branch::to), to_bus);
+        data.connect(load.port(0), to_bus);
+        data.connect(source.port(0), from_bus);
+        data.connect(branch.port(Branch::from), from_bus);
+        data.connect(branch.port(Branch::to), to_bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -925,15 +925,15 @@ namespace GridKit
         using Data = EMT::SystemModelData<RealT, IdxT, LoadRL, VoltageSource, Branch>;
         Data data;
 
-        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const IdxT from_bus = data.addBus({120.0, 0.15});
+        const IdxT to_bus   = data.addBus({118.0, 0.02});
         const auto load     = data.add(LoadRL(loadData()));
         const auto source   = data.add(VoltageSource(sourceData()));
         const auto branch   = data.add(Branch(fullBranchData()));
-        data.connect(load.terminal(0), to_bus);
-        data.connect(source.terminal(0), from_bus);
-        data.connect(branch.terminal(Branch::from), from_bus);
-        data.connect(branch.terminal(Branch::to), to_bus);
+        data.connect(load.port(0), to_bus);
+        data.connect(source.port(0), from_bus);
+        data.connect(branch.port(Branch::from), from_bus);
+        data.connect(branch.port(Branch::to), to_bus);
 
         EMT::SystemModel<Data> system(data);
         system.allocate();
@@ -1008,15 +1008,15 @@ namespace GridKit
         std::filesystem::remove(file);
 
         Data       data;
-        const IdxT from_bus = data.addBus({120.0, 0.15, 60.0});
-        const IdxT to_bus   = data.addBus({118.0, 0.02, 60.0});
+        const IdxT from_bus = data.addBus({120.0, 0.15});
+        const IdxT to_bus   = data.addBus({118.0, 0.02});
         const auto load     = data.add(LoadRL(loadData()));
         const auto source   = data.add(VoltageSource(sourceData()));
         const auto branch   = data.add(Branch(fullBranchData()));
-        data.connect(load.terminal(0), to_bus);
-        data.connect(source.terminal(0), from_bus);
-        data.connect(branch.terminal(Branch::from), from_bus);
-        data.connect(branch.terminal(Branch::to), to_bus);
+        data.connect(load.port(0), to_bus);
+        data.connect(source.port(0), from_bus);
+        data.connect(branch.port(Branch::from), from_bus);
+        data.connect(branch.port(Branch::to), to_bus);
 
         data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV});
         data.monitorBus(from_bus, "source_bus", {EMT::BusMonitorVariable::va, EMT::BusMonitorVariable::vb, EMT::BusMonitorVariable::vc});
@@ -1085,7 +1085,7 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
           Data data;
-          data.addBus({120.0, 0.0, 60.0});
+          data.addBus({120.0, 0.0});
           data.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
           data.monitorBus(IdxT{99}, "missing", {EMT::BusMonitorVariable::va});
 
@@ -1100,9 +1100,9 @@ namespace GridKit
         {
           using Data = EMT::SystemModelData<RealT, IdxT, LoadRL>;
           Data       data;
-          const IdxT bus  = data.addBus({120.0, 0.0, 60.0});
+          const IdxT bus  = data.addBus({120.0, 0.0});
           const auto load = data.add(LoadRL(loadData()));
-          data.connect(load.terminal(0), bus);
+          data.connect(load.port(0), bus);
           data.addMonitorSink({"unused.csv", GridKit::Model::VariableMonitorFormat::CSV});
           data.monitorComponent(load, "load", {static_cast<EMT::LoadRLMonitorVariable>(99)});
 

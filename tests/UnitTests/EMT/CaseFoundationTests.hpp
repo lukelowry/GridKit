@@ -245,20 +245,20 @@ namespace GridKit
         TestStatus success = true;
 
         success *= (EMT::ComponentDescriptor<Load>::class_name == "LoadRL");
-        success *= (EMT::ComponentDescriptor<Load>::terminals.size() == 1u);
-        success *= (EMT::ComponentDescriptor<Load>::terminals[0] == "ac");
+        success *= (EMT::ComponentDescriptor<Load>::electrical_ports.size() == 1u);
+        success *= (EMT::ComponentDescriptor<Load>::electrical_ports[0] == "ac");
         success *= (EMT::ComponentDescriptor<Source>::class_name == "VoltageSource");
-        success *= (EMT::ComponentDescriptor<Source>::terminals[0] == "ac");
+        success *= (EMT::ComponentDescriptor<Source>::electrical_ports[0] == "bus");
         success *= (EMT::ComponentDescriptor<Branch>::class_name == "BranchLumpedConstant");
-        success *= (EMT::ComponentDescriptor<Branch>::terminals[0] == "from");
-        success *= (EMT::ComponentDescriptor<Branch>::terminals[1] == "to");
-        success *= EMT::ComponentDescriptor<Branch>::inputs.empty();
-        success *= EMT::ComponentDescriptor<Branch>::outputs.empty();
+        success *= (EMT::ComponentDescriptor<Branch>::electrical_ports[0] == "from");
+        success *= (EMT::ComponentDescriptor<Branch>::electrical_ports[1] == "to");
+        success *= EMT::ComponentDescriptor<Branch>::input_ports.empty();
+        success *= EMT::ComponentDescriptor<Branch>::output_ports.empty();
         success *= (EMT::ComponentDescriptor<Breaker>::class_name == "Breaker");
-        success *= (EMT::ComponentDescriptor<Breaker>::terminals[0] == "from");
-        success *= (EMT::ComponentDescriptor<Breaker>::terminals[1] == "to");
-        success *= EMT::ComponentDescriptor<Breaker>::inputs.empty();
-        success *= EMT::ComponentDescriptor<Breaker>::outputs.empty();
+        success *= (EMT::ComponentDescriptor<Breaker>::electrical_ports[0] == "from");
+        success *= (EMT::ComponentDescriptor<Breaker>::electrical_ports[1] == "to");
+        success *= EMT::ComponentDescriptor<Breaker>::input_ports.empty();
+        success *= EMT::ComponentDescriptor<Breaker>::output_ports.empty();
 
         return success.report(__func__);
       }
@@ -324,7 +324,7 @@ namespace GridKit
               (void) EMT::Detail::constructFromParams<Source>(badSource, "component 'source'");
             },
             "component 'source'",
-            "terminal resistance");
+            "port resistance");
 
         return success.report(__func__);
       }

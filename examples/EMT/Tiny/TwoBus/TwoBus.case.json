@@ -2,20 +2,23 @@
   "header": {
     "format_version": 1,
     "case_name": "EMT Tiny TwoBus",
-    "description": "Two-bus EMT test case",
-    "frequency": 60.0
+    "description": "Two-bus EMT test case"
   },
   "buses": [
     {
       "name": "source_bus",
-      "vm0": 120.73827496404608,
-      "va0": 0.0043834011508009401,
+      "init": {
+        "vm": 120.73827496404608,
+        "va": 0.0043834011508009401
+      },
       "mon": ["va", "vb", "vc"]
     },
     {
       "name": "receiving_bus",
-      "vm0": 120.0,
-      "va0": 0.0,
+      "init": {
+        "vm": 120.0,
+        "va": 0.0
+      },
       "mon": ["va", "vb", "vc", "ifa", "ifb", "ifc"]
     }
   ],
@@ -29,8 +32,8 @@
         "r": [0.10, 0.10, 0.10],
         "frequency": 60.0
       },
-      "terminals": {
-        "ac": "source_bus"
+      "ports": {
+        "bus": "source_bus"
       },
       "mon": ["ia", "ib", "ic"]
     },
@@ -60,7 +63,7 @@
         ],
         "length": 609.6
       },
-      "terminals": {
+      "ports": {
         "from": "source_bus",
         "to": "receiving_bus"
       },
@@ -73,7 +76,7 @@
         "r": [24.91079956227637, 21.476283038089353, 28.117061919884289],
         "l": [3.9938145972382134e-2, 5.3715312062417496e-2, 5.2353658750919525e-2]
       },
-      "terminals": {
+      "ports": {
         "ac": "receiving_bus"
       },
       "mon": ["ia", "ib", "ic"]

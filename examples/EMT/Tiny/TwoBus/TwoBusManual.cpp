@@ -111,20 +111,18 @@ namespace
 
     Data        data;
     const Index source_bus    = data.addBus({std::abs(source_bus_voltage),
-                                             std::arg(source_bus_voltage),
-                                             frequency});
+                                             std::arg(source_bus_voltage)});
     const Index receiving_bus = data.addBus({std::abs(load_voltage),
-                                             std::arg(load_voltage),
-                                             frequency});
+                                             std::arg(load_voltage)});
 
     const auto source = data.add(Source(sourceData(source_internal_voltage)));
     const auto load   = data.add(LoadRL(loadData()));
     const auto branch = data.add(Branch(branchData()));
 
-    data.connect(source.terminal(0), source_bus);
-    data.connect(load.terminal(0), receiving_bus);
-    data.connect(branch.terminal(Branch::from), source_bus);
-    data.connect(branch.terminal(Branch::to), receiving_bus);
+    data.connect(source.port(0), source_bus);
+    data.connect(load.port(0), receiving_bus);
+    data.connect(branch.port(Branch::from), source_bus);
+    data.connect(branch.port(Branch::to), receiving_bus);
 
     data.schedule(faultStartTime(),
                   data.busRef(receiving_bus),

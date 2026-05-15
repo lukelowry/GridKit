@@ -94,7 +94,7 @@ Each expression is accumulated into the owning bus residual.
 
 The initialization uses the physical branch parameters and the connected bus
 initial RMS phase-voltage phasors. With $\mathbf{V}_1$ and $\mathbf{V}_2$
-denoting RMS phase-voltage phasors and $\omega$ denoting the common terminal
+denoting RMS phase-voltage phasors and $\omega$ denoting the common port
 angular frequency,
 
 ``` math

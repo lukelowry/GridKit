@@ -330,17 +330,17 @@ namespace GridKit
       {
         return Json::parse(R"json(
 {
-  "header": { "format_version": 1, "frequency": 60.0 },
+  "header": { "format_version": 1 },
   "buses": [
-    { "name": "source_bus", "vm0": 120.0, "va0": 0.0 },
-    { "name": "receiving_bus", "vm0": 120.0, "va0": 0.0 }
+    { "name": "source_bus", "init": { "vm": 120.0, "va": 0.0 } },
+    { "name": "receiving_bus", "init": { "vm": 120.0, "va": 0.0 } }
   ],
   "components": [
     {
       "name": "breaker",
       "class": "Breaker",
       "params": {},
-      "terminals": { "from": "source_bus", "to": "receiving_bus" }
+      "ports": { "from": "source_bus", "to": "receiving_bus" }
     }
   ]
 }

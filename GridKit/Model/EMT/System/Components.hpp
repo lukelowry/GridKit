@@ -25,9 +25,23 @@ namespace GridKit
       return lhs.type == rhs.type && lhs.index == rhs.index;
     }
 
-    struct TerminalRef;
-    struct SignalInputRef;
-    struct SignalOutputRef;
+    enum class PortKind
+    {
+      Electrical,
+      Input,
+      Output
+    };
+
+    template <PortKind Kind>
+    struct PortRef
+    {
+      ComponentId component;
+      size_t      index{INVALID_INDEX<size_t>};
+    };
+
+    using ElectricalPortRef = PortRef<PortKind::Electrical>;
+    using InputPortRef      = PortRef<PortKind::Input>;
+    using OutputPortRef     = PortRef<PortKind::Output>;
 
     struct ComponentRef
     {
@@ -38,15 +52,9 @@ namespace GridKit
         return id;
       }
 
-      constexpr TerminalRef     terminal(size_t local) const;
-      constexpr SignalInputRef  input(size_t local) const;
-      constexpr SignalOutputRef output(size_t local) const;
-    };
-
-    struct TerminalRef
-    {
-      ComponentId component;
-      size_t      index{INVALID_INDEX<size_t>};
+      constexpr ElectricalPortRef port(size_t local) const;
+      constexpr InputPortRef      inputPort(size_t local) const;
+      constexpr OutputPortRef     outputPort(size_t local) const;
     };
 
     template <typename IdxT>
@@ -56,46 +64,34 @@ namespace GridKit
     };
 
     template <typename IdxT>
-    struct TerminalConnection
+    struct PortConnection
     {
-      TerminalRef terminal;
-      IdxT        bus{INVALID_INDEX<IdxT>};
+      ElectricalPortRef port;
+      IdxT              bus{INVALID_INDEX<IdxT>};
     };
 
-    struct SignalOutputSpec
+    struct OutputPortSpec
     {
       size_t variable{INVALID_INDEX<size_t>};
     };
 
-    struct SignalInputRef
+    struct SignalPortConnection
     {
-      ComponentId component;
-      size_t      index{INVALID_INDEX<size_t>};
+      OutputPortRef output;
+      InputPortRef  input;
     };
 
-    struct SignalOutputRef
-    {
-      ComponentId component;
-      size_t      index{INVALID_INDEX<size_t>};
-    };
-
-    struct SignalConnection
-    {
-      SignalOutputRef output;
-      SignalInputRef  input;
-    };
-
-    constexpr TerminalRef ComponentRef::terminal(size_t local) const
+    constexpr ElectricalPortRef ComponentRef::port(size_t local) const
     {
       return {id, local};
     }
 
-    constexpr SignalInputRef ComponentRef::input(size_t local) const
+    constexpr InputPortRef ComponentRef::inputPort(size_t local) const
     {
       return {id, local};
     }
 
-    constexpr SignalOutputRef ComponentRef::output(size_t local) const
+    constexpr OutputPortRef ComponentRef::outputPort(size_t local) const
     {
       return {id, local};
     }
@@ -117,17 +113,17 @@ namespace GridKit
         return {id};
       }
 
-      constexpr TerminalRef terminal(size_t local) const
+      constexpr ElectricalPortRef port(size_t local) const
       {
         return {id, local};
       }
 
-      constexpr SignalInputRef input(size_t local) const
+      constexpr InputPortRef inputPort(size_t local) const
       {
         return {id, local};
       }
 
-      constexpr SignalOutputRef output(size_t local) const
+      constexpr OutputPortRef outputPort(size_t local) const
       {
         return {id, local};
       }
@@ -213,11 +209,11 @@ namespace GridKit
     template <class T>
     struct ComponentTraits
     {
-      static constexpr size_t variable_count = T::variable_count;
-      static constexpr size_t equation_count = T::equation_count;
-      static constexpr size_t terminal_count = T::terminal_count;
-      static constexpr size_t input_count    = T::input_count;
-      static constexpr size_t output_count   = T::output_count;
+      static constexpr size_t variable_count        = T::variable_count;
+      static constexpr size_t equation_count        = T::equation_count;
+      static constexpr size_t electrical_port_count = T::electrical_port_count;
+      static constexpr size_t input_port_count      = T::input_port_count;
+      static constexpr size_t output_port_count     = T::output_port_count;
 
       static constexpr bool has_dynamic_counts =
           variable_count == dynamic_component_count || equation_count == dynamic_component_count;
@@ -295,16 +291,16 @@ namespace GridKit
         }
       }
 
-      static constexpr SignalOutputSpec output(size_t index)
+      static constexpr OutputPortSpec outputPort(size_t index)
       {
-        if constexpr (output_count == 0)
+        if constexpr (output_port_count == 0)
         {
           (void) index;
           return {};
         }
         else
         {
-          return T::output(index);
+          return T::outputPort(index);
         }
       }
     };

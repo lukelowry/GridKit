@@ -29,11 +29,11 @@ namespace GridKit
     class VoltageSource
     {
     public:
-      static constexpr size_t variable_count = 0;
-      static constexpr size_t equation_count = 0;
-      static constexpr size_t terminal_count = 1;
-      static constexpr size_t input_count    = 0;
-      static constexpr size_t output_count   = 0;
+      static constexpr size_t variable_count        = 0;
+      static constexpr size_t equation_count        = 0;
+      static constexpr size_t electrical_port_count = 1;
+      static constexpr size_t input_port_count      = 0;
+      static constexpr size_t output_port_count     = 0;
 
       explicit VoltageSource(VoltageSourceData<RealT, IdxT> data)
         : data_{data}
@@ -46,7 +46,7 @@ namespace GridKit
           }
           if (data_.r[phase] <= RealT{0.0})
           {
-            throw std::invalid_argument("EMT VoltageSource terminal resistance must be positive");
+            throw std::invalid_argument("EMT VoltageSource port resistance must be positive");
           }
         }
       }
@@ -103,9 +103,9 @@ namespace GridKit
       using Data      = VoltageSourceData<RealT, IdxT>;
 
       static constexpr std::string_view                class_name = "VoltageSource";
-      static constexpr std::array<std::string_view, 1> terminals{"ac"};
-      static constexpr std::array<std::string_view, 0> inputs{};
-      static constexpr std::array<std::string_view, 0> outputs{};
+      static constexpr std::array<std::string_view, 1> electrical_ports{"bus"};
+      static constexpr std::array<std::string_view, 0> input_ports{};
+      static constexpr std::array<std::string_view, 0> output_ports{};
 
       static constexpr auto params = std::tuple{
           field("e", &Data::e),
@@ -114,9 +114,9 @@ namespace GridKit
           field("frequency", &Data::omega0, &hzToRadPerSec<RealT>),
       };
 
-      static_assert(terminals.size() == ComponentTraits<Component>::terminal_count);
-      static_assert(inputs.size() == ComponentTraits<Component>::input_count);
-      static_assert(outputs.size() == ComponentTraits<Component>::output_count);
+      static_assert(electrical_ports.size() == ComponentTraits<Component>::electrical_port_count);
+      static_assert(input_ports.size() == ComponentTraits<Component>::input_port_count);
+      static_assert(output_ports.size() == ComponentTraits<Component>::output_port_count);
     };
 
     template <class RealT, class IdxT>
@@ -148,7 +148,7 @@ namespace GridKit
         }
 
         const auto data        = source.data();
-        const auto bus_voltage = ctx.terminalVoltageIndex(0, phase);
+        const auto bus_voltage = ctx.portVoltageIndex(0, phase);
         const auto y           = ctx.y();
         const auto time        = ctx.time();
 

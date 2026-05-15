@@ -16,9 +16,9 @@ $\phi_a$      | [rad]      | Source phase offset, phase a        |
 $\phi_b$      | [rad]      | Source phase offset, phase b        |
 $\phi_c$      | [rad]      | Source phase offset, phase c        |
 $\omega_0$    | [rad/s]    | Source angular frequency            |
-$R_a$         | [$\Omega$] | Terminal resistance, phase a        |
-$R_b$         | [$\Omega$] | Terminal resistance, phase b        |
-$R_c$         | [$\Omega$] | Terminal resistance, phase c        |
+$R_a$         | [$\Omega$] | Port resistance, phase a        |
+$R_b$         | [$\Omega$] | Port resistance, phase b        |
+$R_c$         | [$\Omega$] | Port resistance, phase c        |
 
 ## Model Derived Parameters
 
