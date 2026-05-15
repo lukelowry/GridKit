@@ -195,15 +195,16 @@ int main()
   EnzymeModelJacobian<DG>(dg, jac_autodiff);
 
   // Check
-  int  fail    = 0;
-  bool verbose = true;
+  constexpr double jacobian_tol = 1.0e-12;
+  int              fail         = 0;
+  bool             verbose      = true;
   for (size_t idy = 0; idy < dg->size(); ++idy)
   {
     for (size_t idx = 0; idx < dg->size(); ++idx)
     {
       double jac_value     = jac_autodiff.getValue(idx, idy);
       double jac_ref_value = jac_ref_dense.getValue(idx, idy);
-      if (!GridKit::Testing::isEqual(jac_value, jac_ref_value))
+      if (!GridKit::Testing::isEqual(jac_value, jac_ref_value, jacobian_tol))
       {
         fail++;
         if (verbose)

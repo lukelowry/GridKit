@@ -63,15 +63,6 @@ namespace GridKit
         std::optional<IdaLogOutput> log;
       };
 
-      template <class StatsT>
-      struct IdaStatsSegment
-      {
-        double start_time{};
-        double end_time{};
-        int    output_steps{};
-        StatsT stats;
-      };
-
       struct Output
       {
         std::optional<MonitorOutput> monitor;
@@ -506,84 +497,6 @@ namespace GridKit
         throw CaseError("output.monitor.file is ambiguous because the case defines multiple monitor sinks");
       }
 
-      template <class StatsT>
-      nlohmann::json idaStatsJson(const StatsT& stats)
-      {
-        return nlohmann::json{
-            {"sundials",
-             {{"version", stats.sundials_version_},
-              {"logging_level", stats.sundials_logging_level_}}},
-            {"integrator",
-             {{"steps", stats.num_steps_},
-              {"residual_evals", stats.num_residual_evals_},
-              {"linear_solver_setups", stats.num_linear_solver_setups_},
-              {"error_test_failures", stats.num_error_test_fails_},
-              {"backtrack_operations", stats.num_backtrack_operations_}}},
-            {"nonlinear_solver",
-             {{"iterations", stats.num_nonlinear_iters_},
-              {"convergence_failures", stats.num_nonlinear_convergence_fails_},
-              {"step_solve_failures", stats.num_nonlinear_step_fails_}}},
-            {"linear_solver",
-             {{"jacobian_evals", stats.num_jacobian_evals_},
-              {"last_jacobian_eval_step", stats.num_jacobian_eval_steps_},
-              {"jacobian_time", stats.jacobian_time_},
-              {"jacobian_cj", stats.jacobian_cj_},
-              {"iterations", stats.num_linear_iters_},
-              {"convergence_failures", stats.num_linear_convergence_fails_},
-              {"residual_evals", stats.num_linear_residual_evals_},
-              {"preconditioner_evals", stats.num_preconditioner_evals_},
-              {"preconditioner_solves", stats.num_preconditioner_solves_},
-              {"jtimes_setup_evals", stats.num_jtimes_setup_evals_},
-              {"jtimes_evals", stats.num_jtimes_evals_},
-              {"last_flag", stats.last_linear_flag_},
-              {"last_flag_name", stats.last_linear_flag_name_}}},
-            {"final_state",
-             {{"last_order", stats.last_order_},
-              {"current_order", stats.current_order_},
-              {"actual_initial_step", stats.actual_initial_step_},
-              {"last_step", stats.last_step_},
-              {"current_step", stats.current_step_},
-              {"current_time", stats.current_time_},
-              {"current_cj", stats.current_cj_}}}};
-      }
-
-      template <class StatsT>
-      nlohmann::json idaStatsSegmentJson(const IdaStatsSegment<StatsT>& segment)
-      {
-        auto json = idaStatsJson(segment.stats);
-        json.erase("sundials");
-        json["start_time"]   = segment.start_time;
-        json["end_time"]     = segment.end_time;
-        json["output_steps"] = segment.output_steps;
-        return json;
-      }
-
-      template <class StatsT>
-      void writeIdaStats(const StatsT&                               stats,
-                         const std::vector<IdaStatsSegment<StatsT>>& segments,
-                         const IdaOutput&                            output)
-      {
-        std::ofstream stream(output.file);
-        if (!stream)
-        {
-          throw CaseError("failed to open IDA stats output file '" + output.file.string() + "'");
-        }
-
-        auto json             = idaStatsJson(stats);
-        json["segment_count"] = segments.size();
-        json["segments"]      = nlohmann::json::array();
-        for (const auto& segment : segments)
-        {
-          json["segments"].push_back(idaStatsSegmentJson(segment));
-        }
-        if (output.log.has_value())
-        {
-          json["log"] = {
-              {"file", output.log->file.string()},
-              {"level", output.log->level}};
-        }
-        stream << json.dump(2) << '\n';
-      }
     } // namespace IO
   } // namespace EMT
 } // namespace GridKit

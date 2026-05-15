@@ -11,7 +11,6 @@ int main()
   result += test.parserDefaults();
   result += test.parserErrors();
   result += test.scheduleAndOutput();
-  result += test.idaStatsOutput();
 
   return result.summary();
 }

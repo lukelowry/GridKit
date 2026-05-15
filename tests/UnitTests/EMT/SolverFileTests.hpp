@@ -171,6 +171,30 @@ namespace GridKit
             withMutation(
                 [](Json& json)
                 {
+                  json["output"]["ida_stats"] = Json{{"file", "old.json"}};
+                }),
+            "unknown key 'ida_stats'");
+
+        success *= solverErrorContains(
+            withMutation(
+                [](Json& json)
+                {
+                  json["output"]["ida-stats"] = Json{{"file", "old.json"}};
+                }),
+            "unknown key 'ida-stats'");
+
+        success *= solverErrorContains(
+            withMutation(
+                [](Json& json)
+                {
+                  json["output"]["ida_diagnostics"] = Json{{"file", "old.json"}};
+                }),
+            "unknown key 'ida_diagnostics'");
+
+        success *= solverErrorContains(
+            withMutation(
+                [](Json& json)
+                {
                   json["output"]["ida"]["log"]["level"] = "trace";
                 }),
             "output.ida.log.level");
@@ -255,81 +279,6 @@ namespace GridKit
             "multiple monitor sinks");
 
         std::filesystem::remove_all("EMTSolverFileScheduleTest");
-        return success.report(__func__);
-      }
-
-      TestOutcome idaStatsOutput()
-      {
-        TestStatus success = true;
-
-        struct Stats
-        {
-          long int    num_steps_{7};
-          std::string sundials_version_{"7.mock"};
-          int         sundials_logging_level_{4};
-          long int    num_residual_evals_{8};
-          long int    num_linear_solver_setups_{9};
-          long int    num_error_test_fails_{1};
-          long int    num_backtrack_operations_{4};
-          long int    num_nonlinear_iters_{10};
-          long int    num_nonlinear_convergence_fails_{2};
-          long int    num_nonlinear_step_fails_{5};
-          long int    num_jacobian_evals_{11};
-          long int    num_jacobian_eval_steps_{6};
-          long int    num_linear_iters_{12};
-          long int    num_linear_convergence_fails_{3};
-          long int    num_linear_residual_evals_{13};
-          long int    num_preconditioner_evals_{14};
-          long int    num_preconditioner_solves_{15};
-          long int    num_jtimes_setup_evals_{16};
-          long int    num_jtimes_evals_{17};
-          long int    last_linear_flag_{0};
-          std::string last_linear_flag_name_{"SUN_SUCCESS"};
-          int         last_order_{2};
-          int         current_order_{3};
-          double      actual_initial_step_{1.0e-6};
-          double      last_step_{2.0e-6};
-          double      current_step_{3.0e-6};
-          double      current_time_{0.06};
-          double      current_cj_{4.0};
-          double      jacobian_time_{0.05};
-          double      jacobian_cj_{5.0};
-        };
-
-        const auto dir = std::filesystem::path("EMTSolverFileStatsTest");
-        std::filesystem::remove_all(dir);
-        std::filesystem::create_directory(dir);
-
-        Stats segment_stats;
-        segment_stats.num_steps_ = 4;
-        std::vector<EMT::IO::IdaStatsSegment<Stats>> segments{
-            {0.0, 0.01, 100, segment_stats}};
-
-        EMT::IO::writeIdaStats(Stats{}, segments, {dir / "stats.json", std::nullopt});
-        std::ifstream json_in(dir / "stats.json");
-        Json          parsed;
-        json_in >> parsed;
-        success *= (parsed["sundials"]["version"].get<std::string>() == "7.mock");
-        success *= (parsed["segment_count"].get<int>() == 1);
-        success *= (parsed["integrator"]["steps"].get<int>() == 7);
-        success *= (parsed["integrator"]["residual_evals"].get<int>() == 8);
-        success *= (parsed["nonlinear_solver"]["convergence_failures"].get<int>() == 2);
-        success *= (parsed["linear_solver"]["jacobian_evals"].get<int>() == 11);
-        success *= (parsed["linear_solver"]["last_jacobian_eval_step"].get<int>() == 6);
-        success *= (parsed["linear_solver"]["last_flag_name"].get<std::string>() == "SUN_SUCCESS");
-        success *= isEqual(parsed["final_state"]["current_time"].get<double>(), 0.06);
-        success *= (parsed["segments"].size() == 1u);
-        if (parsed["segments"].size() == 1u)
-        {
-          success *= isEqual(parsed["segments"][0]["start_time"].get<double>(), 0.0);
-          success *= isEqual(parsed["segments"][0]["end_time"].get<double>(), 0.01);
-          success *= (parsed["segments"][0]["output_steps"].get<int>() == 100);
-          success *= (parsed["segments"][0]["integrator"]["steps"].get<int>() == 4);
-          success *= !parsed["segments"][0].contains("sundials");
-          success *= !parsed["segments"][0].contains("segment_count");
-        }
-
-        std::filesystem::remove_all(dir);
         return success.report(__func__);
       }
 

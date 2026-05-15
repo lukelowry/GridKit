@@ -52,6 +52,10 @@ namespace GridKit
       std::vector<SystemEvent> events;
       /// path to output file
       fs::path                 output_file;
+      /// path to IDA statistics JSON output file
+      fs::path                 ida_output_file;
+      /// path to SUNDIALS IDA warning/error log file
+      fs::path                 ida_log_file;
       /// path to reference file for validation
       fs::path                 reference_file;
       /// Error tolerance (between output file and reference file)
@@ -93,6 +97,16 @@ namespace GridKit
       if (j.contains("output_file"))
       {
         j.at("output_file").get_to(c.output_file);
+      }
+
+      if (j.contains("ida_output_file"))
+      {
+        j.at("ida_output_file").get_to(c.ida_output_file);
+      }
+
+      if (j.contains("ida_log_file"))
+      {
+        j.at("ida_log_file").get_to(c.ida_log_file);
       }
 
       if (j.contains("reference_file"))
@@ -139,6 +153,14 @@ namespace GridKit
         {
           data.reference_file = loc / data.reference_file;
         }
+      }
+      if (!data.ida_output_file.empty() && !data.ida_output_file.is_absolute())
+      {
+        data.ida_output_file = loc / data.ida_output_file;
+      }
+      if (!data.ida_log_file.empty() && !data.ida_log_file.is_absolute())
+      {
+        data.ida_log_file = loc / data.ida_log_file;
       }
 
       auto csv        = ::GridKit::Model::VariableMonitorFormat::CSV;

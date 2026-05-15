@@ -6,12 +6,12 @@
 #include <iostream>
 #include <optional>
 #include <utility>
-#include <vector>
 
 #include <GridKit/Model/EMT/Case.hpp>
 #include <GridKit/Model/EMT/IO/SolverFile.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
+#include <GridKit/Solver/Dynamic/IdaDiagnostics.hpp>
 #include <GridKit/Testing/CSV.hpp>
 
 namespace
@@ -23,11 +23,9 @@ namespace
 
   struct SolveResult
   {
-    int                                 status{0};
-    AnalysisManager::Sundials::IdaStats ida_summary;
-    std::vector<GridKit::EMT::IO::IdaStatsSegment<AnalysisManager::Sundials::IdaStats>>
-                                         ida_segments;
-    std::optional<std::filesystem::path> monitor_file;
+    int                                       status{0};
+    AnalysisManager::Sundials::IdaStatsReport ida_report;
+    std::optional<std::filesystem::path>      monitor_file;
   };
 
   int outputSteps(Real start_time, Real end_time, Real dt)
@@ -41,31 +39,26 @@ namespace
     return static_cast<int>(std::max<long long>(1, raw));
   }
 
-  std::optional<AnalysisManager::Sundials::IdaLogOptions> idaLogOptions(
+  std::optional<AnalysisManager::Sundials::IdaDiagnosticsOutput> idaDiagnosticsOutput(
       const GridKit::EMT::IO::Output& output)
   {
-    if (!output.ida.has_value() || !output.ida->log.has_value())
+    if (!output.ida.has_value())
     {
       return std::nullopt;
     }
 
-    AnalysisManager::Sundials::IdaLogOptions options;
-    options.file  = output.ida->log->file;
-    options.level = output.ida->log->level == "error"
-                        ? AnalysisManager::Sundials::IdaLogLevel::Error
-                        : AnalysisManager::Sundials::IdaLogLevel::Warning;
-    return options;
-  }
-
-  void recordIdaStatsSegment(SolveResult& result,
-                             const Ida&   ida,
-                             Real         start_time,
-                             Real         end_time,
-                             int          output_steps)
-  {
-    auto stats          = ida.getStats();
-    result.ida_summary += stats;
-    result.ida_segments.push_back({start_time, end_time, output_steps, std::move(stats)});
+    AnalysisManager::Sundials::IdaDiagnosticsOutput output_options;
+    output_options.file = output.ida->file;
+    if (output.ida->log.has_value())
+    {
+      AnalysisManager::Sundials::IdaLogOptions log_options;
+      log_options.file   = output.ida->log->file;
+      log_options.level  = output.ida->log->level == "error"
+                               ? AnalysisManager::Sundials::IdaLogLevel::Error
+                               : AnalysisManager::Sundials::IdaLogLevel::Warning;
+      output_options.log = std::move(log_options);
+    }
+    return output_options;
   }
 
   SolveResult solveCase(Data                            data,
@@ -82,7 +75,9 @@ namespace
                                            static_cast<Idx>(solve.max_steps));
     system.allocate();
 
-    Ida ida(&system, idaLogOptions(output));
+    const auto                                  diagnostics = idaDiagnosticsOutput(output);
+    Ida                                         ida(&system, diagnostics.has_value() ? diagnostics->log : std::nullopt);
+    AnalysisManager::Sundials::IdaStatsRecorder recorder(diagnostics.has_value());
     ida.configureSimulation();
     ida.initializeSimulation(solve.t0, false);
     system.updateTime(solve.t0, 0.0);
@@ -100,8 +95,9 @@ namespace
       const int segment_steps = outputSteps(current_time, *event_time, solve.dt);
       if (segment_steps > 0)
       {
+        recorder.beginSegment(ida);
         result.status = ida.runSimulation(*event_time, segment_steps);
-        recordIdaStatsSegment(result, ida, current_time, *event_time, segment_steps);
+        recorder.endSegment(ida, current_time, *event_time, segment_steps);
       }
       if (result.status != 0)
       {
@@ -120,12 +116,14 @@ namespace
       const int segment_steps = outputSteps(current_time, solve.tmax, solve.dt);
       if (segment_steps > 0)
       {
+        recorder.beginSegment(ida);
         result.status = ida.runSimulation(solve.tmax, segment_steps);
-        recordIdaStatsSegment(result, ida, current_time, solve.tmax, segment_steps);
+        recorder.endSegment(ida, current_time, solve.tmax, segment_steps);
       }
     }
 
     system.stopMonitor();
+    result.ida_report = recorder.report(diagnostics.has_value() ? diagnostics->log : std::nullopt);
     return result;
   }
 
@@ -161,9 +159,9 @@ int main(int argc, const char* argv[])
 
     const auto result = solveCase(std::move(emt_case.data), file.solve, file.output);
 
-    if (file.output.ida.has_value())
+    if (const auto diagnostics = idaDiagnosticsOutput(file.output))
     {
-      GridKit::EMT::IO::writeIdaStats(result.ida_summary, result.ida_segments, *file.output.ida);
+      AnalysisManager::Sundials::writeIdaStatsJson(result.ida_report, *diagnostics);
     }
 
     bool validation_passed = true;

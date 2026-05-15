@@ -3,6 +3,7 @@ target_link_libraries(EMTSim
   PUBLIC
     GridKit::emt_io
     GridKit::solvers_dyn
+    GridKit::solvers_dyn_io
     GridKit::testing)
 
 install(TARGETS EMTSim EXPORT gridkit-targets RUNTIME)

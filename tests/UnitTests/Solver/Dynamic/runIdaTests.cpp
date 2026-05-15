@@ -9,6 +9,8 @@ int main()
   GridKit::Testing::IdaTests<double, size_t> test;
 
   result += test.test();
+  result += test.diagnosticsRecorder();
+  result += test.diagnosticsJsonOutput();
 
   return result.summary();
 }
