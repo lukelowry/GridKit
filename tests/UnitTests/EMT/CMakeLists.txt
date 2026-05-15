@@ -18,6 +18,16 @@ add_test(NAME EMTComponentModelTest COMMAND test_emt_component_models)
 install(TARGETS test_emt_component_models
   RUNTIME DESTINATION bin)
 
+add_executable(test_emt_rational_approx runRationalApproxTests.cpp)
+target_link_libraries(test_emt_rational_approx
+  GridKit::emt
+  GridKit::testing)
+
+add_test(NAME EMTRationalApproxTest COMMAND test_emt_rational_approx)
+
+install(TARGETS test_emt_rational_approx
+  RUNTIME DESTINATION bin)
+
 add_executable(test_emt_case_foundation runCaseFoundationTests.cpp)
 target_link_libraries(test_emt_case_foundation
   GridKit::emt_io

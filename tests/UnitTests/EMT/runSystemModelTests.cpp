@@ -13,6 +13,7 @@ int main()
   result += test.ports();
   result += test.jacobian();
   result += test.zeroDerivativeGeneralPattern();
+  result += test.dynamicComponent();
 
   return result.summary();
 }

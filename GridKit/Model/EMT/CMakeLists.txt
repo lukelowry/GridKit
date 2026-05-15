@@ -46,6 +46,18 @@ install(
     include/GridKit/Model/EMT)
 install(
   FILES
+    Math/README.md
+    Math/PhaseMath.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/Math)
+install(
+  FILES
+    Math/RationalApprox/RationalApprox.hpp
+    Math/RationalApprox/RationalApproxData.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/Math/RationalApprox)
+install(
+  FILES
     Bus/Bus.hpp
   DESTINATION
     include/GridKit/Model/EMT/Bus)

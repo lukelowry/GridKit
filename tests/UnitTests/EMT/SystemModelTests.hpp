@@ -23,6 +23,7 @@ namespace GridKit
       using Sink                 = EMTMocks::MockPortSink<RealT, IdxT>;
       using MissingDifferential  = EMTMocks::MockMissingDifferential<RealT, IdxT>;
       using ZeroDerivative       = EMTMocks::MockZeroDerivativeNonlinear<RealT, IdxT>;
+      using Dynamic              = EMTMocks::MockDynamicComponent<RealT, IdxT>;
 
       TestOutcome systemModelData()
       {
@@ -355,6 +356,79 @@ namespace GridKit
         const RealT* values    = csr->getValues();
         const RealT  expected  = RealT{2.0} * (RealT{0.20} - RealT{0.15625});
         success               *= isEqual(values[0], expected, RealT{1.0e-12});
+
+        return success.report(__func__);
+      }
+
+      TestOutcome dynamicComponent()
+      {
+        TestStatus success = true;
+
+        using Data = EMT::SystemModelData<RealT, IdxT, OneTerminal, Dynamic>;
+        Data data;
+
+        const IdxT bus               = data.addBus({1.0, 0.0, 60.0});
+        const auto static_component  = data.add(OneTerminal{});
+        const auto dynamic_component = data.add(Dynamic{4});
+        data.connect(static_component.terminal(0), bus);
+
+        EMT::SystemModel<Data> system(data);
+        system.allocate();
+        system.initialize();
+        system.tagDifferentiable();
+
+        const auto& dynamic_slot  = system.layout().component(dynamic_component);
+        success                  *= (dynamic_slot.variable_count == 4);
+        success                  *= (dynamic_slot.equation_count == 4);
+        success                  *= (system.size() == 10);
+
+        for (IdxT i = 0; i < dynamic_slot.variable_count; ++i)
+        {
+          success *= system.tag()[static_cast<size_t>(dynamic_slot.variable_offset + i)];
+          success *= isEqual(system.y()[static_cast<size_t>(dynamic_slot.variable_offset + i)],
+                             static_cast<RealT>(i + 1));
+          success *= isEqual(system.yp()[static_cast<size_t>(dynamic_slot.variable_offset + i)],
+                             static_cast<RealT>(100 + i));
+        }
+
+        auto& y  = system.y();
+        auto& yp = system.yp();
+        for (IdxT i = 0; i < dynamic_slot.variable_count; ++i)
+        {
+          y[static_cast<size_t>(dynamic_slot.variable_offset + i)]  = static_cast<RealT>(i + 2);
+          yp[static_cast<size_t>(dynamic_slot.variable_offset + i)] = static_cast<RealT>(10 + i);
+        }
+
+        system.evaluateResidual();
+        const auto& f = system.getResidual();
+        for (IdxT i = 0; i < dynamic_slot.equation_count; ++i)
+        {
+          const RealT expected  = static_cast<RealT>(10 + i) + RealT{2.0} * static_cast<RealT>(i + 2);
+          success              *= isEqual(f[static_cast<size_t>(dynamic_slot.equation_offset + i)], expected);
+        }
+
+        system.updateTime(0.0, RealT{3.0});
+        system.evaluateJacobian();
+
+        auto*        csr      = system.getCsrJacobian();
+        const IdxT*  row_ptrs = csr->getRowData();
+        const IdxT*  cols     = csr->getColData();
+        const RealT* values   = csr->getValues();
+
+        const auto valueAt = [&](IdxT row, IdxT col)
+        {
+          for (IdxT k = row_ptrs[row]; k < row_ptrs[row + 1]; ++k)
+          {
+            if (cols[k] == col)
+            {
+              return values[k];
+            }
+          }
+          return RealT{0.0};
+        };
+
+        success *= isEqual(valueAt(dynamic_slot.equation_offset, dynamic_slot.variable_offset),
+                           RealT{5.0});
 
         return success.report(__func__);
       }

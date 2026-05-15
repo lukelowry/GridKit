@@ -627,8 +627,8 @@ namespace GridKit
               static_assert(ComponentTraits<ComponentT>::is_valid,
                             "EMT components with local variables must define static constexpr bool differential(size_t)");
               layout_.appendComponent(id.type,
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::variable_count),
-                                      static_cast<IdxT>(ComponentTraits<ComponentT>::equation_count),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::variableCount(component)),
+                                      static_cast<IdxT>(ComponentTraits<ComponentT>::equationCount(component)),
                                       static_cast<IdxT>(ComponentTraits<ComponentT>::terminal_count),
                                       static_cast<IdxT>(ComponentTraits<ComponentT>::input_count));
             });
@@ -848,7 +848,7 @@ namespace GridKit
               }
 
               const SignalOutputSpec spec = ComponentTraits<ComponentT>::output(output.index);
-              if (spec.variable >= ComponentTraits<ComponentT>::variable_count)
+              if (spec.variable >= ComponentTraits<ComponentT>::variableCount(component))
               {
                 throw std::invalid_argument("EMT output variable is out of range");
               }
@@ -873,7 +873,7 @@ namespace GridKit
               for (IdxT local = 0; local < slot.variable_count; ++local)
               {
                 differential_variables_[static_cast<size_t>(slot.variable_offset + local)] =
-                    ComponentTraits<ComponentT>::differential(static_cast<size_t>(local));
+                    ComponentTraits<ComponentT>::differential(component, static_cast<size_t>(local));
               }
             });
       }

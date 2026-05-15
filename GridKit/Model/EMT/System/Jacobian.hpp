@@ -158,12 +158,11 @@ namespace GridKit
         static void eval(const ModelT*  model,
                          const ScalarT* local,
                          ScalarT*       residual,
-                         ScalarT        time)
+                         ScalarT        time,
+                         IdxT           variables,
+                         IdxT           equations,
+                         IdxT           terminals)
         {
-          constexpr IdxT variables = static_cast<IdxT>(ComponentTraits<ModelT>::variable_count);
-          constexpr IdxT equations = static_cast<IdxT>(ComponentTraits<ModelT>::equation_count);
-          constexpr IdxT terminals = static_cast<IdxT>(ComponentTraits<ModelT>::terminal_count);
-
           const IdxT     terminal_size = Layout<IdxT>::phases * terminals;
           const ScalarT* y             = local;
           const ScalarT* yp            = y + variables;
@@ -565,7 +564,13 @@ namespace GridKit
               residual_.data(),
               residual_dot_.data(),
               enzyme_const,
-              time);
+              time,
+              enzyme_const,
+              component_.variable_count,
+              enzyme_const,
+              component_.equation_count,
+              enzyme_const,
+              component_.terminal_count);
 
           seed_[source_index] = ScalarT{0.0};
 

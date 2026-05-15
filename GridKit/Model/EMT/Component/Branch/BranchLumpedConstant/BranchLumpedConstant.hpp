@@ -8,7 +8,7 @@
 #include <string_view>
 #include <tuple>
 
-#include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/Math/PhaseMath.hpp>
 #include <GridKit/Model/EMT/System/ComponentDescriptor.hpp>
 
 namespace GridKit

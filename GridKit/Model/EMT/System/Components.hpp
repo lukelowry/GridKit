@@ -163,6 +163,38 @@ namespace GridKit
       inline constexpr bool AlwaysFalse = false;
 
       template <class T>
+      consteval bool hasRuntimeVariableCount()
+      {
+        return requires(const T& component) {
+          { component.variableCount() } -> std::convertible_to<size_t>;
+        };
+      }
+
+      template <class T>
+      consteval bool hasRuntimeEquationCount()
+      {
+        return requires(const T& component) {
+          { component.equationCount() } -> std::convertible_to<size_t>;
+        };
+      }
+
+      template <class T>
+      consteval bool hasStaticDifferential()
+      {
+        return requires(size_t local) {
+          { T::differential(local) } -> std::convertible_to<bool>;
+        };
+      }
+
+      template <class T>
+      consteval bool hasRuntimeDifferential()
+      {
+        return requires(const T& component, size_t local) {
+          { component.differential(local) } -> std::convertible_to<bool>;
+        };
+      }
+
+      template <class T>
       consteval bool hasDifferential()
       {
         if constexpr (T::variable_count == 0)
@@ -171,12 +203,12 @@ namespace GridKit
         }
         else
         {
-          return requires(size_t local) {
-            { T::differential(local) } -> std::convertible_to<bool>;
-          };
+          return hasStaticDifferential<T>() || hasRuntimeDifferential<T>();
         }
       }
     } // namespace Detail
+
+    inline constexpr size_t dynamic_component_count = INVALID_INDEX<size_t>;
 
     template <class T>
     struct ComponentTraits
@@ -187,8 +219,39 @@ namespace GridKit
       static constexpr size_t input_count    = T::input_count;
       static constexpr size_t output_count   = T::output_count;
 
+      static constexpr bool has_dynamic_counts =
+          variable_count == dynamic_component_count || equation_count == dynamic_component_count;
+      static constexpr bool has_runtime_counts =
+          Detail::hasRuntimeVariableCount<T>() && Detail::hasRuntimeEquationCount<T>();
       static constexpr bool has_differential = Detail::hasDifferential<T>();
-      static constexpr bool is_valid         = variable_count == 0 || has_differential;
+      static constexpr bool is_valid         = (!has_dynamic_counts || has_runtime_counts)
+                                       && (variable_count == 0 || has_differential);
+
+      static size_t variableCount(const T& component)
+      {
+        if constexpr (variable_count == dynamic_component_count)
+        {
+          return component.variableCount();
+        }
+        else
+        {
+          (void) component;
+          return variable_count;
+        }
+      }
+
+      static size_t equationCount(const T& component)
+      {
+        if constexpr (equation_count == dynamic_component_count)
+        {
+          return component.equationCount();
+        }
+        else
+        {
+          (void) component;
+          return equation_count;
+        }
+      }
 
       static constexpr bool differential(size_t local)
       {
@@ -197,7 +260,7 @@ namespace GridKit
           (void) local;
           return false;
         }
-        else if constexpr (has_differential)
+        else if constexpr (Detail::hasStaticDifferential<T>())
         {
           return T::differential(local);
         }
@@ -205,6 +268,30 @@ namespace GridKit
         {
           static_assert(Detail::AlwaysFalse<T>,
                         "EMT components with local variables must define static constexpr bool differential(size_t)");
+        }
+      }
+
+      static bool differential(const T& component, size_t local)
+      {
+        if constexpr (variable_count == 0)
+        {
+          (void) component;
+          (void) local;
+          return false;
+        }
+        else if constexpr (Detail::hasRuntimeDifferential<T>())
+        {
+          return component.differential(local);
+        }
+        else if constexpr (has_differential)
+        {
+          (void) component;
+          return T::differential(local);
+        }
+        else
+        {
+          static_assert(Detail::AlwaysFalse<T>,
+                        "EMT components with local variables must define differential(size_t)");
         }
       }
 

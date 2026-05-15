@@ -12,7 +12,7 @@
 
 #include <nlohmann/json.hpp>
 
-#include <GridKit/Model/EMT/PhaseMath.hpp>
+#include <GridKit/Model/EMT/Math/PhaseMath.hpp>
 #include <GridKit/Model/Events.hpp>
 
 namespace GridKit

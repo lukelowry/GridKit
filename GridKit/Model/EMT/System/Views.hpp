@@ -55,6 +55,16 @@ namespace GridKit
         return yp_[component_.variable_offset + local];
       }
 
+      std::span<ScalarT> y(IdxT first, IdxT count)
+      {
+        return {y_ + component_.variable_offset + first, static_cast<size_t>(count)};
+      }
+
+      std::span<ScalarT> yp(IdxT first, IdxT count)
+      {
+        return {yp_ + component_.variable_offset + first, static_cast<size_t>(count)};
+      }
+
       std::array<std::complex<ScalarT>, 3> voltagePhasor(IdxT terminal) const
       {
         return buses_[terminal_buses_[terminal]].template initialVoltagePhasor<ScalarT>();
@@ -122,6 +132,16 @@ namespace GridKit
       ScalarT derivative(IdxT local) const
       {
         return yp_[component_.variable_offset + local];
+      }
+
+      std::span<const ScalarT> y(IdxT first, IdxT count) const
+      {
+        return {y_ + component_.variable_offset + first, static_cast<size_t>(count)};
+      }
+
+      std::span<const ScalarT> yp(IdxT first, IdxT count) const
+      {
+        return {yp_ + component_.variable_offset + first, static_cast<size_t>(count)};
       }
 
       template <size_t N>
@@ -214,6 +234,11 @@ namespace GridKit
         f_[component_.equation_offset + local] += static_cast<ScalarT>(value);
       }
 
+      std::span<ScalarT> f(IdxT first, IdxT count)
+      {
+        return {f_ + component_.equation_offset + first, static_cast<size_t>(count)};
+      }
+
       template <class ValueT, size_t N>
       void set(IdxT first, const std::array<ValueT, N>& values)
       {
@@ -285,6 +310,16 @@ namespace GridKit
         ScalarT derivative(IdxT local) const
         {
           return yp_[local];
+        }
+
+        std::span<const ScalarT> y(IdxT first, IdxT count) const
+        {
+          return {y_ + first, static_cast<size_t>(count)};
+        }
+
+        std::span<const ScalarT> yp(IdxT first, IdxT count) const
+        {
+          return {yp_ + first, static_cast<size_t>(count)};
         }
 
         template <size_t N>
@@ -360,6 +395,11 @@ namespace GridKit
         void add(IdxT local, ValueT value)
         {
           residual_[local] += static_cast<ScalarT>(value);
+        }
+
+        std::span<ScalarT> f(IdxT first, IdxT count)
+        {
+          return {residual_ + first, static_cast<size_t>(count)};
         }
 
         template <class ValueT, size_t N>
