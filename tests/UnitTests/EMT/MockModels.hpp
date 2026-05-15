@@ -149,6 +149,28 @@ namespace GridKit
           r.set(0, x.variable(0));
         }
       };
+
+      template <class RealT, typename IdxT>
+      struct MockZeroDerivativeNonlinear
+      {
+        static constexpr size_t variable_count = 1;
+        static constexpr size_t equation_count = 1;
+        static constexpr size_t terminal_count = 0;
+        static constexpr size_t input_count    = 0;
+        static constexpr size_t output_count   = 0;
+
+        static constexpr bool differential(size_t local)
+        {
+          return local < variable_count;
+        }
+
+        template <class Variables, class Residual>
+        void residual(const Variables& x, Residual& r) const
+        {
+          const auto shifted = x.variable(0) - RealT{0.15625};
+          r.set(0, shifted * shifted);
+        }
+      };
     } // namespace EMTMocks
   } // namespace Testing
 } // namespace GridKit

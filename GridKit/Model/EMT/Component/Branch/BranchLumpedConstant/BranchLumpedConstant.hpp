@@ -200,5 +200,13 @@ namespace GridKit
     {
       static constexpr auto entries = phaseCurrentMonitors<BranchLumpedConstantMonitorVariable>();
     };
+
+    template <class RealT, class IdxT>
+    struct ComponentJacobianTraits<BranchLumpedConstant<RealT, IdxT>>
+    {
+      static constexpr ComponentJacobianForm              form = ComponentJacobianForm::Affine;
+      static constexpr ComponentJacobianCoefficientUpdate coefficient_update =
+          ComponentJacobianCoefficientUpdate::Static;
+    };
   } // namespace EMT
 } // namespace GridKit

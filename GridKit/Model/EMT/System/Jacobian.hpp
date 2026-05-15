@@ -152,93 +152,13 @@ namespace GridKit
 
     namespace Detail
     {
-      template <class ScalarT, typename IdxT>
-      class SingleEquationView
-      {
-      public:
-        SingleEquationView(IdxT target, IdxT equation_count)
-          : target_{target},
-            equation_count_{equation_count}
-        {
-        }
-
-        template <class ValueT>
-        void set(IdxT local, ValueT value)
-        {
-          if (local == target_)
-          {
-            value_ = static_cast<ScalarT>(value);
-          }
-        }
-
-        template <class ValueT>
-        void add(IdxT local, ValueT value)
-        {
-          if (local == target_)
-          {
-            value_ += static_cast<ScalarT>(value);
-          }
-        }
-
-        template <class ValueT, size_t N>
-        void set(IdxT first, const std::array<ValueT, N>& values)
-        {
-          for (IdxT i = 0; i < static_cast<IdxT>(N); ++i)
-          {
-            set(first + i, values[static_cast<size_t>(i)]);
-          }
-        }
-
-        template <class ValueT>
-        void injectCurrent(IdxT terminal, const std::array<ValueT, 3>& current)
-        {
-          const IdxT first = equation_count_ + Layout<IdxT>::phases * terminal;
-          for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase)
-          {
-            if (first + phase == target_)
-            {
-              value_ += static_cast<ScalarT>(current[static_cast<size_t>(phase)]);
-            }
-          }
-        }
-
-        template <class ValueT>
-        void injectCurrent(IdxT terminal, std::initializer_list<ValueT> current)
-        {
-          if (current.size() != 3)
-          {
-            return;
-          }
-
-          const IdxT first = equation_count_ + Layout<IdxT>::phases * terminal;
-          auto       value = current.begin();
-          for (IdxT phase = 0; phase < Layout<IdxT>::phases; ++phase, ++value)
-          {
-            if (first + phase == target_)
-            {
-              value_ += static_cast<ScalarT>(*value);
-            }
-          }
-        }
-
-        ScalarT value() const
-        {
-          return value_;
-        }
-
-      private:
-        IdxT    target_{0};
-        IdxT    equation_count_{0};
-        ScalarT value_{0.0};
-      };
-
       template <class ModelT, class ScalarT, typename IdxT>
-      struct ScalarResidualKernel
+      struct VectorResidualKernel
       {
-        static ScalarT eval(const ModelT*  model,
-                            const ScalarT* local,
-                            IdxT           target,
-                            ScalarT        time)
+        static void eval(const ModelT*  model,
+                         const ScalarT* local,
+                         ScalarT*       residual,
+                         ScalarT        time)
         {
           constexpr IdxT variables = static_cast<IdxT>(ComponentTraits<ModelT>::variable_count);
           constexpr IdxT equations = static_cast<IdxT>(ComponentTraits<ModelT>::equation_count);
@@ -251,10 +171,14 @@ namespace GridKit
           const ScalarT* terminal_vp   = terminal_v + terminal_size;
           const ScalarT* inputs        = terminal_vp + terminal_size;
 
-          LocalStateView<ScalarT, IdxT>     state(y, yp, terminal_v, terminal_vp, inputs, time);
-          SingleEquationView<ScalarT, IdxT> equations_view(target, equations);
+          for (IdxT row = 0; row < equations + terminal_size; ++row)
+          {
+            residual[static_cast<size_t>(row)] = ScalarT{0.0};
+          }
+
+          LocalStateView<ScalarT, IdxT>    state(y, yp, terminal_v, terminal_vp, inputs, time);
+          LocalEquationView<ScalarT, IdxT> equations_view(residual, equations);
           model->residual(state, equations_view);
-          return equations_view.value();
         }
       };
     } // namespace Detail
@@ -296,8 +220,6 @@ namespace GridKit
         }
 
         sources_.clear();
-        column_indices_.clear();
-        column_scales_.assign(static_cast<size_t>(active_count_), ScalarT{1.0});
 
         for (IdxT local = 0; local < component_.variable_count; ++local)
         {
@@ -330,7 +252,11 @@ namespace GridKit
 
         local_.assign(static_cast<size_t>(active_count_), ScalarT{0.0});
         seed_.assign(static_cast<size_t>(active_count_), ScalarT{0.0});
+        residual_.assign(static_cast<size_t>(residual_count_), ScalarT{0.0});
+        residual_dot_.assign(static_cast<size_t>(residual_count_), ScalarT{0.0});
         nonzeros_.clear();
+        coefficients_valid_ = false;
+        coefficient_update_ = ComponentJacobianCoefficientUpdate::PerEvaluation;
       }
 
       template <class ModelT>
@@ -357,7 +283,16 @@ namespace GridKit
         }
 
         updateLocalState(y, yp, ScalarT{1.0});
-        auto mode_nonzeros = discoverLocalPattern(model, time);
+        constexpr bool keep_zero_dependencies =
+            ComponentJacobianTraits<ModelT>::form == ComponentJacobianForm::General
+            || (ComponentJacobianTraits<ModelT>::form == ComponentJacobianForm::Affine
+                && ComponentJacobianTraits<ModelT>::coefficient_update
+                       != ComponentJacobianCoefficientUpdate::Static);
+        if constexpr (ComponentJacobianTraits<ModelT>::form == ComponentJacobianForm::Affine)
+        {
+          coefficient_update_ = ComponentJacobianTraits<ModelT>::coefficient_update;
+        }
+        auto mode_nonzeros = discoverLocalPattern(model, time, keep_zero_dependencies);
         nonzeros_.insert(nonzeros_.end(), mode_nonzeros.begin(), mode_nonzeros.end());
         std::sort(nonzeros_.begin(), nonzeros_.end());
         nonzeros_.erase(std::unique(nonzeros_.begin(), nonzeros_.end()), nonzeros_.end());
@@ -368,20 +303,36 @@ namespace GridKit
         for (const auto& nonzero : nonzeros_)
         {
           entries.emplace_back(row_indices_[static_cast<size_t>(nonzero.row)],
-                               column_indices_[static_cast<size_t>(nonzero.source)]);
+                               sources_[static_cast<size_t>(nonzero.source)].global);
         }
       }
 
       void bindSlots(const JacobianMatrix<RealT, IdxT>& matrix)
       {
+        for (auto& source : sources_)
+        {
+          source.entries.clear();
+        }
+
         for (auto& nonzero : nonzeros_)
         {
           nonzero.slot = matrix.slot(row_indices_[static_cast<size_t>(nonzero.row)],
-                                     column_indices_[static_cast<size_t>(nonzero.source)]);
+                                     sources_[static_cast<size_t>(nonzero.source)].global);
           if (nonzero.slot == INVALID_INDEX<IdxT>)
           {
             throw std::logic_error("EMT Jacobian slot map is missing a structural entry");
           }
+
+          sources_[static_cast<size_t>(nonzero.source)].entries.push_back(
+              {nonzero.row, nonzero.slot, RealT{0.0}});
+        }
+      }
+
+      void invalidateCachedCoefficients()
+      {
+        if (coefficient_update_ != ComponentJacobianCoefficientUpdate::Static)
+        {
+          coefficients_valid_ = false;
         }
       }
 
@@ -399,16 +350,13 @@ namespace GridKit
         }
 
         updateLocalState(y, yp, static_cast<ScalarT>(alpha));
-        for (const auto& nonzero : nonzeros_)
+        if constexpr (ComponentJacobianTraits<ModelT>::form == ComponentJacobianForm::Affine)
         {
-          const ScalarT scale = column_scales_[static_cast<size_t>(nonzero.source)];
-          const ScalarT value = scale * derivative(model, nonzero.row, nonzero.source, time);
-          if (value == ScalarT{0.0})
-          {
-            continue;
-          }
-
-          matrix.addToSlot(nonzero.slot, static_cast<RealT>(value));
+          evaluateAffine(model, matrix, time, alpha);
+        }
+        else
+        {
+          evaluateGeneral(model, matrix, time, alpha);
         }
       }
 
@@ -417,6 +365,16 @@ namespace GridKit
       {
         bool derivative{false};
         IdxT global{INVALID_INDEX<IdxT>};
+        IdxT active{INVALID_INDEX<IdxT>};
+
+        struct Entry
+        {
+          IdxT  local_row{0};
+          IdxT  slot{INVALID_INDEX<IdxT>};
+          RealT coefficient{0.0};
+        };
+
+        std::vector<Entry> entries;
       };
 
       struct Nonzero
@@ -438,25 +396,27 @@ namespace GridKit
 
       void addSource(bool derivative, IdxT global)
       {
-        sources_.push_back({derivative, global});
-        column_indices_.push_back(global);
+        const IdxT active = static_cast<IdxT>(sources_.size());
+        sources_.push_back({derivative, global, active, {}});
       }
 
       void updateLocalState(const std::vector<ScalarT>& y,
                             const std::vector<ScalarT>& yp,
                             ScalarT                     alpha)
       {
+        (void) alpha;
         for (size_t i = 0; i < sources_.size(); ++i)
         {
           const auto& source = sources_[i];
           local_[i]          = source.derivative ? yp[static_cast<size_t>(source.global)]
                                                  : y[static_cast<size_t>(source.global)];
-          column_scales_[i]  = source.derivative ? alpha : ScalarT{1.0};
         }
       }
 
       template <class ModelT>
-      std::vector<Nonzero> discoverLocalPattern(const ModelT& model, ScalarT time)
+      std::vector<Nonzero> discoverLocalPattern(const ModelT& model,
+                                                ScalarT       time,
+                                                bool          keep_zero_dependencies)
       {
         using TrackingScalar = GridKit::DependencyTracking::Variable;
 
@@ -493,7 +453,7 @@ namespace GridKit
           const auto& dependencies = residual[static_cast<size_t>(row)].getDependencies();
           for (const auto& [source, derivative] : dependencies)
           {
-            if (derivative != 0.0)
+            if (keep_zero_dependencies || derivative != 0.0)
             {
               nonzeros.push_back({row, static_cast<IdxT>(source), INVALID_INDEX<IdxT>});
             }
@@ -506,23 +466,120 @@ namespace GridKit
       }
 
       template <class ModelT>
-      ScalarT derivative(const ModelT& model, IdxT row, IdxT source, ScalarT time)
+      void refreshAffineCoefficients(const ModelT& model, ScalarT time)
       {
-        const auto source_index = static_cast<size_t>(source);
-        seed_[source_index]     = ScalarT{1.0};
-        const ScalarT value     = GridKit::Enzyme::Sparse::__enzyme_fwddiff<ScalarT>(
-            (void*) Detail::ScalarResidualKernel<ModelT, ScalarT, IdxT>::eval,
-            enzyme_const,
-            &model,
-            enzyme_dup,
-            local_.data(),
-            seed_.data(),
-            enzyme_const,
-            row,
-            enzyme_const,
-            time);
-        seed_[source_index] = ScalarT{0.0};
-        return value;
+        using TrackingScalar = GridKit::DependencyTracking::Variable;
+
+        std::vector<TrackingScalar> local(static_cast<size_t>(active_count_));
+        for (IdxT source = 0; source < active_count_; ++source)
+        {
+          auto& value = local[static_cast<size_t>(source)];
+          value       = static_cast<double>(local_[static_cast<size_t>(source)]);
+          value.setVariableNumber(static_cast<size_t>(source));
+        }
+
+        std::vector<TrackingScalar> residual(static_cast<size_t>(residual_count_));
+        TrackingScalar              tracking_time(static_cast<double>(time));
+
+        TrackingScalar* y           = local.data();
+        TrackingScalar* yp          = y + component_.variable_count;
+        TrackingScalar* terminal_v  = yp + component_.variable_count;
+        TrackingScalar* terminal_vp = terminal_v + terminal_size_;
+        TrackingScalar* inputs      = terminal_vp + terminal_size_;
+
+        Detail::LocalStateView<TrackingScalar, IdxT>    state(y,
+                                                           yp,
+                                                           terminal_v,
+                                                           terminal_vp,
+                                                           inputs,
+                                                           tracking_time);
+        Detail::LocalEquationView<TrackingScalar, IdxT> equations(residual.data(),
+                                                                  component_.equation_count);
+        model.residual(state, equations);
+
+        for (auto& source : sources_)
+        {
+          for (auto& entry : source.entries)
+          {
+            const auto& dependencies = residual[static_cast<size_t>(entry.local_row)].getDependencies();
+            const auto  it           = dependencies.find(static_cast<size_t>(source.active));
+            entry.coefficient        = it == dependencies.end() ? RealT{0.0}
+                                                                : static_cast<RealT>(it->second);
+          }
+        }
+        coefficients_valid_ = true;
+      }
+
+      template <class ModelT>
+      void evaluateAffine(const ModelT&                model,
+                          JacobianMatrix<RealT, IdxT>& matrix,
+                          ScalarT                      time,
+                          RealT                        alpha)
+      {
+        if (!coefficients_valid_
+            || coefficient_update_ == ComponentJacobianCoefficientUpdate::PerEvaluation)
+        {
+          refreshAffineCoefficients(model, time);
+        }
+
+        for (const auto& source : sources_)
+        {
+          const RealT scale = source.derivative ? alpha : RealT{1.0};
+          for (const auto& entry : source.entries)
+          {
+            const RealT value = scale * entry.coefficient;
+            if (value != RealT{0.0})
+            {
+              matrix.addToSlot(entry.slot, value);
+            }
+          }
+        }
+      }
+
+      template <class ModelT>
+      void evaluateGeneral(const ModelT&                model,
+                           JacobianMatrix<RealT, IdxT>& matrix,
+                           ScalarT                      time,
+                           RealT                        alpha)
+      {
+        for (const auto& source : sources_)
+        {
+          if (source.entries.empty())
+          {
+            continue;
+          }
+
+          const auto source_index = static_cast<size_t>(source.active);
+          seed_[source_index]     = ScalarT{1.0};
+          std::fill(residual_.begin(), residual_.end(), ScalarT{0.0});
+          std::fill(residual_dot_.begin(), residual_dot_.end(), ScalarT{0.0});
+
+          GridKit::Enzyme::Sparse::__enzyme_fwddiff<void>(
+              (void*) Detail::VectorResidualKernel<ModelT, ScalarT, IdxT>::eval,
+              enzyme_const,
+              &model,
+              enzyme_dup,
+              local_.data(),
+              seed_.data(),
+              enzyme_dup,
+              residual_.data(),
+              residual_dot_.data(),
+              enzyme_const,
+              time);
+
+          seed_[source_index] = ScalarT{0.0};
+
+          const RealT scale = source.derivative ? alpha : RealT{1.0};
+          for (const auto& entry : source.entries)
+          {
+            const RealT value =
+                scale * static_cast<RealT>(residual_dot_[static_cast<size_t>(entry.local_row)]);
+            if (value != RealT{0.0})
+            {
+              matrix.addToSlot(entry.slot, value);
+            }
+          }
+        }
       }
 
       ComponentLayout<IdxT> component_;
@@ -533,13 +590,16 @@ namespace GridKit
       std::vector<IdxT>    terminal_buses_;
       std::vector<IdxT>    input_variables_;
       std::vector<IdxT>    row_indices_;
-      std::vector<IdxT>    column_indices_;
       std::vector<Source>  sources_;
       std::vector<Nonzero> nonzeros_;
 
-      std::vector<ScalarT> local_;
-      std::vector<ScalarT> seed_;
-      std::vector<ScalarT> column_scales_;
+      std::vector<ScalarT>               local_;
+      std::vector<ScalarT>               seed_;
+      std::vector<ScalarT>               residual_;
+      std::vector<ScalarT>               residual_dot_;
+      bool                               coefficients_valid_{false};
+      ComponentJacobianCoefficientUpdate coefficient_update_{
+          ComponentJacobianCoefficientUpdate::PerEvaluation};
     };
 
     template <class ScalarT, typename IdxT>
@@ -665,6 +725,14 @@ namespace GridKit
             });
         buses_.evaluate(data, matrix_);
         matrix_.markUpdated();
+      }
+
+      void invalidateCachedCoefficients()
+      {
+        for (auto& component : components_)
+        {
+          component.invalidateCachedCoefficients();
+        }
       }
 
       Matrix& matrix()

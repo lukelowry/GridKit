@@ -7,6 +7,7 @@ int main()
 
   result += test.busInitialization();
   result += test.eventPhaseMask();
+  result += test.jacobianTraits();
   result += test.loadRLInitialization();
   result += test.voltageSourceResidual();
   result += test.branchValidation();

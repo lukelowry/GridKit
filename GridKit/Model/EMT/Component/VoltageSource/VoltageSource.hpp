@@ -167,5 +167,13 @@ namespace GridKit
         return resolveMonitorVariable<Variable>(name);
       }
     };
+
+    template <class RealT, class IdxT>
+    struct ComponentJacobianTraits<VoltageSource<RealT, IdxT>>
+    {
+      static constexpr ComponentJacobianForm              form = ComponentJacobianForm::Affine;
+      static constexpr ComponentJacobianCoefficientUpdate coefficient_update =
+          ComponentJacobianCoefficientUpdate::Static;
+    };
   } // namespace EMT
 } // namespace GridKit

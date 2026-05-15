@@ -66,6 +66,27 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome jacobianTraits()
+      {
+        TestStatus success = true;
+
+        success *= (EMT::ComponentJacobianTraits<LoadRL>::form == EMT::ComponentJacobianForm::Affine);
+        success *= (EMT::ComponentJacobianTraits<VoltageSource>::form == EMT::ComponentJacobianForm::Affine);
+        success *= (EMT::ComponentJacobianTraits<Branch>::form == EMT::ComponentJacobianForm::Affine);
+        success *= (EMT::ComponentJacobianTraits<Breaker>::form == EMT::ComponentJacobianForm::Affine);
+
+        success *= (EMT::ComponentJacobianTraits<LoadRL>::coefficient_update
+                    == EMT::ComponentJacobianCoefficientUpdate::Static);
+        success *= (EMT::ComponentJacobianTraits<VoltageSource>::coefficient_update
+                    == EMT::ComponentJacobianCoefficientUpdate::Static);
+        success *= (EMT::ComponentJacobianTraits<Branch>::coefficient_update
+                    == EMT::ComponentJacobianCoefficientUpdate::Static);
+        success *= (EMT::ComponentJacobianTraits<Breaker>::coefficient_update
+                    == EMT::ComponentJacobianCoefficientUpdate::OnStructuralChange);
+
+        return success.report(__func__);
+      }
+
       TestOutcome busInitialization()
       {
         TestStatus success = true;

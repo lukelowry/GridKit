@@ -422,6 +422,7 @@ namespace GridKit
           applyEvent(event_schedule_[event_cursor_]);
           ++event_cursor_;
         }
+        jacobian_.invalidateCachedCoefficients();
         return true;
       }
 

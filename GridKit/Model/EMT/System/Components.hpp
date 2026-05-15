@@ -222,6 +222,27 @@ namespace GridKit
       }
     };
 
+    enum class ComponentJacobianForm
+    {
+      General,
+      Affine
+    };
+
+    enum class ComponentJacobianCoefficientUpdate
+    {
+      PerEvaluation,
+      OnStructuralChange,
+      Static
+    };
+
+    template <class T>
+    struct ComponentJacobianTraits
+    {
+      static constexpr ComponentJacobianForm              form = ComponentJacobianForm::General;
+      static constexpr ComponentJacobianCoefficientUpdate coefficient_update =
+          ComponentJacobianCoefficientUpdate::PerEvaluation;
+    };
+
     template <class... Ts>
     class ComponentStore
     {

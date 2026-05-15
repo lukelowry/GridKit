@@ -12,6 +12,7 @@ int main()
   result += test.terminalWiring();
   result += test.ports();
   result += test.jacobian();
+  result += test.zeroDerivativeGeneralPattern();
 
   return result.summary();
 }

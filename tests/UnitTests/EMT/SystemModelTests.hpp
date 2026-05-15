@@ -22,6 +22,7 @@ namespace GridKit
       using Source               = EMTMocks::MockPortSource<RealT, IdxT>;
       using Sink                 = EMTMocks::MockPortSink<RealT, IdxT>;
       using MissingDifferential  = EMTMocks::MockMissingDifferential<RealT, IdxT>;
+      using ZeroDerivative       = EMTMocks::MockZeroDerivativeNonlinear<RealT, IdxT>;
 
       TestOutcome systemModelData()
       {
@@ -329,6 +330,31 @@ namespace GridKit
         success       *= isEqual(valueAt(r0, s0), RealT{1.0});
         success       *= isEqual(valueAt(r0, system.layout().busVariable(bus, 0)), RealT{1.0});
         success       *= isEqual(valueAt(system.layout().busEquation(bus, 0), s0), RealT{1.0});
+
+        return success.report(__func__);
+      }
+
+      TestOutcome zeroDerivativeGeneralPattern()
+      {
+        TestStatus success = true;
+
+        using Data = EMT::SystemModelData<RealT, IdxT, ZeroDerivative>;
+        Data       data;
+        const auto component = data.add(ZeroDerivative{});
+
+        EMT::SystemModel<Data> system(data);
+        system.allocate();
+
+        success *= (system.nnz() == 1);
+
+        system.y()[system.layout().component(component).variable_offset] = RealT{0.20};
+        system.updateTime(0.0, RealT{0.0});
+        system.evaluateJacobian();
+
+        auto*        csr       = system.getCsrJacobian();
+        const RealT* values    = csr->getValues();
+        const RealT  expected  = RealT{2.0} * (RealT{0.20} - RealT{0.15625});
+        success               *= isEqual(values[0], expected, RealT{1.0e-12});
 
         return success.report(__func__);
       }
