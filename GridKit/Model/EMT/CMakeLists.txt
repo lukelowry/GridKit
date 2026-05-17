@@ -38,15 +38,12 @@ install(
   FILES
     Case.hpp
     ComponentLibrary.hpp
-    README.md
-    PhaseMath.hpp
     SystemModel.hpp
     SystemModelData.hpp
   DESTINATION
     include/GridKit/Model/EMT)
 install(
   FILES
-    Math/README.md
     Math/PhaseMath.hpp
   DESTINATION
     include/GridKit/Model/EMT/Math)
