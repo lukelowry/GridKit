@@ -17,6 +17,7 @@ namespace GridKit
     template <class RealT = double, typename IdxT = std::size_t>
     using CaseData = SystemModelData<RealT,
                                      IdxT,
+                                     BranchFrequencyDependent<RealT, IdxT>,
                                      BranchLumpedConstant<RealT, IdxT>,
                                      Breaker<RealT, IdxT>,
                                      LoadRL<RealT, IdxT>,

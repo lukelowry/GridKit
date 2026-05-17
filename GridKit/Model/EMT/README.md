@@ -19,7 +19,7 @@ The current EMT documentation is organized into two categories:
 - `Bus`
 - `Component`
 
-Branch models such as `BranchLumpedConstant` are documented under
+Branch models such as `BranchLumpedConstant` and `BranchFrequencyDependent` are documented under
 `Component/Branch` because they are EMT components connected to buses.
 
 ## System Model
@@ -29,6 +29,9 @@ Branch models such as `BranchLumpedConstant` are documented under
 `IO/CaseJson.hpp`, with scalar/vector/matrix readers in `IO/JsonSupport.hpp`
 and descriptor parameter binding in `IO/ParamReader.hpp`.
 The EMT case input format is documented in [INPUT.md](INPUT.md).
+Dense rational approximation data is stored in sidecar `.fit.json` files
+documented in [IO/FIT_JSON.md](IO/FIT_JSON.md). Case JSON references those
+files from component parameters and keeps the case topology readable.
 
 The EMT `SystemModel` is the IDA-facing runtime model. `SystemModelData` owns
 construction-time buses, typed component storage, port connections, and
@@ -71,6 +74,7 @@ The former EMT case shape with `monitors.sinks`, `monitors.buses`, and
 
 ## Open Design Notes
 
-Distributed parameter lines are placeholders until internal signal delay support
-is designed.
+Distributed propagation and delay/history terms are placeholders until internal
+signal delay support is designed. `BranchFrequencyDependent` currently consumes
+only characteristic-admittance `Yc` rational fits.
 - Initial electrical wiring will use Delta configuration only

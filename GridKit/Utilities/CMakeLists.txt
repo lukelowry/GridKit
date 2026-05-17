@@ -15,5 +15,6 @@ install(
     Errors.hpp
     FileIO.hpp
     MapFromCOO.hpp
+    Sha256.hpp
   DESTINATION
     include/GridKit/Utilities)

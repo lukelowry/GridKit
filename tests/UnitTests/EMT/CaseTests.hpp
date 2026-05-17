@@ -324,6 +324,60 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome frequencyDependentBranchCase()
+      {
+        TestStatus success = true;
+
+        const auto dir      = std::filesystem::path("EMTFDCaseTest");
+        const auto fit_dir  = dir / "fits";
+        const auto fit_file = fit_dir / "unit.yc.fit.json";
+        const auto case_file = dir / "fd.case.json";
+        std::filesystem::remove_all(dir);
+        std::filesystem::create_directories(fit_dir);
+
+        {
+          std::ofstream out(fit_file);
+          out << constantYcFitJson().dump(2) << '\n';
+        }
+        {
+          std::ofstream out(case_file);
+          out << frequencyDependentCaseJson().dump(2) << '\n';
+        }
+
+        auto loaded = EMT::loadCase<Data>(case_file);
+        success *= (loaded.data.components.template get<EMT::BranchFrequencyDependent<RealT, IdxT>>().size() == 1u);
+        success *= (loaded.data.port_connections.size() == 2u);
+        success *= (loaded.data.component_monitors.size() == 1u);
+
+        EMT::SystemModel<Data> system(std::move(loaded.data), RealT{1.0e-8}, RealT{1.0e-8});
+        system.allocate();
+        system.initialize();
+        system.updateTime(0.0, 1.0);
+        system.evaluateResidual();
+        system.evaluateJacobian();
+
+        success *= caseErrorContains(
+            [&]()
+            {
+              auto bad = frequencyDependentCaseJson();
+              bad["components"][0]["params"]["propagation"] = Json::object();
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "unknown key 'propagation'");
+
+        success *= caseErrorContains(
+            [&]()
+            {
+              auto bad = frequencyDependentCaseJson();
+              bad["components"][0]["params"]["yc"]["extra"] = 1;
+              (void) EMT::loadCase<Data>(bad);
+            },
+            "unknown key 'extra'");
+
+        std::filesystem::remove_all(dir);
+        return success.report(__func__);
+      }
+
       TestOutcome errorCases()
       {
         TestStatus success = true;
@@ -568,6 +622,64 @@ namespace GridKit
   ]
 }
 )json");
+      }
+
+      static Json frequencyDependentCaseJson()
+      {
+        return Json::parse(R"json(
+{
+  "header": { "format_version": 1 },
+  "buses": [
+    { "name": "source_bus", "init": { "vm": 120.0, "va": 0.0 } },
+    { "name": "receiving_bus", "init": { "vm": 120.0, "va": 0.0 } }
+  ],
+  "components": [
+    {
+      "name": "line",
+      "class": "BranchFrequencyDependent",
+      "params": {
+        "length": 1000.0,
+        "phase_order": ["a", "b", "c"],
+        "yc": {
+          "fit_file": "fits/unit.yc.fit.json"
+        }
+      },
+      "ports": { "from": "source_bus", "to": "receiving_bus" },
+      "mon": ["ifa", "ifb", "ifc", "ita", "itb", "itc"]
+    }
+  ]
+}
+)json");
+      }
+
+      static Json constantYcFitJson()
+      {
+        return Json{
+            {"schema", "gridkit.emt.rational_fit"},
+            {"format_version", 1},
+            {"fit_name", "unit_yc"},
+            {"quantity", "characteristic_admittance"},
+            {"domain", "phase"},
+            {"realization", "pole_residue_real_sections"},
+            {"matrix_layout", "row_major"},
+            {"phase_order", Json::array({"a", "b", "c"})},
+            {"transfer_function",
+             Json{{"variable", "s"}, {"s_units", "rad/s"}, {"form", "D + sE + sum(R/(s-p))"}}},
+            {"units",
+             Json{{"transfer", "S"}, {"d", "S"}, {"e", "S*s"}, {"poles", "rad/s"}, {"residues", "S/s"}}},
+            {"source", Json::object()},
+            {"rational_approx",
+             Json{{"dimension", 3},
+                  {"d", Json::array({0.001, 0.0, 0.0, 0.0, 0.001, 0.0, 0.0, 0.0, 0.001})},
+                  {"e", Json::array({0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0})},
+                  {"real_poles", Json::array()},
+                  {"real_residues", Json::array()},
+                  {"pair_real", Json::array()},
+                  {"pair_imag", Json::array()},
+                  {"pair_residue_real", Json::array()},
+                  {"pair_residue_imag", Json::array()}}},
+            {"validation", Json::object()},
+            {"metadata", Json::object()}};
       }
 
       template <class Vector>

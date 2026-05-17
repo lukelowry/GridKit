@@ -310,6 +310,7 @@ namespace GridKit
 
       template <class ComponentT>
       ComponentT constructFromParams(const nlohmann::json& params,
+                                     const std::filesystem::path& base_dir,
                                      std::string_view      entity)
       {
         using Descriptor = ComponentDescriptor<ComponentT>;
@@ -317,7 +318,16 @@ namespace GridKit
 
         try
         {
-          return ComponentT(parseStruct<Data>(params, Descriptor::params, entity));
+          if constexpr (requires {
+                          ComponentT::fromJson(params, base_dir, entity);
+                        })
+          {
+            return ComponentT::fromJson(params, base_dir, entity);
+          }
+          else
+          {
+            return ComponentT(parseStruct<Data>(params, Descriptor::params, entity));
+          }
         }
         catch (const CaseError&)
         {
@@ -422,6 +432,7 @@ namespace GridKit
       {
         DataT&                   data;
         const nlohmann::json&    params;
+        const std::filesystem::path& base_dir;
         std::string              entity;
         std::string              label;
         std::vector<std::string> monitor_variables;
@@ -431,6 +442,7 @@ namespace GridKit
         void operator()()
         {
           auto       component = constructFromParams<ComponentT>(params,
+                                                           base_dir,
                                                            entity + ": params");
           auto       monitors  = encodeComponentMonitorVariables<ComponentT>(monitor_variables,
                                                                       entity);
@@ -507,7 +519,8 @@ namespace GridKit
 
       template <class DataT>
       void loadComponents(const nlohmann::json& root,
-                          Case<DataT>&          loaded)
+                          Case<DataT>&          loaded,
+                          const std::filesystem::path& base_dir)
       {
         const auto& components = requireArrayField(root, "components", "case file");
         for (std::size_t i = 0; i < components.size(); ++i)
@@ -529,6 +542,7 @@ namespace GridKit
 
           AddComponentVisitor<DataT> visitor{loaded.data,
                                              params,
+                                             base_dir,
                                              "component '" + name + "'",
                                              name,
                                              readMonList(entry, entity)};
@@ -728,7 +742,7 @@ namespace GridKit
 
         Case<DataT> loaded;
         loadBuses(root, loaded);
-        loadComponents(root, loaded);
+        loadComponents(root, loaded, base_dir);
         connectComponents(root, loaded);
         loadMonitors(root, loaded, base_dir);
         return loaded;

@@ -24,7 +24,8 @@ add_library(GridKit::emt ALIAS emt)
 add_library(emt_io INTERFACE)
 target_link_libraries(emt_io
   INTERFACE
-    GridKit::emt)
+    GridKit::emt
+    GridKit::Utilities)
 target_include_directories(emt_io
   INTERFACE
     $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include>
@@ -60,6 +61,11 @@ install(
     include/GridKit/Model/EMT/Bus)
 install(
   FILES
+    Component/Branch/BranchFrequencyDependent/BranchFrequencyDependent.hpp
+  DESTINATION
+    include/GridKit/Model/EMT/Component/Branch/BranchFrequencyDependent)
+install(
+  FILES
     Component/Branch/BranchLumpedConstant/BranchLumpedConstant.hpp
   DESTINATION
     include/GridKit/Model/EMT/Component/Branch/BranchLumpedConstant)
@@ -92,6 +98,7 @@ install(
 install(
   FILES
     IO/CaseJson.hpp
+    IO/FitFile.hpp
     IO/JsonSupport.hpp
     IO/ParamReader.hpp
     IO/SolverFile.hpp

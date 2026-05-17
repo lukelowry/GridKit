@@ -1,0 +1,48 @@
+{
+  "header": {
+    "format_version": 1,
+    "case_name": "EMT frequency-dependent line prototype",
+    "description": "Proposed JSON shape for consuming an OpenLine Yc rational approximation from a sidecar .fit.json file."
+  },
+  "buses": [
+    {
+      "name": "source_bus",
+      "init": {
+        "vm": 199185.8428704209,
+        "va": 0.0
+      }
+    },
+    {
+      "name": "receiving_bus",
+      "init": {
+        "vm": 199185.8428704209,
+        "va": 0.0
+      }
+    }
+  ],
+  "components": [
+    {
+      "name": "line",
+      "class": "BranchFrequencyDependent",
+      "params": {
+        "length": 150000.0,
+        "phase_order": ["a", "b", "c"],
+        "yc": {
+          "fit_file": "fits/ol_345_horizontal_acsr_twin_transposed.yc.fit.json",
+          "sha256": "b913334383f4cf4befeb0a060154813bc69ce75f8a997b2df366c0f8f161266c"
+        }
+      },
+      "ports": {
+        "from": "source_bus",
+        "to": "receiving_bus"
+      },
+      "mon": ["ifa", "ifb", "ifc", "ita", "itb", "itc"]
+    }
+  ],
+  "monitors": [
+    {
+      "file_name": "fd_line.csv",
+      "format": "csv"
+    }
+  ]
+}

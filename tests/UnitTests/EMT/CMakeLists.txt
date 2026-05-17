@@ -28,6 +28,26 @@ add_test(NAME EMTRationalApproxTest COMMAND test_emt_rational_approx)
 install(TARGETS test_emt_rational_approx
   RUNTIME DESTINATION bin)
 
+add_executable(test_emt_fit_file runFitFileTests.cpp)
+target_link_libraries(test_emt_fit_file
+  GridKit::emt_io
+  GridKit::testing)
+
+add_test(NAME EMTFitFileTest COMMAND test_emt_fit_file)
+
+install(TARGETS test_emt_fit_file
+  RUNTIME DESTINATION bin)
+
+add_executable(test_emt_frequency_dependent_branch runFrequencyDependentBranchTests.cpp)
+target_link_libraries(test_emt_frequency_dependent_branch
+  GridKit::emt_io
+  GridKit::testing)
+
+add_test(NAME EMTFrequencyDependentBranchTest COMMAND test_emt_frequency_dependent_branch)
+
+install(TARGETS test_emt_frequency_dependent_branch
+  RUNTIME DESTINATION bin)
+
 add_executable(test_emt_case_foundation runCaseFoundationTests.cpp)
 target_link_libraries(test_emt_case_foundation
   GridKit::emt_io

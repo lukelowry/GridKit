@@ -16,3 +16,7 @@ A component README should include:
 - `Branch` (See [Branch](Branch/README.md))
 - `LoadRL` (See [LoadRL](LoadRL/README.md))
 - `VoltageSource` (See [VoltageSource](VoltageSource/README.md))
+
+Frequency-dependent components may reference dense rational approximation
+sidecars. The sidecar schema is documented in
+[../IO/FIT_JSON.md](../IO/FIT_JSON.md).

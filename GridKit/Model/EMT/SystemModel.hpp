@@ -547,9 +547,28 @@ namespace GridKit
           return system_->layout_.busVariable(port_buses_[port], phase);
         }
 
+        IdxT portVoltageDerivativeIndex(size_t port, IdxT phase) const
+        {
+          return portVoltageIndex(port, phase);
+        }
+
+        IdxT componentVariableIndex(size_t local) const
+        {
+          if (local >= static_cast<size_t>(component_.variable_count))
+          {
+            throw std::invalid_argument("EMT monitor component variable index is out of range");
+          }
+          return component_.variable_offset + static_cast<IdxT>(local);
+        }
+
         const std::vector<ScalarT>* y() const
         {
           return &system_->y_;
+        }
+
+        const std::vector<ScalarT>* yp() const
+        {
+          return &system_->yp_;
         }
 
         const RealT* time() const

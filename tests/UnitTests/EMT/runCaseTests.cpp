@@ -10,6 +10,7 @@ int main()
   result += test.happyPath();
   result += test.signalPortWiring();
   result += test.pathLoading();
+  result += test.frequencyDependentBranchCase();
   result += test.errorCases();
 
   return result.summary();

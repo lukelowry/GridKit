@@ -6,6 +6,8 @@ sinks.
 
 This document defines the file-level schema. Component-specific `params`,
 `ports`, and `mon` entries are defined by the component model documentation.
+Dense rational approximation data is stored outside the case file in
+`.fit.json` sidecars, documented in [IO/FIT_JSON.md](IO/FIT_JSON.md).
 
 ## General Rules
 
@@ -171,6 +173,24 @@ Input port example for custom EMT components:
   }
 }
 ```
+
+## Fit-File References
+
+Frequency-dependent components keep dense numeric fit data out of the EMT case
+file. A component parameter may reference a `.fit.json` sidecar:
+
+```json
+"yc": {
+  "fit_file": "fits/ol_345_horizontal_acsr_twin_transposed.yc.fit.json",
+  "sha256": "b913334383f4cf4befeb0a060154813bc69ce75f8a997b2df366c0f8f161266c"
+}
+```
+
+`fit_file` is required and must not be empty. Relative paths are resolved from
+the directory containing the case file. `sha256` is optional; when present, it
+must match the sidecar bytes before parsing continues.
+
+The case root remains strict and does not define a `model_library` key.
 
 ## Monitor Sinks
 
