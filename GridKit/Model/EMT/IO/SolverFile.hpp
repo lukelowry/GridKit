@@ -1,7 +1,5 @@
 #pragma once
 
-#include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <cstddef>
 #include <filesystem>
@@ -46,27 +44,10 @@ namespace GridKit
         std::size_t                    order{};
       };
 
-      struct MonitorOutput
-      {
-        std::filesystem::path file;
-      };
-
-      struct IdaLogOutput
-      {
-        std::filesystem::path file;
-        std::string           level{"warning"};
-      };
-
-      struct IdaOutput
-      {
-        std::filesystem::path       file;
-        std::optional<IdaLogOutput> log;
-      };
-
       struct Output
       {
-        std::optional<MonitorOutput> monitor;
-        std::optional<IdaOutput>     ida;
+        std::optional<std::filesystem::path> monitor;
+        std::optional<std::filesystem::path> ida_stats;
       };
 
       struct Validation
@@ -91,18 +72,6 @@ namespace GridKit
         using GridKit::EMT::Detail::fieldContext;
         using GridKit::EMT::Detail::readJsonValue;
         using GridKit::EMT::Detail::throwCase;
-
-        inline std::string lowerAscii(std::string value)
-        {
-          std::transform(value.begin(),
-                         value.end(),
-                         value.begin(),
-                         [](unsigned char ch)
-                         {
-                           return static_cast<char>(std::tolower(ch));
-                         });
-          return value;
-        }
 
         inline std::filesystem::path resolvePath(const std::filesystem::path& base,
                                                  std::filesystem::path        path)
@@ -338,34 +307,16 @@ namespace GridKit
 
         if (auto output = Detail::optionalObject(root, "output", "solver file"))
         {
-          rejectUnknownKeys(output->get(), {"monitor", "ida"}, "output");
+          rejectUnknownKeys(output->get(), {"monitor", "ida_stats"}, "output");
 
-          if (auto monitor = Detail::optionalObject(output->get(), "monitor", "output"))
+          if (output->get().contains("monitor"))
           {
-            rejectUnknownKeys(monitor->get(), {"file"}, "output.monitor");
-            file.output.monitor = MonitorOutput{
-                Detail::readPath(monitor->get(), "file", "output.monitor", base_dir)};
+            file.output.monitor = Detail::readPath(output->get(), "monitor", "output", base_dir);
           }
 
-          if (auto ida = Detail::optionalObject(output->get(), "ida", "output"))
+          if (output->get().contains("ida_stats"))
           {
-            rejectUnknownKeys(ida->get(), {"file", "log"}, "output.ida");
-            IdaOutput parsed;
-            parsed.file = Detail::readPath(ida->get(), "file", "output.ida", base_dir);
-            if (auto log = Detail::optionalObject(ida->get(), "log", "output.ida"))
-            {
-              rejectUnknownKeys(log->get(), {"file", "level"}, "output.ida.log");
-              IdaLogOutput parsed_log;
-              parsed_log.file  = Detail::readPath(log->get(), "file", "output.ida.log", base_dir);
-              parsed_log.level = Detail::lowerAscii(
-                  Detail::optionalValue<std::string>(log->get(), "level", "warning", "output.ida.log"));
-              if (parsed_log.level != "error" && parsed_log.level != "warning")
-              {
-                throw CaseError("output.ida.log.level: expected 'error' or 'warning'");
-              }
-              parsed.log = std::move(parsed_log);
-            }
-            file.output.ida = std::move(parsed);
+            file.output.ida_stats = Detail::readPath(output->get(), "ida_stats", "output", base_dir);
           }
         }
 
@@ -481,7 +432,7 @@ namespace GridKit
           return;
         }
 
-        const auto file = output.monitor->file.string();
+        const auto file = output.monitor->string();
         if (data.monitor_sinks.empty())
         {
           data.addMonitorSink({file, GridKit::Model::VariableMonitorFormat::CSV, ","});
@@ -494,7 +445,7 @@ namespace GridKit
           return;
         }
 
-        throw CaseError("output.monitor.file is ambiguous because the case defines multiple monitor sinks");
+        throw CaseError("output.monitor is ambiguous because the case defines multiple monitor sinks");
       }
 
     } // namespace IO

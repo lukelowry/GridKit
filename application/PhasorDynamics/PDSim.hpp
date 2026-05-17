@@ -37,6 +37,14 @@ namespace GridKit
       std::size_t element_id;
     };
 
+    struct StudyOutput
+    {
+      /// path to monitored variable CSV output file
+      fs::path monitor;
+      /// path to IDA statistics JSON output file
+      fs::path ida_stats;
+    };
+
     /**
      * @brief Data defined in JSON file for parameterized study
      */
@@ -50,12 +58,8 @@ namespace GridKit
       double                   tmax;
       /// set of system events
       std::vector<SystemEvent> events;
-      /// path to output file
-      fs::path                 output_file;
-      /// path to IDA statistics JSON output file
-      fs::path                 ida_output_file;
-      /// path to SUNDIALS IDA warning/error log file
-      fs::path                 ida_log_file;
+      /// output file configuration
+      StudyOutput              output;
       /// path to reference file for validation
       fs::path                 reference_file;
       /// Error tolerance (between output file and reference file)
@@ -94,19 +98,17 @@ namespace GridKit
         event.type = type_wrap.value();
       }
 
-      if (j.contains("output_file"))
+      if (j.contains("output"))
       {
-        j.at("output_file").get_to(c.output_file);
-      }
-
-      if (j.contains("ida_output_file"))
-      {
-        j.at("ida_output_file").get_to(c.ida_output_file);
-      }
-
-      if (j.contains("ida_log_file"))
-      {
-        j.at("ida_log_file").get_to(c.ida_log_file);
+        const auto& output = j.at("output");
+        if (output.contains("monitor"))
+        {
+          output.at("monitor").get_to(c.output.monitor);
+        }
+        if (output.contains("ida_stats"))
+        {
+          output.at("ida_stats").get_to(c.output.ida_stats);
+        }
       }
 
       if (j.contains("reference_file"))
@@ -154,13 +156,13 @@ namespace GridKit
           data.reference_file = loc / data.reference_file;
         }
       }
-      if (!data.ida_output_file.empty() && !data.ida_output_file.is_absolute())
+      if (!data.output.monitor.empty() && !data.output.monitor.is_absolute())
       {
-        data.ida_output_file = loc / data.ida_output_file;
+        data.output.monitor = loc / data.output.monitor;
       }
-      if (!data.ida_log_file.empty() && !data.ida_log_file.is_absolute())
+      if (!data.output.ida_stats.empty() && !data.output.ida_stats.is_absolute())
       {
-        data.ida_log_file = loc / data.ida_log_file;
+        data.output.ida_stats = loc / data.output.ida_stats;
       }
 
       auto csv        = ::GridKit::Model::VariableMonitorFormat::CSV;
@@ -178,28 +180,28 @@ namespace GridKit
       if (model_output_file.empty())
       {
         // Add study output file to model if one did not already exist
-        data.model_data.monitor_sink.emplace_back(data.output_file, csv);
+        data.model_data.monitor_sink.emplace_back(data.output.monitor, csv);
       }
       else
       {
-        if (data.output_file.empty())
+        if (data.output.monitor.empty())
         {
-          data.output_file = model_output_file;
+          data.output.monitor = model_output_file;
         }
         else
         {
           // If model file already specifies a CSV output file, then the study
           // output file must be a symlink to the model output file
-          if (exists(data.output_file))
+          if (exists(data.output.monitor))
           {
-            if ((!is_symlink(data.output_file)) || (read_symlink(data.output_file) != model_output_file))
+            if ((!is_symlink(data.output.monitor)) || (read_symlink(data.output.monitor) != model_output_file))
             {
               Log::error() << "Study output file not usable" << std::endl;
             }
           }
           else
           {
-            fs::create_symlink(model_output_file, data.output_file);
+            fs::create_symlink(model_output_file, data.output.monitor);
           }
         }
       }

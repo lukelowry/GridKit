@@ -6,7 +6,9 @@
         {"time": 1, "type": "fault_on", "element_id": 0},
         {"time": 1.1, "type": "fault_off", "element_id": 0}
     ],
-    "output_file": "ThreeBus_six_cycle_fault_bus1.csv",
+    "output": {
+        "monitor": "ThreeBus_six_cycle_fault_bus1.csv"
+    },
     "reference_file": "ThreeBusBasic.ref.csv",
     "error_tolerance":  1e-4
 }

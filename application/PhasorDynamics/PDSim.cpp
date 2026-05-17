@@ -20,18 +20,6 @@ using scalar_type = double;
 using real_type   = double;
 using index_type  = size_t;
 
-namespace
-{
-  std::optional<IdaLogOptions> idaLogOptions(const StudyData& study)
-  {
-    if (study.ida_log_file.empty())
-    {
-      return std::nullopt;
-    }
-    return IdaLogOptions{study.ida_log_file, IdaLogLevel::Warning};
-  }
-} // namespace
-
 int main(int argc, const char* argv[])
 {
   // Study file
@@ -56,9 +44,8 @@ int main(int argc, const char* argv[])
   real_type dt = study.dt;
 
   // Set up simulation
-  const auto                   log_options = idaLogOptions(study);
-  Ida<scalar_type, index_type> ida(&sys, log_options);
-  IdaStatsRecorder             ida_stats(!study.ida_output_file.empty());
+  Ida<scalar_type, index_type> ida(&sys);
+  IdaStatsRecorder             ida_stats(!study.output.ida_stats.empty());
   ida.configureSimulation();
 
   // Start timer
@@ -114,17 +101,17 @@ int main(int argc, const char* argv[])
   // Stop the variable monitor
   sys.stopMonitor();
 
-  if (!study.ida_output_file.empty())
+  if (!study.output.ida_stats.empty())
   {
-    writeIdaStatsJson(ida_stats.report(log_options), {study.ida_output_file, log_options});
+    writeIdaStatsJson(ida_stats.report(), {study.output.ida_stats, std::nullopt});
   }
 
   // Generate aggregate errors comparing variable output to reference solution
   std::string func{"monitor file vs reference file"};
   TestStatus  status{func.c_str()};
-  if (!study.output_file.empty() && !study.reference_file.empty())
+  if (!study.output.monitor.empty() && !study.reference_file.empty())
   {
-    auto errorSet = compareCSV(study.output_file, study.reference_file);
+    auto errorSet = compareCSV(study.output.monitor, study.reference_file);
 
     // Print the errors
     errorSet.display();

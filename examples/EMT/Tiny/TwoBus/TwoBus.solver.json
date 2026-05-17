@@ -12,11 +12,8 @@
   },
 
   "output": {
-    "monitor": { "file": "TwoBus.csv" },
-    "ida": {
-      "file": "TwoBus.ida.json",
-      "log": { "file": "TwoBus.ida.log", "level": "warning" }
-    }
+    "monitor": "TwoBus.csv",
+    "ida_stats": "TwoBus.ida.json"
   },
 
   "schedule": [

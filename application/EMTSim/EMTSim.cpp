@@ -42,22 +42,13 @@ namespace
   std::optional<AnalysisManager::Sundials::IdaDiagnosticsOutput> idaDiagnosticsOutput(
       const GridKit::EMT::IO::Output& output)
   {
-    if (!output.ida.has_value())
+    if (!output.ida_stats.has_value())
     {
       return std::nullopt;
     }
 
     AnalysisManager::Sundials::IdaDiagnosticsOutput output_options;
-    output_options.file = output.ida->file;
-    if (output.ida->log.has_value())
-    {
-      AnalysisManager::Sundials::IdaLogOptions log_options;
-      log_options.file   = output.ida->log->file;
-      log_options.level  = output.ida->log->level == "error"
-                               ? AnalysisManager::Sundials::IdaLogLevel::Error
-                               : AnalysisManager::Sundials::IdaLogLevel::Warning;
-      output_options.log = std::move(log_options);
-    }
+    output_options.file = *output.ida_stats;
     return output_options;
   }
 
@@ -76,7 +67,7 @@ namespace
     system.allocate();
 
     const auto                                  diagnostics = idaDiagnosticsOutput(output);
-    Ida                                         ida(&system, diagnostics.has_value() ? diagnostics->log : std::nullopt);
+    Ida                                         ida(&system);
     AnalysisManager::Sundials::IdaStatsRecorder recorder(diagnostics.has_value());
     ida.configureSimulation();
     ida.initializeSimulation(solve.t0, false);
@@ -123,7 +114,7 @@ namespace
     }
 
     system.stopMonitor();
-    result.ida_report = recorder.report(diagnostics.has_value() ? diagnostics->log : std::nullopt);
+    result.ida_report = recorder.report();
     return result;
   }
 

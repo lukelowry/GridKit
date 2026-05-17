@@ -45,18 +45,12 @@ namespace GridKit
         success           *= solver.output.monitor.has_value();
         if (solver.output.monitor)
         {
-          success *= (solver.output.monitor->file == dir / "TwoBus.csv");
+          success *= (*solver.output.monitor == dir / "TwoBus.csv");
         }
-        success *= solver.output.ida.has_value();
-        if (solver.output.ida)
+        success *= solver.output.ida_stats.has_value();
+        if (solver.output.ida_stats)
         {
-          success *= (solver.output.ida->file == dir / "TwoBus.ida.json");
-          success *= solver.output.ida->log.has_value();
-          if (solver.output.ida->log)
-          {
-            success *= (solver.output.ida->log->file == dir / "TwoBus.ida.log");
-            success *= (solver.output.ida->log->level == "warning");
-          }
+          success *= (*solver.output.ida_stats == dir / "TwoBus.ida.json");
         }
         success *= solver.validation.has_value();
         if (solver.validation)
@@ -99,7 +93,7 @@ namespace GridKit
         success           *= (solver.solve.max_steps == 200000u);
         success           *= solver.solve.use_jacobian;
         success           *= !solver.output.monitor.has_value();
-        success           *= !solver.output.ida.has_value();
+        success           *= !solver.output.ida_stats.has_value();
         success           *= solver.schedule.empty();
         success           *= !solver.validation.has_value();
 
@@ -163,9 +157,9 @@ namespace GridKit
             withMutation(
                 [](Json& json)
                 {
-                  json["output"]["ida"]["format"] = "text";
+                  json["output"]["ida"] = Json{{"file", "old.json"}};
                 }),
-            "unknown key 'format'");
+            "unknown key 'ida'");
 
         success *= solverErrorContains(
             withMutation(
@@ -173,7 +167,7 @@ namespace GridKit
                 {
                   json["output"]["ida_stats"] = Json{{"file", "old.json"}};
                 }),
-            "unknown key 'ida_stats'");
+            "output.ida_stats");
 
         success *= solverErrorContains(
             withMutation(
@@ -195,9 +189,9 @@ namespace GridKit
             withMutation(
                 [](Json& json)
                 {
-                  json["output"]["ida"]["log"]["level"] = "trace";
+                  json["output"]["monitor"] = Json{{"file", "old.csv"}};
                 }),
-            "output.ida.log.level");
+            "output.monitor");
 
         success *= solverErrorContains(
             withMutation(
@@ -298,8 +292,8 @@ namespace GridKit
     "use_jacobian": true
   },
   "output": {
-    "monitor": { "file": "TwoBus.csv" },
-    "ida": { "file": "TwoBus.ida.json", "log": { "file": "TwoBus.ida.log" } }
+    "monitor": "TwoBus.csv",
+    "ida_stats": "TwoBus.ida.json"
   },
   "schedule": [
     { "time": 0.010, "target": "receiving_bus", "action": "fault", "params": { "r": 15.0, "phases": "abc" } },
@@ -317,7 +311,7 @@ namespace GridKit
       static Json breakerSolverJson()
       {
         auto json        = solverJson();
-        json["output"]   = Json{{"monitor", Json{{"file", "out.csv"}}}};
+        json["output"]   = Json{{"monitor", "out.csv"}};
         json["schedule"] = Json::array({Json{{"time", 0.010}, {"target", "receiving_bus"}, {"action", "fault"}, {"params", Json{{"r", 15.0}}}},
                                         Json{{"time", 0.011}, {"target", "receiving_bus"}, {"action", "clear"}},
                                         Json{{"time", 0.012}, {"target", "breaker"}, {"action", "open"}},

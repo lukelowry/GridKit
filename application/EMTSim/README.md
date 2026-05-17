@@ -18,9 +18,9 @@ semantics) is documented in [`EVENTS.md`](EVENTS.md).
 EMTSim <solver-file.solver.json>
 ```
 
-Relative paths in `case_file`, `output.monitor.file`, `output.ida.file`,
-`output.ida.log.file`, and `validation.reference_file` are resolved against
-the solver file's directory. Absolute paths are used as given.
+Relative paths in `case_file`, `output.monitor`, `output.ida_stats`, and
+`validation.reference_file` are resolved against the solver file's directory.
+Absolute paths are used as given.
 
 ## Solver file format
 
@@ -63,12 +63,10 @@ Field          | Required | Default  | Description
 
 ### Output
 
-Field               | Required         | Description
---------------------|------------------|-------------------------------------------------
-`monitor.file`      | if `monitor` set | CSV monitor output path. EMTSim adds a monitor sink if the case has none, or retargets the sink if the case has exactly one. A case with multiple sinks is rejected as ambiguous.
-`ida.file`          | if `ida` set     | IDA statistics JSON output path.
-`ida.log.file`      | if `ida.log` set | Optional SUNDIALS IDA warning/error log path.
-`ida.log.level`     | no               | `warning` (default) or `error`.
+Field       | Required | Description
+------------|----------|-------------------------------------------------
+`monitor`   | no       | CSV monitor output path. EMTSim adds a monitor sink if the case has none, or retargets the sink if the case has exactly one. A case with multiple sinks is rejected as ambiguous.
+`ida_stats` | no       | IDA statistics JSON output path.
 
 ### Schedule
 
@@ -100,7 +98,7 @@ within `error_tolerance` and the solve succeeded, `1` otherwise.
 
 ### Monitor CSV
 
-When `output.monitor.file` is set, EMTSim writes a comma-delimited CSV monitor
+When `output.monitor` is set, EMTSim writes a comma-delimited CSV monitor
 file.
 
 Row            | Format
@@ -117,7 +115,7 @@ has been applied and IDA has been re-initialized.
 
 ### IDA JSON
 
-When `output.ida.file` is set, EMTSim writes IDA solver statistics as JSON.
+When `output.ida_stats` is set, EMTSim writes IDA solver statistics as JSON.
 The top-level statistics summarize the whole run. The `segments` array records
 the same statistics for each solve segment between event batches.
 
@@ -130,7 +128,6 @@ Top-level field       | Type   | Description
 `final_state`         | object | IDA state at the end of the final segment.
 `segment_count`       | int    | Number of entries in `segments`.
 `segments`            | array  | Per-segment statistics.
-`log`                 | object | Present only when `output.ida.log` is configured.
 
 `sundials` fields:
 
@@ -138,13 +135,6 @@ Field           | Type   | Description
 ----------------|--------|----------------------------
 `version`       | string | SUNDIALS version used.
 `logging_level` | int    | Compile-time SUNDIALS logging level.
-
-`log` fields:
-
-Field   | Type   | Description
---------|--------|------------------------------
-`file`  | string | IDA log path used by EMTSim.
-`level` | string | `warning` or `error`.
 
 Statistics object fields:
 
@@ -212,20 +202,9 @@ Compact example:
       "linear_solver": { "...": "same fields as top-level linear_solver" },
       "final_state": { "...": "same fields as top-level final_state" }
     }
-  ],
-  "log": { "file": "TwoBus.ida.log", "level": "warning" }
+  ]
 }
 ```
-
-### IDA log
-
-When `output.ida.log.file` is set, EMTSim configures the SUNDIALS logger before
-creating the IDA memory block. The log is plain text and captures SUNDIALS
-warnings and errors using the normal SUNDIALS logging level shipped by typical
-builds. A successful run may produce an empty log. Detailed step-by-step
-info/debug traces are intentionally not part of this solver-file contract; use
-the structured `output.ida.file` JSON for solve statistics and behavior
-summaries.
 
 ## Example
 
@@ -244,11 +223,8 @@ summaries.
   },
 
   "output": {
-    "monitor": { "file": "TwoBus.csv" },
-    "ida": {
-      "file": "TwoBus.ida.json",
-      "log": { "file": "TwoBus.ida.log", "level": "warning" }
-    }
+    "monitor": "TwoBus.csv",
+    "ida_stats": "TwoBus.ida.json"
   },
 
   "schedule": [
