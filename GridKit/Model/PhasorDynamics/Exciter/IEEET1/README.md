@@ -162,11 +162,11 @@ For the algebraic piecewise functions (non-flags), this implementation is straig
     E_{fd}
     &=(1 + \omega I_{spdlm})E_{fd}' \\ 
     k_{sat}
-    &=S_B\left[(E_{fd}' -S_A) \cdot \sigma (E_{fd}' -S_A)\right]^2   
+    &=S_B\left[(E_{fd}' -S_A) \cdot \sigma (E_{fd}' -S_A)\right]^2
 \end{aligned}
 ```
 
-The approximation approaches an exact solution as $\alpha\to\infty$.
+The approximation approaches an exact solution as the sigmoid steepness increases.
 
 ## Initialization
 
@@ -192,4 +192,4 @@ All internal derivatives initialize to zero.
 
 The field voltage, $E_{fd}$, is an internal model variable.
 
-The magnetic saturation coefficient $k_{sat}$ is calculated from $E_{fd}$ using the the smooth piecewise version (above).
+The magnetic saturation coefficient $k_{sat}$ is calculated from $E_{fd}$ using the smooth piecewise version above.

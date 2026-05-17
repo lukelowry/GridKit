@@ -83,6 +83,6 @@ Anti-windup gate (`Math::indicator`):
 - [TGOV1](Model/PhasorDynamics/Governor/Tgov1/README.md): gates $\dot P_v$ on $P_v \in (P_{vmin}, P_{vmax})$
 - [SEXS-PTI](Model/PhasorDynamics/Exciter/SEXS-PTI/README.md): gates $\dot E_{fd}$ on $E_{fd} \in (E_{fd,\min}, E_{fd,\max})$
 
-Interior indicator (`Math::indicator_zero`):
+Window gate (`Math::sigmoid((x - lower)(upper - x) / (upper - lower))`):
 
-- [IEEEST](Model/PhasorDynamics/Stabilizer/IEEEST/README.md): clips stabilizer output $v_7$ to $[L_{s\min}, L_{s\max}]$
+- [IEEEST](Model/PhasorDynamics/Stabilizer/IEEEST/README.md): gates $V_s$ by the $V_{ct}$ cutout window $[V_{cl}, V_{cu}]$

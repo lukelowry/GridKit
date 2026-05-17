@@ -46,12 +46,9 @@ namespace GridKit
       using RealT               = typename GridKit::ScalarTraits<ScalarT>::RealT;
       static constexpr RealT MU = 240.0;
 
-      if (x > ZERO<RealT>)
-      {
-        return x + (ONE<RealT> / MU) * std::log(ONE<RealT> + std::exp(-MU * x));
-      }
-
-      return (ONE<RealT> / MU) * std::log(ONE<RealT> + std::exp(MU * x));
+      ScalarT z = MU * x;
+      ScalarT a = std::abs(z);
+      return (HALF<RealT> * (z + a) + std::log1p(std::exp(-a))) / MU;
     }
 
     /**
@@ -180,6 +177,7 @@ namespace GridKit
      * @tparam ScalarT - Scalar data type
      * @tparam RealT - Real data type (see GridKit::ScalarTraits<ScalarT>::RealT)
      *
+     * @param[in] limit_min - Minimum limit
      * @param[in] limit_max - Maximum limit
      * @param[in] x - State variable
      * @return Scalar value indicating limit activation

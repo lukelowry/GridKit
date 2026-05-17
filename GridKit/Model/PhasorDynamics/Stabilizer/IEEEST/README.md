@@ -32,8 +32,8 @@ $T_4$ | [s] | Lead–lag 2 denominator time constant | 0.0
 $T_5$ | [s] | Washout numerator time constant | 1.65
 $T_6$ | [s] | Washout denominator time constant | 1.65
 $K_s$ | [p.u.] | Stabilizer gain | 3.0
-$L_{s\min}$ | [p.u.] | Minimum stabilizer output limit | 0.1
-$L_{s\max}$ | [p.u.] | Maximum stabilizer output limit | -0.1
+$L_{s\min}$ | [p.u.] | Minimum stabilizer output limit | -0.1
+$L_{s\max}$ | [p.u.] | Maximum stabilizer output limit | 0.1
 $V_{cl}$ | [p.u.] | Lower input cutout threshold | 0.0
 $V_{cu}$ | [p.u.] | Upper input cutout threshold | 0.0
 $T_{delay}$ | [s] | Input time delay | 0.0
@@ -115,7 +115,7 @@ $V_{ct}$ | [p.u.] | Cutout signal (compared to $V_{cl},V_{cu}$) | from the block
 0 &= -v_5 + x_5 + \dfrac{T_1}{T_2}(v_4 - x_5) \\
 0 &= -v_6 + x_6 + \dfrac{T_3}{T_4}(v_5 - x_6) \\
 0 &= -v_7 + K_s \dfrac{T_5}{T_6}(v_6 - x_7) \\
-0 &= -V_{ss} + \min\!\big(\max(v_7, L_{s\min}), L_{s\max}\big) \\
+0 &= -V_{ss} + \operatorname{clamp}(v_7,L_{s\min},L_{s\max}) \\
 0 &= -V_s +
 \begin{cases}
 V_{ss}, & V_{cl} < V_{ct} < V_{cu} \\
@@ -123,3 +123,9 @@ V_{ss}, & V_{cl} < V_{ct} < V_{cu} \\
 \end{cases}
 \end{aligned}
 ```
+
+In simulation, the output limiter uses a smooth clamp approximation.
+The cutout case statement is smoothed as the product of lower and upper
+sigmoid indicators, $\sigma(V_{ct}-V_{cl})\sigma(V_{cu}-V_{ct})$.
+The parameter convention $V_{cl}=V_{cu}=0$ disables the cutout and passes
+$V_{ss}$ through.

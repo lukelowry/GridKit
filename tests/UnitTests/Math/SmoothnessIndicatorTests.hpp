@@ -52,19 +52,23 @@ namespace GridKit
         success *= (Math::rampsat(static_cast<ScalarT>(-1.0),
                                   static_cast<ScalarT>(0.0),
                                   static_cast<ScalarT>(2.0),
-                                  static_cast<ScalarT>(4.0)) < static_cast<ScalarT>(0.01));
+                                  static_cast<ScalarT>(4.0))
+                    < static_cast<ScalarT>(0.01));
         success *= (Math::rampsat(static_cast<ScalarT>(1.0),
                                   static_cast<ScalarT>(0.0),
                                   static_cast<ScalarT>(2.0),
-                                  static_cast<ScalarT>(4.0)) > static_cast<ScalarT>(1.99));
+                                  static_cast<ScalarT>(4.0))
+                    > static_cast<ScalarT>(1.99));
         success *= (Math::rampsat(static_cast<ScalarT>(1.0),
                                   static_cast<ScalarT>(0.0),
                                   static_cast<ScalarT>(2.0),
-                                  static_cast<ScalarT>(4.0)) < static_cast<ScalarT>(2.01));
+                                  static_cast<ScalarT>(4.0))
+                    < static_cast<ScalarT>(2.01));
         success *= (Math::rampsat(static_cast<ScalarT>(3.0),
                                   static_cast<ScalarT>(0.0),
                                   static_cast<ScalarT>(2.0),
-                                  static_cast<ScalarT>(4.0)) > static_cast<ScalarT>(3.99));
+                                  static_cast<ScalarT>(4.0))
+                    > static_cast<ScalarT>(3.99));
 
         return success.report(__func__);
       }
@@ -81,14 +85,22 @@ namespace GridKit
         success *= (std::abs(Math::ramp(static_cast<ScalarT>(0.0)) - at_zero) < static_cast<ScalarT>(1.0e-12));
         success *= (Math::ramp(static_cast<ScalarT>(-0.01)) > static_cast<ScalarT>(0.0));
         success *= (Math::ramp(static_cast<ScalarT>(0.01)) > Math::ramp(static_cast<ScalarT>(0.0)));
+        success *= std::isfinite(Math::ramp(static_cast<ScalarT>(4.0)));
+        success *= (Math::ramp(static_cast<ScalarT>(4.0)) > static_cast<ScalarT>(3.99));
+        success *= std::isfinite(Math::ramp(static_cast<ScalarT>(-4.0)));
+        success *= (Math::ramp(static_cast<ScalarT>(-4.0)) < static_cast<ScalarT>(1.0e-12));
 
         const ScalarT lower = -0.25;
         const ScalarT upper = 0.75;
         const ScalarT x     = 0.4;
 
-        const ScalarT smooth_clip = lower + Math::ramp(x - lower) - Math::ramp(x - upper);
-        success *= (smooth_clip > lower);
-        success *= (smooth_clip < upper);
+        const ScalarT smooth_clip  = lower + Math::ramp(x - lower) - Math::ramp(x - upper);
+        success                   *= (smooth_clip > lower);
+        success                   *= (smooth_clip < upper);
+        success                   *= std::isfinite(Math::clamp(static_cast<ScalarT>(4.0), lower, upper));
+        success                   *= (Math::clamp(static_cast<ScalarT>(4.0), lower, upper) < upper + static_cast<ScalarT>(1.0e-12));
+        success                   *= std::isfinite(Math::clamp(static_cast<ScalarT>(-4.0), lower, upper));
+        success                   *= (Math::clamp(static_cast<ScalarT>(-4.0), lower, upper) > lower - static_cast<ScalarT>(1.0e-12));
 
         return success.report(__func__);
       }
