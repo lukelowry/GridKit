@@ -30,6 +30,99 @@ namespace GridKit
     }
 
     /**
+     * @brief Smooth one-sided ramp function
+     *
+     * Smooth approximation to max(x, 0), using a stable softplus form with
+     * the same scale as the rest of CommonMath.
+     *
+     * @tparam ScalarT - scalar data type
+     *
+     * @param[in] x - expected to be of order 1
+     * @return value of the smooth ramp function
+     */
+    template <class ScalarT>
+    __attribute__((always_inline)) inline ScalarT ramp(const ScalarT x)
+    {
+      using RealT               = typename GridKit::ScalarTraits<ScalarT>::RealT;
+      static constexpr RealT MU = 240.0;
+
+      if (x > ZERO<RealT>)
+      {
+        return x + (ONE<RealT> / MU) * std::log(ONE<RealT> + std::exp(-MU * x));
+      }
+
+      return (ONE<RealT> / MU) * std::log(ONE<RealT> + std::exp(MU * x));
+    }
+
+    /**
+     * @brief Smooth clamp function
+     *
+     * Smooth approximation to min(max(x, lower), upper), composed from the
+     * smooth ramp function.
+     *
+     * @tparam ScalarT - scalar data type
+     * @tparam RealT - Real data type (see GridKit::ScalarTraits<ScalarT>::RealT)
+     *
+     * @param[in] x - expected to be of order 1
+     * @param[in] lower - Lower limit
+     * @param[in] upper - Upper limit
+     * @return value of the smooth clamp function
+     */
+    template <class ScalarT, typename RealT>
+    __attribute__((always_inline)) inline ScalarT clamp(
+        const ScalarT x,
+        const RealT   lower,
+        const RealT   upper)
+    {
+      return lower + ramp(x - lower) - ramp(x - upper);
+    }
+
+    /**
+     * @brief Smooth slew-rate limiter
+     *
+     * Smooth approximation to min(max(f, -rate), rate).
+     *
+     * @tparam ScalarT - scalar data type
+     * @tparam RealT - Real data type (see GridKit::ScalarTraits<ScalarT>::RealT)
+     *
+     * @param[in] f - Pre-limit derivative or rate signal
+     * @param[in] rate - Symmetric positive rate limit
+     * @return Slew-rate-limited value of f
+     */
+    template <class ScalarT, typename RealT>
+    __attribute__((always_inline)) inline ScalarT slew(
+        const ScalarT f,
+        const RealT   rate)
+    {
+      return clamp(f, -rate, rate);
+    }
+
+    /**
+     * @brief Smooth saturating ramp function
+     *
+     * Smooth approximation to a monotone linear ramp saturating from zero to
+     * height over the interval [lower, upper].
+     *
+     * @tparam ScalarT - scalar data type
+     * @tparam RealT - Real data type (see GridKit::ScalarTraits<ScalarT>::RealT)
+     *
+     * @param[in] x - Input signal
+     * @param[in] lower - Lower breakpoint
+     * @param[in] upper - Upper breakpoint
+     * @param[in] height - Saturated value above the upper breakpoint
+     * @return Saturating ramp value
+     */
+    template <class ScalarT, typename RealT>
+    __attribute__((always_inline)) inline ScalarT rampsat(
+        const ScalarT x,
+        const RealT   lower,
+        const RealT   upper,
+        const RealT   height)
+    {
+      return height / (upper - lower) * (ramp(x - lower) - ramp(x - upper));
+    }
+
+    /**
      * @brief Derivative of the scaled sigmoid activation function
      *        (i.e., approximation to the delta dirac function)
      *

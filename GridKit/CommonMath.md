@@ -1,34 +1,51 @@
 # CommonMath
 
-Numerical utilities in [CommonMath.hpp](CommonMath.hpp): smooth, autodiff-friendly replacements for piecewise functions used across GridKit component models.
+Smooth, autodiff-friendly replacements for piecewise functions used across GridKit component models. See [CommonMath.hpp](CommonMath.hpp) for implementation details.
 
-## Sigmoid
+## Primitives
 
-Smooth approximation to the step function.
+| Name | Exact Target | Smooth Approximation | Description |
+|------|--------------|----------------------|-------------|
+| `sigmoid` | $H(x)$ | $\sigma(x) = \frac{1}{1+\exp(-\mu x)}$ | Step function |
+| `ramp` | $\max(x,0)$ | $\rho(x)=\mu^{-1}\log(1+\exp(\mu x))$ | Smooth one-sided ramp |
 
-```math
-\sigma(x) = \dfrac{1}{1+\exp(-\alpha x)}
-```
+The scale $\mu=240$ is chosen so $\sigma$ behaves like a step on inputs of order 1 while keeping derivatives finite. As $\mu \to \infty$, these functions approach their exact targets.
 
-The scale $\alpha$ (currently $240$) is chosen large enough that $\sigma$ behaves as a step on inputs of order 1.
-
-## Limit Indicators
-
-For a state variable $x$ with limits $(x_{\min}, x_{\max})$:
+Softplus avoids the negative undershoot of $x\sigma(x)$, with a small positive breakpoint bias:
 
 ```math
-\begin{aligned}
-   \phi_L(x) &= \sigma(x - x_{\min}) \\
-   \phi_U(x) &= \sigma(x_{\max} - x) \\
-   \phi_0(x) &= \phi_L + \phi_U - 1
-\end{aligned}
+\rho(0)=\frac{\log 2}{\mu}.
 ```
 
-$\phi_L$ and $\phi_U$ are soft indicators for "above lower limit" and "below upper limit"; their product (or $\phi_0$) is an interior indicator.
+## Derived Functions
 
-## Anti-Windup Indicator
+| Name | Exact Target | Smooth Approximation | Description |
+|------|--------------|----------------------|-------------|
+| `clamp` | $\min(\max(x,\ell),u)$ | $\ell + \rho(x-\ell) - \rho(x-u)$ | Bounded saturation |
+| `slew` | $\min(\max(f,-r),r)$ | $-r + \rho(f+r) - \rho(f-r)$ | Symmetric slew-rate limiter |
+| `rampsat` | $h\,\operatorname{clamp}\!\left(\frac{x-a}{b-a},0,1\right)$ | $\frac{h}{b-a}\left[\rho(x-a)-\rho(x-b)\right]$ | Saturating linear ramp |
 
-Component models with a limited state $x \in (x_{\min}, x_{\max})$ and pre-limit derivative $f$ express the gated dynamics piecewise as
+`rampsat` is a monotone saturating linear ramp, implemented as the difference of two smooth ramps:
+
+```math
+\operatorname{rampsat}(x;\,a,b,h)
+=
+\frac{h}{b-a}\left[\rho(x-a)-\rho(x-b)\right].
+```
+
+It is not a signal-processing window function.
+
+## Anti-Windup
+
+For a limited state $x \in [x_{\min}, x_{\max}]$, the indicators are:
+
+| Name | Exact Target | Smooth Approximation | Description |
+|------|--------------|----------------------|-------------|
+| $\phi_L$ | $H(x-x_{\min})$ | $\sigma(x-x_{\min})$ | Above-lower-limit indicator |
+| $\phi_U$ | $H(x_{\max}-x)$ | $\sigma(x_{\max}-x)$ | Below-upper-limit indicator |
+| $\phi_0$ | $\begin{cases}1 & x_{\min}<x<x_{\max}\\0 & \text{else}\end{cases}$ | $\phi_L+\phi_U-1$ | Interior pulse indicator |
+
+For a pre-limit derivative $f$, the exact anti-windup rule is:
 
 ```math
 \dot x =
@@ -41,17 +58,26 @@ Component models with a limited state $x \in (x_{\min}, x_{\max})$ and pre-limit
    \end{cases}
 ```
 
-In simulation this is replaced with the smooth approximation $\dot x = \phi(x, f) \cdot f$, where
+GridKit uses the smooth gate $\dot x = \phi(x,f)f$, where
 
 ```math
 \phi(x, f) = \phi_L \phi_U + (1 - \phi_U)\,\sigma(-f) + (1 - \phi_L)\,\sigma(f).
 ```
 
-The first term passes the dynamics through in the interior. The second re-admits them when $x$ is above $x_{\max}$ and $f$ is pulling back down; the third re-admits them when $x$ is below $x_{\min}$ and $f$ is driving back up. When $x$ is outside a limit *and* $f$ is still driving further beyond it, $\phi$ vanishes smoothly and blocks the windup.
+The first term passes interior dynamics. The second and third terms pass restoring motion from the upper and lower limits, respectively; otherwise, $\phi$ smoothly blocks windup.
 
-## Callers
+## Model Usage
 
-Anti-windup indicator (`Math::indicator`):
+Ramp (`Math::ramp`, $\rho$):
+
+- [IEEET1](Model/PhasorDynamics/Exciter/IEEET1/README.md): smooth magnetic saturation above the saturation knee
+- REGCA: applies reactive-current and active-current rate-limit corrections
+
+Saturating ramp (`Math::rampsat`, $\operatorname{rampsat}$):
+
+- REGCA: defines the LVPL and LVACM piecewise-linear curves
+
+Anti-windup gate (`Math::indicator`):
 
 - [IEEET1](Model/PhasorDynamics/Exciter/IEEET1/README.md): gates $\dot V_R$ on $V_R \in (V_{rmin}, V_{rmax})$
 - [TGOV1](Model/PhasorDynamics/Governor/Tgov1/README.md): gates $\dot P_v$ on $P_v \in (P_{vmin}, P_{vmax})$
@@ -59,4 +85,4 @@ Anti-windup indicator (`Math::indicator`):
 
 Interior indicator (`Math::indicator_zero`):
 
-- [IEEEST](Model/PhasorDynamics/Stabilizer/IEEEST/README.md): clips the stabilizer output $v_7$ to $[L_{s\min}, L_{s\max}]$, passing $v_7$ through in the interior and saturating to the limits outside
+- [IEEEST](Model/PhasorDynamics/Stabilizer/IEEEST/README.md): clips stabilizer output $v_7$ to $[L_{s\min}, L_{s\max}]$
