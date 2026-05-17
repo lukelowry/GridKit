@@ -23,12 +23,12 @@ Softplus avoids the negative undershoot of $x\sigma(x)$, with a small positive b
 |------|--------------|----------------------|-------------|
 | `clamp` | $\min(\max(x,\ell),u)$ | $\ell + \rho(x-\ell) - \rho(x-u)$ | Bounded saturation |
 | `slew` | $\min(\max(f,-r),r)$ | $-r + \rho(f+r) - \rho(f-r)$ | Symmetric slew-rate limiter |
-| `rampsat` | $h\,\operatorname{clamp}\!\left(\frac{x-a}{b-a},0,1\right)$ | $\frac{h}{b-a}\left[\rho(x-a)-\rho(x-b)\right]$ | Saturating linear ramp |
+| `rampsat` | $h\,\text{clamp}\!\left(\frac{x-a}{b-a},0,1\right)$ | $\frac{h}{b-a}\left[\rho(x-a)-\rho(x-b)\right]$ | Saturating linear ramp |
 
 `rampsat` is a monotone saturating linear ramp, implemented as the difference of two smooth ramps:
 
 ```math
-\operatorname{rampsat}(x;\,a,b,h)
+\text{rampsat}(x;\,a,b,h)
 =
 \frac{h}{b-a}\left[\rho(x-a)-\rho(x-b)\right].
 ```
@@ -73,7 +73,7 @@ Ramp (`Math::ramp`, $\rho$):
 - [IEEET1](Model/PhasorDynamics/Exciter/IEEET1/README.md): smooth magnetic saturation above the saturation knee
 - REGCA: applies reactive-current and active-current rate-limit corrections
 
-Saturating ramp (`Math::rampsat`, $\operatorname{rampsat}$):
+Saturating ramp (`Math::rampsat`, $\text{rampsat}$):
 
 - REGCA: defines the LVPL and LVACM piecewise-linear curves
 

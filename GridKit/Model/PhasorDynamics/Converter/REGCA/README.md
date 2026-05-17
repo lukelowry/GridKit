@@ -132,7 +132,7 @@ The exact state equations are
       \min(f_{\mathrm{q}}, R_{\mathrm{q}}^{\max}) & Q_{\mathrm{0}} > 0 \\
       \max(f_{\mathrm{q}}, R_{\mathrm{q}}^{\min}) & Q_{\mathrm{0}} \le 0
     \end{cases} \\
-  \dot I_{\mathrm{p}} &= \operatorname{clamp}(f_{\mathrm{p}}, \ell_{\mathrm{p}}, u_{\mathrm{p}})
+  \dot I_{\mathrm{p}} &= \text{clamp}(f_{\mathrm{p}}, \ell_{\mathrm{p}}, u_{\mathrm{p}})
 \end{aligned}
 ```
 
@@ -203,7 +203,7 @@ exact algebraic targets are:
 \end{aligned}
 ```
 
-The implemented algebraic residuals use smooth $\operatorname{rampsat}$,
+The implemented algebraic residuals use smooth $\text{rampsat}$,
 $\rho$, and $\sigma$ operators:
 
 ```math
@@ -213,9 +213,9 @@ $\rho$, and $\sigma$ operators:
   0 &= -I_{\mathrm{q}}^{\mathrm{extra}}
        + \rho\!\left(I_{\mathrm{q}}^{\mathrm{extra}} - (V_{\mathrm{hv}}^{\max} - V_T)\right) \\
   0 &= -I_L
-       + \operatorname{rampsat}(V_M;\ V_{L0},\ V_{L1},\ I_{L1}) \\
+       + \text{rampsat}(V_M;\ V_{L0},\ V_{L1},\ I_{L1}) \\
   0 &= -I_{\mathrm{r}}
-       + I_{\mathrm{p}}\operatorname{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) \\
+       + I_{\mathrm{p}}\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) \\
   0 &= -\ell_{\mathrm{p}}
        - R_{\mathrm{p}}^{\max}
        - (M_{\mathrm{p}} - R_{\mathrm{p}}^{\max})\sigma(I_{\mathrm{p}}) \\
@@ -261,9 +261,9 @@ steady-state initial values:
   I_{\mathrm{i0}}         &= \dfrac{P_{\mathrm{0}}V_{\mathrm{i}} - Q_{\mathrm{0}}V_{\mathrm{r}}}{V_T^2}
                               \dfrac{S^{\mathrm{sys}}}{S^{\mathrm{conv}}} \\
   V_{M0}                  &= V_T \\
-  I_{L0}                  &= \operatorname{rampsat}(V_T;\ V_{L0},\ V_{L1},\ I_{L1}) \\
+  I_{L0}                  &= \text{rampsat}(V_T;\ V_{L0},\ V_{L1},\ I_{L1}) \\
   I_{\mathrm{p0}}         &= \dfrac{I_{\mathrm{r0}}}
-       {\operatorname{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1)} \\
+       {\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1)} \\
   \ell_{\mathrm{p0}}       &= -R_{\mathrm{p}}^{\max}
        - (M_{\mathrm{p}} - R_{\mathrm{p}}^{\max})\sigma(I_{\mathrm{p0}}) \\
   u_{\mathrm{p0}}          &=
@@ -284,14 +284,14 @@ steady-state initial values:
 ```
 
 For normal power-flow starts, $V_T > V_{A1}$, so
-$\operatorname{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) = 1$ and the
+$\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) = 1$ and the
 $I_{\mathrm{p0}}$ formula is well defined.
 
 Initialization should verify:
 - $V_T \le V_{\mathrm{hv}}^{\max}$. If $V_T \ge V_{\mathrm{hv}}^{\max}$,
   $I_{\mathrm{q0}}^{\mathrm{extra}} = 0$ may not satisfy the HVRCM algebraic
   condition, and a nonzero value should be solved or the initialization rejected.
-- $\operatorname{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) > 0$ when
+- $\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) > 0$ when
   $I_{\mathrm{r0}} \ne 0$. If the LVACM gain is zero, no finite
   $I_{\mathrm{p0}}$ can reproduce nonzero initial active current.
 
