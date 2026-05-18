@@ -126,13 +126,13 @@ The exact state equations are
 
 ```math
 \begin{aligned}
-  \dot V_M &= \dfrac{1}{T_M}(V_T - V_M) \\
-  \dot I_{\mathrm{q}} &=
+  0 &= -T_M \dot V_M - V_M + V_T \\
+  0 &= -\dot I_{\mathrm{q}}  +
     \begin{cases}
       \min(f_{\mathrm{q}}, R_{\mathrm{q}}^{\max}) & Q_{\mathrm{0}} > 0 \\
       \max(f_{\mathrm{q}}, R_{\mathrm{q}}^{\min}) & Q_{\mathrm{0}} \le 0
     \end{cases} \\
-  \dot I_{\mathrm{p}} &= \text{clamp}(f_{\mathrm{p}}, \ell_{\mathrm{p}}, u_{\mathrm{p}})
+  0 &= -\dot I_{\mathrm{p}} + \text{clamp}(f_{\mathrm{p}}, \ell_{\mathrm{p}}, u_{\mathrm{p}})
 \end{aligned}
 ```
 
@@ -140,15 +140,15 @@ The implemented smooth state equations are
 
 ```math
 \begin{aligned}
-  \dot V_M &= \dfrac{1}{T_M}(V_T - V_M) \\
-  \dot I_{\mathrm{q}} &=
+  0 &= -T_M \dot V_M - V_M + V_T \\
+  0 &= -\dot I_{\mathrm{q}} +
     \begin{cases}
       f_{\mathrm{q}} - \rho(f_{\mathrm{q}} - R_{\mathrm{q}}^{\max})
         & Q_{\mathrm{0}} > 0 \\
       f_{\mathrm{q}} + \rho(R_{\mathrm{q}}^{\min} - f_{\mathrm{q}})
         & Q_{\mathrm{0}} \le 0
     \end{cases} \\
-  \dot I_{\mathrm{p}} &=
+  0 &= -\dot I_{\mathrm{p}} +
     \ell_{\mathrm{p}}
     + \rho(f_{\mathrm{p}} - \ell_{\mathrm{p}})
     - \rho(f_{\mathrm{p}} - u_{\mathrm{p}})
@@ -168,7 +168,7 @@ exact algebraic targets are:
 
 ```math
 \begin{aligned}
-  V_T &= \sqrt{V_{\mathrm{r}}^2 + V_{\mathrm{i}}^2} \\
+  0 &= -V_T^2 + V_{\mathrm{r}}^2 + V_{\mathrm{i}}^2 \\
   I_{\mathrm{i}} &= -I_{\mathrm{q}} + I_{\mathrm{q}}^{\mathrm{extra}} \\
   0 &=
   \begin{cases}
@@ -203,19 +203,19 @@ exact algebraic targets are:
 \end{aligned}
 ```
 
-The implemented algebraic residuals use smooth $\text{rampsat}$,
+The implemented algebraic residuals use smooth $\text{linseg}$,
 $\rho$, and $\sigma$ operators:
 
 ```math
 \begin{aligned}
-  0 &= V_T^2 - V_{\mathrm{r}}^2 - V_{\mathrm{i}}^2 \\
+  0 &= -V_T^2 + V_{\mathrm{r}}^2 + V_{\mathrm{i}}^2 \\
   0 &= -I_{\mathrm{i}} - I_{\mathrm{q}} + I_{\mathrm{q}}^{\mathrm{extra}} \\
   0 &= -I_{\mathrm{q}}^{\mathrm{extra}}
        + \rho\!\left(I_{\mathrm{q}}^{\mathrm{extra}} - (V_{\mathrm{hv}}^{\max} - V_T)\right) \\
   0 &= -I_L
-       + \text{rampsat}(V_M;\ V_{L0},\ V_{L1},\ I_{L1}) \\
+       + \text{linseg}(V_M;\ V_{L0},\ V_{L1},\ I_{L1}) \\
   0 &= -I_{\mathrm{r}}
-       + I_{\mathrm{p}}\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) \\
+       + I_{\mathrm{p}}\text{linseg}(V_T;\ V_{A0},\ V_{A1},\ 1) \\
   0 &= -\ell_{\mathrm{p}}
        - R_{\mathrm{p}}^{\max}
        - (M_{\mathrm{p}} - R_{\mathrm{p}}^{\max})\sigma(I_{\mathrm{p}}) \\
@@ -261,9 +261,9 @@ steady-state initial values:
   I_{\mathrm{i0}}         &= \dfrac{P_{\mathrm{0}}V_{\mathrm{i}} - Q_{\mathrm{0}}V_{\mathrm{r}}}{V_T^2}
                               \dfrac{S^{\mathrm{sys}}}{S^{\mathrm{conv}}} \\
   V_{M0}                  &= V_T \\
-  I_{L0}                  &= \text{rampsat}(V_T;\ V_{L0},\ V_{L1},\ I_{L1}) \\
+  I_{L0}                  &= \text{linseg}(V_T;\ V_{L0},\ V_{L1},\ I_{L1}) \\
   I_{\mathrm{p0}}         &= \dfrac{I_{\mathrm{r0}}}
-       {\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1)} \\
+       {\text{linseg}(V_T;\ V_{A0},\ V_{A1},\ 1)} \\
   \ell_{\mathrm{p0}}       &= -R_{\mathrm{p}}^{\max}
        - (M_{\mathrm{p}} - R_{\mathrm{p}}^{\max})\sigma(I_{\mathrm{p0}}) \\
   u_{\mathrm{p0}}          &=
@@ -284,14 +284,14 @@ steady-state initial values:
 ```
 
 For normal power-flow starts, $V_T > V_{A1}$, so
-$\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) = 1$ and the
+$\text{linseg}(V_T;\ V_{A0},\ V_{A1},\ 1) = 1$ and the
 $I_{\mathrm{p0}}$ formula is well defined.
 
 Initialization should verify:
 - $V_T \le V_{\mathrm{hv}}^{\max}$. If $V_T \ge V_{\mathrm{hv}}^{\max}$,
   $I_{\mathrm{q0}}^{\mathrm{extra}} = 0$ may not satisfy the HVRCM algebraic
   condition, and a nonzero value should be solved or the initialization rejected.
-- $\text{rampsat}(V_T;\ V_{A0},\ V_{A1},\ 1) > 0$ when
+- $\text{linseg}(V_T;\ V_{A0},\ V_{A1},\ 1) > 0$ when
   $I_{\mathrm{r0}} \ne 0$. If the LVACM gain is zero, no finite
   $I_{\mathrm{p0}}$ can reproduce nonzero initial active current.
 

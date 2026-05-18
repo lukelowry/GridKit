@@ -325,7 +325,7 @@ namespace GridKit
         // The 'pre-limit' derivative of Vr.
         ScalarT func            = (-vr + Ka_ * vtr) / Ta_;
         ScalarT func_normalized = func / static_cast<RealT>(500.0); // TODO This is arbitrary, need more general conditioning method that is fast
-        ScalarT vr_ind          = Math::indicator(Vrmin_, Vrmax_, vr, func_normalized);
+        ScalarT vr_ind          = Math::indicator(vr, func_normalized, Vrmin_, Vrmax_);
 
         // Internal Differential Equations
         f[0] = -vts_dot + (Ec - vts) / Tr_;

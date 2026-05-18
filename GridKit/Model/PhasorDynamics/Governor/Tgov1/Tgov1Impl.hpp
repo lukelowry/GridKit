@@ -258,7 +258,7 @@ namespace GridKit
 
         // The 'pre-limit' derivative of Pv
         ScalarT func     = (-pv + (pref_ - omega) / R_) / T1_;
-        ScalarT valv_ind = Math::indicator(Pvmin_, Pvmax_, pv, func);
+        ScalarT valv_ind = Math::indicator(pv, func, Pvmin_, Pvmax_);
 
         // Internal Differential Equations
         f[0] = -ptx_dot + pv - (ptx + T2_ * pv) / T3_;

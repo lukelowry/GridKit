@@ -7,10 +7,14 @@ int main()
   GridKit::Testing::SmoothnessIndicatorTests<double> test;
 
   result += test.clamp();
+  result += test.deadband();
+  result += test.limitIndicators();
   result += test.slew();
-  result += test.rampsat();
+  result += test.linseg();
   result += test.ramp();
+  result += test.minMax();
   result += test.antiWindupIndicator();
+  result += test.antiWindup();
 
   return result.summary();
 }
