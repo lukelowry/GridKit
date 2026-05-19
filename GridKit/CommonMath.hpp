@@ -53,6 +53,26 @@ namespace GridKit
     }
 
     /**
+     * @brief Smooth one-sided quadratic ramp
+     *
+     * Smooth approximation to max(x, 0)^2 via a sigmoid-gated quadratic.
+     * Used for IEEE-style quadratic saturation curves.
+     *
+     * @note Eventually a enzyme specialization for an exact implementation
+     *       would be nice, since the piecewise definition is C^1 continuous
+     *
+     * @tparam ScalarT - scalar data type
+     *
+     * @param[in] x - input signal
+     * @return value of the quadratic ramp
+     */
+    template <class ScalarT>
+    __attribute__((always_inline)) inline ScalarT qramp(const ScalarT x)
+    {
+      return x * x * sigmoid(x);
+    }
+
+    /**
      * @brief Smooth binary maximum function
      *
      * Smooth approximation to max(x, y), composed from the smooth ramp

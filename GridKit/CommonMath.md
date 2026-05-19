@@ -9,7 +9,8 @@ Smooth, autodiff-friendly replacements for piecewise functions used across GridK
 | Name | Description | Usage |
 |------|-------------|-------|
 | `sigmoid` | Step function | `IEEET1` |
-| `ramp` | Smooth one-sided ramp | `IEEET1`, `REGCA` |
+| `ramp` | Smooth one-sided ramp | `REGCA` |
+| `qramp` | Exact one-sided quadratic ramp | `IEEET1` |
 
 ### Exact Equations
 
@@ -22,7 +23,8 @@ Smooth, autodiff-friendly replacements for piecewise functions used across GridK
 1 & x > 0
 \end{cases}
 \\
-\rho(x) &= \max(x,0)
+\rho(x) &= \max(x,0) \\
+q(x) &= \max(x,0)^2
 \end{aligned}
 ```
 
@@ -31,7 +33,8 @@ Smooth, autodiff-friendly replacements for piecewise functions used across GridK
 ```math
 \begin{aligned}
 \sigma(x) &= \dfrac{1}{1+e^{-\mu x}} \\
-\rho(x) &= \dfrac{(\mu x+\lvert\mu x\rvert)/2+\log(1+e^{-\lvert\mu x\rvert})}{\mu}
+\rho(x) &= \dfrac{(\mu x+\lvert\mu x\rvert)/2+\log(1+e^{-\lvert\mu x\rvert})}{\mu} \\
+q(x) &= x^2\,\sigma(x)
 \end{aligned}
 ```
 
