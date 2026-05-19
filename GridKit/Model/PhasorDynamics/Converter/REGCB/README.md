@@ -15,6 +15,10 @@ Standard model diagram for the REGCB converter interface.
   Figure 1: Generator/Converter REGCB model. Figure courtesy of [PowerWorld](https://www.powerworld.com/WebHelp/)
 </div>
 
+Detailed REGCB parameters, variables, equations, initialization details, and
+outputs will be added after validation against the REGCB source standard.
+
+<!--
 ## Model Parameters
 
 TODO: Populate from the validated REGCB source standard.
@@ -110,3 +114,4 @@ phasor dynamics convention:
 ```
 
 Power outputs should be oriented as leaving the converter (i.e. entering the bus).
+-->

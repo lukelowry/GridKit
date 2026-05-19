@@ -28,8 +28,8 @@ $T_4$       | [s]    | Lead–lag 2 denominator time constant | 0.0
 $T_5$       | [s]    | Washout numerator time constant      | 1.65
 $T_6$       | [s]    | Washout denominator time constant    | 1.65
 $K_s$       | [p.u.] | Stabilizer gain                      | 3.0
-$L_{s\min}$ | [p.u.] | Minimum stabilizer output limit      | -0.1
-$L_{s\max}$ | [p.u.] | Maximum stabilizer output limit      | 0.1
+$L_s^{\min}$ | [p.u.] | Minimum stabilizer output limit      | -0.1
+$L_s^{\max}$ | [p.u.] | Maximum stabilizer output limit      | 0.1
 
 The IEEE 421.5 IEEEST also defines a cutout window ($V_{cl}$, $V_{cu}$) and an
 input delay ($T_{delay}$). These parameters are accepted for input-format
@@ -102,7 +102,7 @@ $u$    | [p.u.] | Stabilizer input signal
 0 &= -T_2(v_5 - x_5) + T_1(v_4 - x_5) \\
 0 &= -T_4(v_6 - x_6) + T_3(v_5 - x_6) \\
 0 &= -T_6 v_7 + K_s T_5(v_6 - x_7) \\
-0 &= -V_{ss} + \operatorname{clamp}(v_7, L_{s\min}, L_{s\max})
+0 &= -V_{ss} + \text{clamp}(v_7, L_s^{\min}, L_s^{\max})
 \end{aligned}
 ```
 

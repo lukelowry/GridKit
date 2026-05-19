@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cassert>
 #include <cmath>
 
 #include <GridKit/Constants.hpp>
@@ -115,6 +116,7 @@ namespace GridKit
         const LowerT  lower,
         const UpperT  upper)
     {
+      assert(lower <= upper);
       return lower + ramp(x - lower) - ramp(x - upper);
     }
 
@@ -138,6 +140,7 @@ namespace GridKit
         const RealT   lower,
         const RealT   upper)
     {
+      assert(lower <= upper);
       return ramp(x - upper) - ramp(-(x - lower));
     }
 
@@ -158,6 +161,7 @@ namespace GridKit
         const ScalarT f,
         const RealT   rate)
     {
+      assert(rate >= ZERO<RealT>);
       return clamp(f, -rate, rate);
     }
 
@@ -184,6 +188,7 @@ namespace GridKit
         const RealT   upper,
         const RealT   height)
     {
+      assert(lower < upper);
       return height / (upper - lower) * (ramp(x - lower) - ramp(x - upper));
     }
 
@@ -256,6 +261,7 @@ namespace GridKit
         const RealT   limit_min,
         const RealT   limit_max)
     {
+      assert(limit_min <= limit_max);
       return above(x, limit_min) + below(x, limit_max) - ONE<RealT>;
     }
 
@@ -276,6 +282,7 @@ namespace GridKit
         const RealT   limit_min,
         const RealT   limit_max)
     {
+      assert(limit_min <= limit_max);
       return below(x, limit_min) + above(x, limit_max);
     }
 
@@ -299,6 +306,8 @@ namespace GridKit
         const RealT   limit_min,
         const RealT   limit_max)
     {
+      assert(limit_min <= limit_max);
+
       ScalarT above_min = above(x, limit_min);
       ScalarT below_max = below(x, limit_max);
 
