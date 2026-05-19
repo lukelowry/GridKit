@@ -255,31 +255,31 @@ steady-state initial values:
 
 ```math
 \begin{aligned}
-  V_T                    &= \sqrt{V_{\mathrm{r}}^2 + V_{\mathrm{i}}^2} \\
-  I_{\mathrm{r0}}         &= \dfrac{P_{\mathrm{0}}V_{\mathrm{r}} + Q_{\mathrm{0}}V_{\mathrm{i}}}{V_T^2}
-                              \dfrac{S^{\mathrm{sys}}}{S^{\mathrm{conv}}} \\
-  I_{\mathrm{i0}}         &= \dfrac{P_{\mathrm{0}}V_{\mathrm{i}} - Q_{\mathrm{0}}V_{\mathrm{r}}}{V_T^2}
-                              \dfrac{S^{\mathrm{sys}}}{S^{\mathrm{conv}}} \\
+  V_T                    &= \sqrt{V_\mathrm{r}^2 + V_\mathrm{i}^2} \\
+  I_\mathrm{r0}           &= \dfrac{P_0 V_\mathrm{r} + Q_0 V_\mathrm{i}}{V_T^2}
+                              \dfrac{S^\mathrm{sys}}{S^\mathrm{conv}} \\
+  I_\mathrm{i0}           &= \dfrac{P_0 V_\mathrm{i} - Q_0 V_\mathrm{r}}{V_T^2}
+                              \dfrac{S^\mathrm{sys}}{S^\mathrm{conv}} \\
   V_{M0}                  &= V_T \\
   I_{L0}                  &= \text{linseg}(V_T;\ V_{L0},\ V_{L1},\ I_{L1}) \\
-  I_{\mathrm{p0}}         &= \dfrac{I_{\mathrm{r0}}}
+  I_\mathrm{p0}           &= \dfrac{I_\mathrm{r0}}
        {\text{linseg}(V_T;\ V_{A0},\ V_{A1},\ 1)} \\
-  \ell_{\mathrm{p0}}       &= -R_{\mathrm{p}}^{\max}
-       - (M_{\mathrm{p}} - R_{\mathrm{p}}^{\max})\sigma(I_{\mathrm{p0}}) \\
-  u_{\mathrm{p0}}          &=
+  \ell_\mathrm{p0}         &= -R_\mathrm{p}^{\max}
+       - (M_\mathrm{p} - R_\mathrm{p}^{\max})\sigma(I_\mathrm{p0}) \\
+  u_\mathrm{p0}            &=
        \begin{cases}
-         M_{\mathrm{p}}(1-\sigma(I_{\mathrm{p0}}))
-         + R_{\mathrm{p}}^{\max}\sigma(I_{\mathrm{p0}})
-           \sigma(I_{L0} - I_{\mathrm{p0}})
+         M_\mathrm{p}(1-\sigma(I_\mathrm{p0}))
+         + R_\mathrm{p}^{\max}\sigma(I_\mathrm{p0})
+           \sigma(I_{L0} - I_\mathrm{p0})
            & s_L = 1 \\
-         M_{\mathrm{p}}(1-\sigma(I_{\mathrm{p0}}))
-         + R_{\mathrm{p}}^{\max}\sigma(I_{\mathrm{p0}})
+         M_\mathrm{p}(1-\sigma(I_\mathrm{p0}))
+         + R_\mathrm{p}^{\max}\sigma(I_\mathrm{p0})
            & s_L = 0
        \end{cases} \\
-  I_{\mathrm{q0}}^{\mathrm{extra}} &= 0 \\
-  I_{\mathrm{q0}}         &= -I_{\mathrm{i0}} + I_{\mathrm{q0}}^{\mathrm{extra}} \\
-  I_{\mathrm{p0}}^{\mathrm{cmd}} &= I_{\mathrm{p0}} \\
-  I_{\mathrm{q0}}^{\mathrm{cmd}} &= I_{\mathrm{q0}}
+  I_\mathrm{q0}^\mathrm{extra} &= 0 \\
+  I_\mathrm{q0}           &= -I_\mathrm{i0} + I_\mathrm{q0}^\mathrm{extra} \\
+  I_\mathrm{p0}^\mathrm{cmd} &= I_\mathrm{p0} \\
+  I_\mathrm{q0}^\mathrm{cmd} &= I_\mathrm{q0}
 \end{aligned}
 ```
 

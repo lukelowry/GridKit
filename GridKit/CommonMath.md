@@ -23,8 +23,8 @@ Smooth, autodiff-friendly replacements for piecewise functions used across GridK
 1 & x > 0
 \end{cases}
 \\
-\rho(x) &= \max(x,0) \\
-q(x) &= \max(x,0)^2
+\rho(x) &= x\,\sigma(x) \\
+q(x) &= x^2\,\sigma(x)
 \end{aligned}
 ```
 
@@ -38,7 +38,7 @@ q(x) &= x^2\,\sigma(x)
 \end{aligned}
 ```
 
-The scale $\mu=4\cdot f_{\text{sync}}=240$ is chosen so $\sigma$ behaves like a step on inputs of order 1 while keeping derivatives finite. As $\mu \to \infty$, these functions approach their exact targets.
+The scale $\mu=4\cdot f_{\text{sync}}=240$ is chosen so $\sigma$ behaves like a step on inputs of order 1 while keeping derivatives finite. As $\mu \to \infty$, these functions approach their exact targets. (*Note*: the implementation of the quadratic ramp `q(x)` could be optimized with Enzyme features down the road).
 
 ## Derived Functions
 
