@@ -1,0 +1,104 @@
+{
+  "header": {
+    "format_version": 1,
+    "case_name": "EMT Simple TwoBus",
+    "description": "Two-bus EMT parser fixture"
+  },
+  "buses": [
+    {
+      "name": "source_bus",
+      "init": {
+        "vm": 120.0,
+        "va": 0.0
+      },
+      "mon": ["va", "vb", "vc"]
+    },
+    {
+      "name": "receiving_bus",
+      "init": {
+        "vm": 120.0,
+        "va": 0.0
+      },
+      "mon": ["va", "vb", "vc", "ifa", "ifb", "ifc"]
+    }
+  ],
+  "components": [
+    {
+      "name": "source",
+      "class": "VoltageSource",
+      "params": {
+        "e": [120.0, 120.0, 120.0],
+        "phi": [0.0, -2.0943951023931953, 2.0943951023931953],
+        "r": [0.1, 0.1, 0.1],
+        "frequency": 60.0
+      },
+      "ports": {
+        "bus": "source_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    },
+    {
+      "name": "line",
+      "class": "BranchLumpedConstant",
+      "params": {
+        "r": [
+          [0.001, 0.0, 0.0],
+          [0.0, 0.001, 0.0],
+          [0.0, 0.0, 0.001]
+        ],
+        "l": [
+          [0.0001, 0.0, 0.0],
+          [0.0, 0.0001, 0.0],
+          [0.0, 0.0, 0.0001]
+        ],
+        "g": [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ],
+        "c": [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ],
+        "length": 100.0
+      },
+      "ports": {
+        "from": "source_bus",
+        "to": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    },
+    {
+      "name": "load",
+      "class": "LoadRL",
+      "params": {
+        "r": [24.9, 21.4, 28.1],
+        "l": [0.039, 0.053, 0.052]
+      },
+      "ports": {
+        "ac": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    },
+    {
+      "name": "breaker",
+      "class": "Breaker",
+      "params": {
+        "closed": "abc"
+      },
+      "ports": {
+        "from": "source_bus",
+        "to": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    }
+  ],
+  "monitors": [
+    {
+      "file_name": "emt_simple.csv",
+      "format": "csv",
+      "delim": ","
+    }
+  ]
+}
