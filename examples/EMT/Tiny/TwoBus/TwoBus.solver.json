@@ -1,0 +1,20 @@
+{
+  "case_file": "TwoBus.case.json",
+  "t_start": 0.0,
+  "t_stop": 0.3,
+  "output_step": 0.001,
+  "fault": {
+    "bus": "receiving_bus",
+    "resistance": 0.25
+  },
+  "events": [
+    {
+      "time": 0.1,
+      "type": "fault_on"
+    },
+    {
+      "time": 0.2,
+      "type": "fault_off"
+    }
+  ]
+}

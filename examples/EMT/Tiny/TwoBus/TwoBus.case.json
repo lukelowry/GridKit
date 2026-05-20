@@ -1,0 +1,95 @@
+{
+  "header": {
+    "format_version": 1,
+    "case_name": "EMT Tiny TwoBus",
+    "description": "Two-bus EMT example with a voltage source, lumped branch, RL load, and a timed shunt fault",
+    "freq_base": 60.0
+  },
+  "buses": [
+    {
+      "number": 0,
+      "name": "source_bus",
+      "init": {
+        "vm": 120.0,
+        "va": 0.0
+      },
+      "mon": ["va", "vb", "vc"]
+    },
+    {
+      "number": 1,
+      "name": "receiving_bus",
+      "init": {
+        "vm": 118.0,
+        "va": -0.04
+      },
+      "mon": ["va", "vb", "vc"]
+    }
+  ],
+  "components": [
+    {
+      "name": "source",
+      "class": "VoltageSource",
+      "params": {
+        "e": [120.0, 120.0, 120.0],
+        "phi": [0.0, -2.0943951023931953, 2.0943951023931953],
+        "r": [0.15, 0.15, 0.15],
+        "frequency": 60.0
+      },
+      "ports": {
+        "bus": "source_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    },
+    {
+      "name": "line",
+      "class": "BranchLumpedConstant",
+      "params": {
+        "r": [
+          [0.08, 0.0, 0.0],
+          [0.0, 0.08, 0.0],
+          [0.0, 0.0, 0.08]
+        ],
+        "l": [
+          [0.0015, 0.0, 0.0],
+          [0.0, 0.0015, 0.0],
+          [0.0, 0.0, 0.0015]
+        ],
+        "g": [
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0]
+        ],
+        "c": [
+          [0.00002, 0.0, 0.0],
+          [0.0, 0.00002, 0.0],
+          [0.0, 0.0, 0.00002]
+        ],
+        "length": 1.0
+      },
+      "ports": {
+        "from": "source_bus",
+        "to": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    },
+    {
+      "name": "load",
+      "class": "LoadRL",
+      "params": {
+        "r": [18.0, 18.0, 18.0],
+        "l": [0.045, 0.045, 0.045]
+      },
+      "ports": {
+        "ac": "receiving_bus"
+      },
+      "mon": ["ia", "ib", "ic"]
+    }
+  ],
+  "monitors": [
+    {
+      "file_name": "TwoBus.mon.csv",
+      "format": "csv",
+      "delim": ","
+    }
+  ]
+}

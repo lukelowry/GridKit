@@ -3,7 +3,7 @@
 This propagation model is designed specifically for an adpative time-step integration, which allows us to bypass the typical upper bound on time step interval. This is technically a smooth approximation of wave-front propagation.
 
 <div align="center">
-   <img align="center" src="../../../../../docs/Figures/EMT/lumped_constant_diagram.svg">
+   <img align="center" src="../../../../../docs/Figures/EMT/propagation_diagram.png">
 
   Figure 1: Lumped constant EMT branch model
 </div>
@@ -21,8 +21,9 @@ $\Delta t_{\min}$  | [s]          | Series inductance matrix per unit length | $
 The incidence matrix $\mathbf{A}$ is that of a directed ring.
 ``` math
 \begin{aligned}
-N&=2\,\text{floor}\left(\dfrac{\tau_{\min}}{\Delta t_{\min}}\right) \\
-\mathbf{H}&=\dfrac{N}{\tau_{\min}}\mathbf{A}
+N&=\,\text{floor}\left(\dfrac{\tau_{\min}}{\Delta t_{\min}}\right) \\
+G&= \dfrac{\tau_{\min}}{2\Delta t_{\min}}\\
+\mathbf{H}&=G\mathbf{A}
 \end{aligned}
 ```
 
