@@ -7,7 +7,7 @@ port wiring, and monitor output sinks.
 {
   "header": {
     "format_version": 1,
-    "case_name": "Minimal EMT Case",
+    "case_name": "Minimal EMT Scenario",
     "description": "Small EMT input example"
   },
   "buses": [
@@ -33,7 +33,7 @@ port wiring, and monitor output sinks.
 
 | Field | Required | Type | Description |
 | --- | --- | --- | --- |
-| `header` | Yes | object | Case metadata. |
+| `header` | Yes | object | Scenario metadata. |
 | `buses` | Yes | array | EMT bus objects. |
 | `components` | Yes | array | EMT component objects. |
 | `monitors` | No | array | Monitor sink objects. |
@@ -59,8 +59,9 @@ Bus initialization uses RMS phase-voltage magnitude `vm` and phase-a angle
 | `ports` | Yes | object | Class-defined port wiring. |
 | `mon` | No | array | Ordered component monitor variable names. |
 
-Supported classes in this scaffold are `BranchLumpedConstant`, `LoadRL`,
-`VoltageSource`, and `Breaker`.
+Active sparse-AD model classes are `BranchLumpedConstant`, `LoadRL`, and
+`VoltageSource`. `Breaker` is currently parsed as a skeleton and does not add
+solver equations.
 
 ## Ports
 
@@ -72,6 +73,31 @@ LoadRL:               ac
 VoltageSource:        bus
 Breaker:              from, to
 ```
+
+## Required Parameters
+
+`VoltageSource`:
+
+- `e`: three RMS phase voltages, each nonnegative.
+- `phi`: three phase angles in radians.
+- `r`: three phase resistances, each strictly positive.
+- `frequency` in Hz or `omega0` in rad/s. If both are present, they must agree.
+
+`LoadRL`:
+
+- `r`: three phase resistances, each nonnegative.
+- `l`: three phase inductances, each strictly positive.
+
+`BranchLumpedConstant`:
+
+- `r`: finite 3x3 resistance matrix in ohm/m.
+- `l`: finite 3x3 inductance matrix in H/m; the derived matrix must be nonsingular.
+- `g`: optional finite 3x3 conductance matrix in S/m; defaults to zero.
+- `c`: finite symmetric 3x3 capacitance matrix in F/m with strictly positive diagonal entries.
+- `length`: finite positive length in m.
+
+Branch shunt capacitance is mandatory. A zero-capacitance branch is a validation
+error, not a fallback mode.
 
 ## Monitor Sinks
 

@@ -68,7 +68,14 @@ namespace GridKit
     template <class ScalarT, typename IdxT>
     int Breaker<ScalarT, IdxT>::evaluateResidual()
     {
-      std::fill(f_.begin(), f_.end(), ScalarT{0.0});
+      // Residual assembly is system-driven via SystemModel + LocalMap; this Evaluator override is intentionally unused.
+      return 0;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Breaker<ScalarT, IdxT>::evaluateJacobian()
+    {
+      // Jacobian assembly is system-driven via SystemModel + SparseAD; this Evaluator override is intentionally unused.
       return 0;
     }
 

@@ -1,6 +1,10 @@
 # [[
-#  EMT simple architecture skeleton
+#  EMT sparse-AD architecture
 #]]
+
+if(NOT GRIDKIT_ENABLE_ENZYME)
+  message(FATAL_ERROR "EMT sparse AD models require GridKit_ENABLE_ENZYME=ON")
+endif()
 
 add_library(emt_components INTERFACE)
 add_library(emt_components_dependency_tracking INTERFACE)
@@ -14,6 +18,10 @@ gridkit_add_library(emt_core
     ComponentDataJSONParser.hpp
     ComponentLibrary.hpp
     GridElement.hpp
+    System/CsrAssembly.hpp
+    System/Layout.hpp
+    System/LocalMap.hpp
+    System/SparseAD.hpp
     SystemModel.hpp
     SystemModelData.hpp
     SystemModelDataJSONParser.hpp
@@ -22,13 +30,29 @@ gridkit_add_library(emt_core
     PUBLIC GridKit::utilities_logger
     PUBLIC GridKit::sparse_matrix
   INCLUDE_DIRECTORIES
-    PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include
-    PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include)
+    PUBLIC $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include>
+    PUBLIC $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include>)
+
+gridkit_add_library(emt_sparse_ad
+  SOURCES
+    System/SparseAD.cpp
+  HEADERS
+    System/CsrAssembly.hpp
+    System/Layout.hpp
+    System/LocalMap.hpp
+    System/SparseAD.hpp
+  LINK_LIBRARIES
+    PUBLIC GridKit::definitions
+    PUBLIC ClangEnzymeFlags
+  COMPILE_OPTIONS
+    PRIVATE -fno-math-errno)
 
 target_link_libraries(emt_components
-  INTERFACE GridKit::emt_core)
+  INTERFACE GridKit::emt_core
+  INTERFACE GridKit::emt_sparse_ad)
 target_link_libraries(emt_components_dependency_tracking
-  INTERFACE GridKit::emt_core)
+  INTERFACE GridKit::emt_core
+  INTERFACE GridKit::emt_sparse_ad)
 
 add_subdirectory(Bus)
 add_subdirectory(Components/BranchLumpedConstant)

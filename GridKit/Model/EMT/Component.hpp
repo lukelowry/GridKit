@@ -42,9 +42,6 @@ namespace GridKit
     protected:
       IdxT gridkit_component_id_{0};
 
-      std::vector<ScalarT> wb_;
-      std::vector<ScalarT> h_;
-
       RealT time_{0.0};
       RealT alpha_{0.0};
     };

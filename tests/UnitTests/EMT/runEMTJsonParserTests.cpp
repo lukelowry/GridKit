@@ -8,7 +8,7 @@ int main()
   TestingResults     result;
   EMTJsonParserTests test;
 
-  result += test.parseTwoBusCase();
+  result += test.parseTwoBusFixture();
 
   return result.summary();
 }

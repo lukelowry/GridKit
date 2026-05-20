@@ -1,28 +1,32 @@
 set(_install_headers
   BranchLumpedConstant.hpp
-  BranchLumpedConstantData.hpp)
+  BranchLumpedConstantData.hpp
+  BranchLumpedConstantImpl.hpp)
 
-gridkit_add_library(emt_branch_lumped_constant
-  SOURCES
-    BranchLumpedConstant.cpp
-  HEADERS
-    ${_install_headers}
-  INCLUDE_DIRECTORIES
-    PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include
-  LINK_LIBRARIES
-    PUBLIC GridKit::emt_core
-    PUBLIC GridKit::emt_bus)
+add_library(emt_branch_lumped_constant INTERFACE)
+target_include_directories(emt_branch_lumped_constant
+  INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>)
+target_compile_features(emt_branch_lumped_constant INTERFACE cxx_std_20)
+target_link_libraries(emt_branch_lumped_constant
+  INTERFACE GridKit::emt_core
+  INTERFACE GridKit::emt_bus)
+add_library(GridKit::emt_branch_lumped_constant ALIAS emt_branch_lumped_constant)
 
-gridkit_add_library(emt_branch_lumped_constant_dependency_tracking
-  SOURCES
-    BranchLumpedConstantDependencyTracking.cpp
-  INCLUDE_DIRECTORIES
-    PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include
-  LINK_LIBRARIES
-    PUBLIC GridKit::emt_core
-    PUBLIC GridKit::emt_bus_dependency_tracking)
+add_library(emt_branch_lumped_constant_dependency_tracking INTERFACE)
+target_link_libraries(emt_branch_lumped_constant_dependency_tracking
+  INTERFACE GridKit::emt_branch_lumped_constant)
+add_library(GridKit::emt_branch_lumped_constant_dependency_tracking ALIAS emt_branch_lumped_constant_dependency_tracking)
 
 target_link_libraries(emt_components
   INTERFACE GridKit::emt_branch_lumped_constant)
 target_link_libraries(emt_components_dependency_tracking
   INTERFACE GridKit::emt_branch_lumped_constant_dependency_tracking)
+
+install(TARGETS
+  emt_branch_lumped_constant
+  emt_branch_lumped_constant_dependency_tracking
+  EXPORT gridkit-targets)
+install(FILES ${_install_headers}
+  DESTINATION include/GridKit/Model/EMT/Components/BranchLumpedConstant)

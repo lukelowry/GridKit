@@ -14,7 +14,7 @@ namespace GridKit
     class EMTJsonParserTests
     {
     public:
-      TestOutcome parseTwoBusCase()
+      TestOutcome parseTwoBusFixture()
       {
         TestStatus success = true;
 
@@ -43,11 +43,13 @@ namespace GridKit
 
         EMT::SystemModel<double, size_t> system(data);
         success *= (system.allocate() == 0);
-        success *= (system.size() == 15);
+        success *= (system.size() == 12);
         success *= (system.initialize() == 0);
         success *= (system.tagDifferentiable() == 0);
         success *= (system.evaluateResidual() == 0);
         success *= (system.evaluateJacobian() == 0);
+        success *= (system.nnz() > 0);
+        success *= (system.getCsrJacobian() != nullptr);
 
         return success.report(__func__);
       }

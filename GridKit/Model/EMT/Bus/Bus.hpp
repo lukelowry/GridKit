@@ -1,7 +1,11 @@
 #pragma once
 
+#include <complex>
+
 #include <GridKit/Model/EMT/Bus/BusData.hpp>
 #include <GridKit/Model/EMT/GridElement.hpp>
+#include <GridKit/Model/EMT/Math/PhaseMath.hpp>
+#include <GridKit/Model/VariableMonitor.hpp>
 
 namespace GridKit
 {
@@ -29,18 +33,32 @@ namespace GridKit
       Bus(RealT vm, RealT va);
       virtual ~Bus();
 
-      int                setBusID(IdxT id);
-      IdxT               busID() const;
-      const std::string& name() const;
+      int                              setBusID(IdxT id);
+      IdxT                             busID() const;
+      const std::string&               name() const;
+      const DataT&                     data() const;
+      RealT                            frequency() const;
+      RealT                            omega() const;
+      PhaseVector<std::complex<RealT>> initialVoltagePhasor() const;
 
-      int  allocate() override final;
-      int  initialize() override final;
-      int  tagDifferentiable() override final;
-      int  evaluateResidual() override final;
-      int  evaluateJacobian() override final;
-      int  verify() const override final;
-      bool hasJacobian() override final;
-      void updateTime(RealT, RealT) override final;
+      int                               allocate() override final;
+      int                               initialize() override final;
+      int                               tagDifferentiable() override final;
+      int                               evaluateResidual() override final;
+      int                               evaluateJacobian() override final;
+      int                               verify() const override final;
+      bool                              hasJacobian() override final;
+      void                              updateTime(RealT, RealT) override final;
+      const Model::VariableMonitorBase* getMonitor() const override final;
+
+      void addIntrinsicResidual(const std::vector<ScalarT>& y,
+                                const std::vector<ScalarT>& yp,
+                                std::vector<ScalarT>&       f) const;
+
+      template <class LayoutT>
+      void addIntrinsicJacobian(const LayoutT&, const std::vector<ScalarT>&, const std::vector<ScalarT>&, RealT, std::vector<RealT>&) const
+      {
+      }
 
       ScalarT&       voltage(IdxT phase);
       const ScalarT& voltage(IdxT phase) const;
@@ -52,3 +70,5 @@ namespace GridKit
     };
   } // namespace EMT
 } // namespace GridKit
+
+#include <GridKit/Model/EMT/Bus/BusImpl.hpp>

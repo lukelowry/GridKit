@@ -1,43 +1,44 @@
 # Electromagnetic Transients (EMT)
 
-This directory contains the simplified EMT architecture scaffold. It follows
-the same lifecycle and build conventions as `PhasorDynamics`, while keeping
-the EMT model set in instantaneous abc coordinates.
+The EMT implementation is a sparse-AD-only `SystemModel` for instantaneous
+abc models. Components are value-like equation objects: each target model has
+one templated residual over local `y`, `yp`, and `f` arrays, and `SystemModel`
+owns all solver-facing global vectors and CSR Jacobian storage.
 
-## Conventions
+## Local Layout
 
-- Phase order is `a`, `b`, `c`.
-- Equations use SI units unless a model says otherwise.
-- Current injection terms are written as positive into buses.
-- This branch intentionally contains architecture stubs only; numerical EMT
-  equations are documented in component READMEs and will be implemented later.
+For every component, local arrays are ordered as:
 
-## Architecture
+```text
+y / yp: [ own variables | port 0 node variables | port 1 node variables | ... ]
+f:      [ own equations | port 0 node injections | port 1 node injections | ... ]
+```
 
-The EMT skeleton uses:
+Own residual rows are assigned into the global residual. Port rows are current
+injections accumulated into bus KCL equations. Electrical ports are
+three-phase and use phase order `a,b,c`.
 
-- `GridElement` as the common `Model::Evaluator` base.
-- `Component` as the base for branch/load/source/breaker models.
-- One concrete `Bus` implementation.
-- `SystemModel` with separate bus and component containers so buses are
-  allocated, initialized, and residual-evaluated first.
+## Sparse Jacobian
 
-This branch does not include the older EMT `Case`, `IO`, `System`, `Layout`,
-`Views`, `ComponentStore`, event scheduler, or Jacobian runtime architecture.
+The sparse pattern is discovered once with dependency tracking on the same
+single component residual used for values. Local `y` and `yp` are tracked as
+distinct variable ranges, and `SystemModel::tag()` is derived from structural
+`dF/dyp` columns. CSR coordinates are deduplicated and local contributions are
+bound to stable slots before time stepping.
 
-## Model Categories
+Every Jacobian evaluation clears CSR values before adding component
+contributions. The nonlinear sparse-AD value path is centralized in
+`System/SparseAD.hpp`; the current production EMT models are affine and use
+cached AD coefficients from the pattern pass.
 
-- `Bus`
-- `Components/BranchLumpedConstant`
-- `Components/LoadRL`
-- `Components/VoltageSource`
-- `Components/Breaker`
+## Models
 
-## History Buffer Reference
+- `Bus`: fixed three-phase node block initialized from RMS voltage phasors.
+- `Components/VoltageSource`: Norton source injection through phase resistance.
+- `Components/LoadRL`: three-phase differential RL load current.
+- `Components/BranchLumpedConstant`: full 3x3 coupled nominal pi branch.
+- `Components/Breaker`: parsed skeleton only unless separately implemented.
 
-Future distributed-line work is expected to need history buffering and
-polynomial/linear interpolation. The current reference point in
-`lukel/emt-system-dev` is
-`GridKit/Model/EMT/Math/RationalApprox/README.md`, which notes that travel-time
-delay and history interpolation are separate line-model concerns. No
-implemented history-buffer model is ported in this branch.
+`BranchLumpedConstant` requires a finite, symmetric shunt capacitance matrix
+with strictly positive diagonal entries. There is no zero-capacitance branch
+mode.

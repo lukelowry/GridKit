@@ -55,6 +55,41 @@ namespace GridKit
     }
 
     template <class ScalarT, typename IdxT>
+    const typename Bus<ScalarT, IdxT>::DataT& Bus<ScalarT, IdxT>::data() const
+    {
+      return data_;
+    }
+
+    template <class ScalarT, typename IdxT>
+    typename Bus<ScalarT, IdxT>::RealT Bus<ScalarT, IdxT>::frequency() const
+    {
+      return data_.freq_base.value_or(RealT{60.0});
+    }
+
+    template <class ScalarT, typename IdxT>
+    typename Bus<ScalarT, IdxT>::RealT Bus<ScalarT, IdxT>::omega() const
+    {
+      const RealT pi = std::acos(RealT{-1.0});
+      return RealT{2.0} * pi * frequency();
+    }
+
+    template <class ScalarT, typename IdxT>
+    PhaseVector<std::complex<typename Bus<ScalarT, IdxT>::RealT>>
+    Bus<ScalarT, IdxT>::initialVoltagePhasor() const
+    {
+      const RealT pi        = std::acos(RealT{-1.0});
+      const RealT shift     = RealT{2.0} * pi / RealT{3.0};
+      const RealT angles[3] = {data_.va, data_.va - shift, data_.va + shift};
+
+      PhaseVector<std::complex<RealT>> voltage{};
+      for (std::size_t phase = 0; phase < 3; ++phase)
+      {
+        voltage[phase] = std::polar(data_.vm, angles[phase]);
+      }
+      return voltage;
+    }
+
+    template <class ScalarT, typename IdxT>
     int Bus<ScalarT, IdxT>::allocate()
     {
       size_             = variable_count;
@@ -78,18 +113,15 @@ namespace GridKit
     template <class ScalarT, typename IdxT>
     int Bus<ScalarT, IdxT>::initialize()
     {
-      const RealT pi        = std::acos(RealT{-1.0});
-      const RealT shift     = RealT{2.0} * pi / RealT{3.0};
-      const RealT sqrt2     = std::sqrt(RealT{2.0});
-      const RealT freq      = data_.freq_base.value_or(RealT{60.0});
-      const RealT omega     = RealT{2.0} * pi * freq;
-      const RealT angles[3] = {data_.va, data_.va - shift, data_.va + shift};
+      const RealT sqrt2 = std::sqrt(RealT{2.0});
+      const RealT w     = omega();
+      const auto  v     = initialVoltagePhasor();
 
       for (IdxT phase = 0; phase < size_; ++phase)
       {
-        const RealT angle               = angles[static_cast<size_t>(phase)];
-        y_[static_cast<size_t>(phase)]  = sqrt2 * data_.vm * std::cos(angle);
-        yp_[static_cast<size_t>(phase)] = -sqrt2 * data_.vm * omega * std::sin(angle);
+        const std::complex<RealT> j{0.0, 1.0};
+        y_[static_cast<size_t>(phase)]  = sqrt2 * std::real(v[static_cast<std::size_t>(phase)]);
+        yp_[static_cast<size_t>(phase)] = sqrt2 * std::real(j * w * v[static_cast<std::size_t>(phase)]);
       }
 
       return 0;
@@ -98,7 +130,7 @@ namespace GridKit
     template <class ScalarT, typename IdxT>
     int Bus<ScalarT, IdxT>::tagDifferentiable()
     {
-      std::fill(tag_.begin(), tag_.end(), true);
+      std::fill(tag_.begin(), tag_.end(), false);
       return 0;
     }
 
@@ -106,6 +138,12 @@ namespace GridKit
     int Bus<ScalarT, IdxT>::evaluateResidual()
     {
       std::fill(f_.begin(), f_.end(), ScalarT{0.0});
+      return 0;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Bus<ScalarT, IdxT>::evaluateJacobian()
+    {
       return 0;
     }
 
@@ -123,6 +161,19 @@ namespace GridKit
 
     template <class ScalarT, typename IdxT>
     void Bus<ScalarT, IdxT>::updateTime(RealT, RealT)
+    {
+    }
+
+    template <class ScalarT, typename IdxT>
+    const Model::VariableMonitorBase* Bus<ScalarT, IdxT>::getMonitor() const
+    {
+      return nullptr;
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Bus<ScalarT, IdxT>::addIntrinsicResidual(const std::vector<ScalarT>&,
+                                                  const std::vector<ScalarT>&,
+                                                  std::vector<ScalarT>&) const
     {
     }
 

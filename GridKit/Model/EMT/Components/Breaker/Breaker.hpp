@@ -45,3 +45,5 @@ namespace GridKit
     };
   } // namespace EMT
 } // namespace GridKit
+
+#include <GridKit/Model/EMT/Components/Breaker/BreakerImpl.hpp>

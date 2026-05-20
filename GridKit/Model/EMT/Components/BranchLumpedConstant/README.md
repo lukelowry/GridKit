@@ -27,10 +27,13 @@ $\Delta x$       | [m]            | Line segment length                      | $
 
 ``` math
 \begin{aligned}
-  \mathbf{R} &= \mathbf{R}'\Delta x   & \mathbf{G} &= \mathbf{G}'\Delta x \\
-  \mathbf{L} &= \mathbf{L}'\Delta x   & \mathbf{C} &= \mathbf{C}'\Delta x
+  \mathbf{R} &= \mathbf{R}'\Delta x   & \mathbf{G}_{half} &= \mathbf{G}'\Delta x/2 \\
+  \mathbf{L} &= \mathbf{L}'\Delta x   & \mathbf{C}_{half} &= \mathbf{C}'\Delta x/2
 \end{aligned}
 ```
+
+The shunt capacitance matrix is required, finite, symmetric, and must have a
+strictly positive diagonal. There is no supported zero-shunt branch mode.
 
 ## Model Variables
 
