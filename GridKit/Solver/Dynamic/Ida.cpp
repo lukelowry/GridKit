@@ -262,6 +262,14 @@ namespace AnalysisManager
     }
 
     template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::setMaxOrder(int max_order)
+    {
+      int retval = IDASetMaxOrd(solver_, max_order);
+      checkOutput(retval, "IDASetMaxOrd");
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::setMaxStep(RealT hmax)
     {
       int retval = IDASetMaxStep(solver_, hmax);

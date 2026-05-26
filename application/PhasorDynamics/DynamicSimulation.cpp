@@ -57,6 +57,15 @@ int main(int argc, const char* argv[])
   IdaStatsRecorder             ida_stats_recorder(!study.ida_stats.empty());
   IdaStepHistoryRecorder       ida_steps_recorder(!study.ida_steps.empty());
   ida.configureSimulation();
+  if (study.ida_max_order.has_value())
+  {
+    if (study.ida_max_order.value() < 1 || study.ida_max_order.value() > 5)
+    {
+      Log::error() << "ida_max_order must be between 1 and 5" << std::endl;
+      return 1;
+    }
+    ida.setMaxOrder(study.ida_max_order.value());
+  }
   if (study.ida_max_dt.has_value())
   {
     if (study.ida_max_dt.value() <= 0.0)

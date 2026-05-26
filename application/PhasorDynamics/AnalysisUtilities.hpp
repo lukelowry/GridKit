@@ -55,6 +55,8 @@ namespace GridKit
       double                   dt;
       /// max time
       double                   tmax;
+      /// optional IDA maximum integrator order
+      std::optional<int>       ida_max_order;
       /// optional IDA maximum internal time step
       std::optional<double>    ida_max_dt;
       /// set of system events
@@ -89,6 +91,10 @@ namespace GridKit
       if (j.contains("ida_max_dt"))
       {
         c.ida_max_dt = j.at("ida_max_dt").get<double>();
+      }
+      if (j.contains("ida_max_order"))
+      {
+        c.ida_max_order = j.at("ida_max_order").get<int>();
       }
 
       for (auto& raw_event : j.at("events"))

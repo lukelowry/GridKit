@@ -7,6 +7,7 @@
   `system_model_file` | Path to the system model file[^1]
   `dt`                | A nonnegative output sample interval; `0` outputs at solver-selected steps
   `tmax`              | A floating point value for max time
+  `ida_max_order`     | Optional integer from 1 to 5 limiting IDA's maximum integrator order
   `ida_max_dt`        | Optional positive floating point value limiting IDA's internal max step
   `events`            | An array of event groups (see [Events](#events) below)
   `output_file`       | Optional path to monitor output (CSV); omitted means monitors are disabled

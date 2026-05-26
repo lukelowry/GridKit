@@ -290,6 +290,7 @@ namespace GridKit
 
         Ida<double, size_t> ida(&model);
         ida.configureSimulation();
+        ida.setMaxOrder(2);
 
         unsigned observed_steps = 0;
         auto     output_cb      = [&]([[maybe_unused]] double t)
