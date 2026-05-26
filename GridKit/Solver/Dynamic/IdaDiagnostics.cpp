@@ -276,7 +276,7 @@ namespace AnalysisManager
       }
 
       nlohmann::json json{
-          {"schema", "gridkit.ida_step_history.v1"},
+          {"schema", "gridkit.ida_steps.v1"},
           {"source", "actual_solve"},
           {"driver", "IDA_ONE_STEP"},
           {"stop_time_enforced", true},

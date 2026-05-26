@@ -102,6 +102,7 @@ namespace AnalysisManager
       int configureLinearSolverDense();
       int getDefaultInitialCondition();
       int setIntegrationTime(RealT t_init, RealT t_final, int nout);
+      int setMaxStep(RealT hmax);
       int initializeSimulation(RealT                t0,
                                bool                 findConsistent  = false,
                                std::optional<RealT> consistent_tout = {});

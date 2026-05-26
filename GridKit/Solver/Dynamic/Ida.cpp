@@ -261,6 +261,14 @@ namespace AnalysisManager
       return 0;
     }
 
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::setMaxStep(RealT hmax)
+    {
+      int retval = IDASetMaxStep(solver_, hmax);
+      checkOutput(retval, "IDASetMaxStep");
+      return retval;
+    }
+
     /**
      * @brief Initialize the simulation
      *

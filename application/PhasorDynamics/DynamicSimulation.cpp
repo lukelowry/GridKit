@@ -54,9 +54,18 @@ int main(int argc, const char* argv[])
 
   // Set up simulation
   Ida<scalar_type, index_type> ida(&sys);
-  IdaStatsRecorder             ida_stats(!study.ida_stats_file.empty());
-  IdaStepHistoryRecorder       ida_step_history(!study.ida_step_history_file.empty());
+  IdaStatsRecorder             ida_stats_recorder(!study.ida_stats.empty());
+  IdaStepHistoryRecorder       ida_steps_recorder(!study.ida_steps.empty());
   ida.configureSimulation();
+  if (study.ida_max_dt.has_value())
+  {
+    if (study.ida_max_dt.value() <= 0.0)
+    {
+      Log::error() << "ida_max_dt must be positive" << std::endl;
+      return 1;
+    }
+    ida.setMaxStep(static_cast<real_type>(study.ida_max_dt.value()));
+  }
 
   // Start timer
   real_type start = static_cast<real_type>(clock());
@@ -81,17 +90,17 @@ int main(int argc, const char* argv[])
   auto run_segment = [&](real_type start_time, real_type end_time, std::optional<int> output_count)
   {
     const int requested_output_count = output_count.value_or(0);
-    ida_stats.beginSegment(ida);
-    ida_step_history.beginSegment(ida, start_time, end_time, requested_output_count);
+    ida_stats_recorder.beginSegment(ida);
+    ida_steps_recorder.beginSegment(ida, start_time, end_time, requested_output_count);
     try
     {
-      if (ida_step_history.enabled())
+      if (ida_steps_recorder.enabled())
       {
         solve_status = ida.runSimulationWithStepHistory(end_time,
                                                         output_count,
                                                         [&](const IdaStats& stats)
                                                         {
-                                                          ida_step_history.recordStep(stats);
+                                                          ida_steps_recorder.recordStep(stats);
                                                         });
       }
       else
@@ -106,8 +115,8 @@ int main(int argc, const char* argv[])
       pending_what      = std::string(ex.what());
     }
     // Capture diagnostics even if the segment failed — IdaGetX counters remain valid.
-    ida_step_history.endSegment(ida);
-    ida_stats.endSegment(ida, start_time, end_time, requested_output_count);
+    ida_steps_recorder.endSegment(ida);
+    ida_stats_recorder.endSegment(ida, start_time, end_time, requested_output_count);
   };
 
   for (const auto& event : study.events)
@@ -150,13 +159,13 @@ int main(int argc, const char* argv[])
   // Stop the variable monitor
   sys.stopMonitor();
 
-  if (!study.ida_stats_file.empty())
+  if (!study.ida_stats.empty())
   {
-    writeIdaStatsJson(ida_stats.report(), {study.ida_stats_file, std::nullopt});
+    writeIdaStatsJson(ida_stats_recorder.report(), {study.ida_stats, std::nullopt});
   }
-  if (!study.ida_step_history_file.empty())
+  if (!study.ida_steps.empty())
   {
-    writeIdaStepHistoryJson(ida_step_history.report(), {study.ida_step_history_file, std::nullopt});
+    writeIdaStepHistoryJson(ida_steps_recorder.report(), {study.ida_steps, std::nullopt});
   }
 
   // Preserve original behaviour: surface the SUNDIALS exception (and its message)
