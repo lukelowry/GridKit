@@ -46,6 +46,11 @@ int main(int argc, const char* argv[])
   sys.allocate();
 
   real_type dt = study.dt;
+  if (dt < 0.0)
+  {
+    Log::error() << "dt must be nonnegative" << std::endl;
+    return 1;
+  }
 
   // Set up simulation
   Ida<scalar_type, index_type> ida(&sys);
@@ -64,16 +69,26 @@ int main(int argc, const char* argv[])
   int                        solve_status = 0;
   std::exception_ptr         pending_exception;
   std::optional<std::string> pending_what;
-  auto                       run_segment = [&](real_type start_time, real_type end_time, int nout)
+  auto                       output_count_for_segment = [dt](real_type start_time, real_type end_time) -> std::optional<int>
   {
+    if (dt == 0.0)
+    {
+      return std::nullopt;
+    }
+    return static_cast<int>(std::round((end_time - start_time) / dt));
+  };
+
+  auto run_segment = [&](real_type start_time, real_type end_time, std::optional<int> output_count)
+  {
+    const int requested_output_count = output_count.value_or(0);
     ida_stats.beginSegment(ida);
-    ida_step_history.beginSegment(ida, start_time, end_time, nout);
+    ida_step_history.beginSegment(ida, start_time, end_time, requested_output_count);
     try
     {
       if (ida_step_history.enabled())
       {
         solve_status = ida.runSimulationWithStepHistory(end_time,
-                                                        nout,
+                                                        output_count,
                                                         [&](const IdaStats& stats)
                                                         {
                                                           ida_step_history.recordStep(stats);
@@ -81,7 +96,7 @@ int main(int argc, const char* argv[])
       }
       else
       {
-        solve_status = ida.runSimulation(end_time, nout);
+        solve_status = ida.runSimulation(end_time, output_count);
       }
     }
     catch (const std::exception& ex)
@@ -92,16 +107,16 @@ int main(int argc, const char* argv[])
     }
     // Capture diagnostics even if the segment failed — IdaGetX counters remain valid.
     ida_step_history.endSegment(ida);
-    ida_stats.endSegment(ida, start_time, end_time, nout);
+    ida_stats.endSegment(ida, start_time, end_time, requested_output_count);
   };
 
   for (const auto& event : study.events)
   {
     // Run to event time
-    int nout = static_cast<int>(std::round((event.time - curr_time) / dt));
-    if (nout > 0)
+    auto output_count = output_count_for_segment(curr_time, event.time);
+    if (event.time > curr_time && (!output_count.has_value() || *output_count > 0))
     {
-      run_segment(curr_time, event.time, nout);
+      run_segment(curr_time, event.time, output_count);
     }
     if (solve_status != 0)
     {
@@ -124,10 +139,10 @@ int main(int argc, const char* argv[])
   }
 
   // Run to final time
-  int nout = static_cast<int>(std::round((study.tmax - curr_time) / dt));
-  if (solve_status == 0 && nout > 0)
+  auto output_count = output_count_for_segment(curr_time, study.tmax);
+  if (solve_status == 0 && study.tmax > curr_time && (!output_count.has_value() || *output_count > 0))
   {
-    run_segment(curr_time, study.tmax, nout);
+    run_segment(curr_time, study.tmax, output_count);
   }
 
   real_type stop = static_cast<real_type>(clock());

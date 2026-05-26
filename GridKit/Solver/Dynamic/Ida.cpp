@@ -317,7 +317,9 @@ namespace AnalysisManager
      * @tparam ScalarT Scalar data type
      * @tparam IdxT Matrix and vector index data type
      * @param tf The final simulation time.
-     * @param nout The number of integration segmentstimes.
+     * @param output_count The number of requested output times. If empty,
+     * output is published at solver-selected steps instead of interpolated
+     * output times.
      * @param step_callback An optional callback which, if provided, will be
      * called after each time the IDA solver has been invoked with the value
      * of `t` that IDA has calculated the last step at. The provided model will
@@ -332,11 +334,61 @@ namespace AnalysisManager
      * @todo Consider adding initial time as the function argument, as well.
      */
     template <class ScalarT, typename IdxT>
-    int Ida<ScalarT, IdxT>::runSimulation(RealT tf, int nout, const std::optional<OutputCallback> step_callback)
+    int Ida<ScalarT, IdxT>::runSimulation(RealT                               tf,
+                                          std::optional<int>                  output_count,
+                                          const std::optional<OutputCallback> step_callback)
     {
       int   retval = 0;
       int   iout   = 0;
       RealT tret;
+
+      if (!output_count.has_value())
+      {
+        retval = IDASetStopTime(solver_, tf);
+        checkOutput(retval, "IDASetStopTime");
+
+        try
+        {
+          while (true)
+          {
+            retval = IDASolve(solver_, tf, &tret, yy_, yp_, IDA_ONE_STEP);
+            checkOutput(retval, "IDASolve");
+
+            publishOutput(tret, step_callback);
+
+            if (retval == IDA_TSTOP_RETURN)
+            {
+              retval = IDA_SUCCESS;
+              break;
+            }
+
+            if (retval != IDA_SUCCESS)
+            {
+              break;
+            }
+          }
+
+          copyVec(yy_, model_->y());
+          copyVec(yp_, model_->yp());
+          model_->updateTime(tf, 0.0);
+        }
+        catch (...)
+        {
+          IDAClearStopTime(solver_);
+          throw;
+        }
+
+        const int clear_retval = IDAClearStopTime(solver_);
+        checkOutput(clear_retval, "IDAClearStopTime");
+        return retval;
+      }
+
+      const int nout = *output_count;
+      if (nout <= 0)
+      {
+        return IDA_SUCCESS;
+      }
+
       RealT dt   = (tf - t_init_) / static_cast<RealT>(nout);
       RealT tout = t_init_ + dt;
 
@@ -372,7 +424,7 @@ namespace AnalysisManager
 
     template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::runSimulationWithStepHistory(RealT                         tf,
-                                                         int                           nout,
+                                                         std::optional<int>            output_count,
                                                          const InternalStepCallback&   internal_step_callback,
                                                          std::optional<OutputCallback> step_callback)
     {
@@ -380,6 +432,50 @@ namespace AnalysisManager
       int   iout   = 0;
       RealT tret;
 
+      if (!output_count.has_value())
+      {
+        retval = IDASetStopTime(solver_, tf);
+        checkOutput(retval, "IDASetStopTime");
+
+        try
+        {
+          while (true)
+          {
+            retval = IDASolve(solver_, tf, &tret, yy_, yp_, IDA_ONE_STEP);
+            checkOutput(retval, "IDASolve");
+
+            const auto step_stats = getStats();
+            internal_step_callback(step_stats);
+            publishOutput(tret, step_callback);
+
+            if (retval == IDA_TSTOP_RETURN)
+            {
+              retval = IDA_SUCCESS;
+              break;
+            }
+
+            if (retval != IDA_SUCCESS)
+            {
+              break;
+            }
+          }
+
+          copyVec(yy_, model_->y());
+          copyVec(yp_, model_->yp());
+          model_->updateTime(tf, 0.0);
+        }
+        catch (...)
+        {
+          IDAClearStopTime(solver_);
+          throw;
+        }
+
+        const int clear_retval = IDAClearStopTime(solver_);
+        checkOutput(clear_retval, "IDAClearStopTime");
+        return retval;
+      }
+
+      const int nout = *output_count;
       if (nout <= 0)
       {
         return IDA_SUCCESS;

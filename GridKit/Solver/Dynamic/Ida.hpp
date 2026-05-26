@@ -106,9 +106,11 @@ namespace AnalysisManager
                                bool                 findConsistent  = false,
                                std::optional<RealT> consistent_tout = {});
 
-      int runSimulation(RealT tf, int nout = 1, std::optional<OutputCallback> step_callback = {});
+      int runSimulation(RealT                         tf,
+                        std::optional<int>            output_count  = 1,
+                        std::optional<OutputCallback> step_callback = {});
       int runSimulationWithStepHistory(RealT                         tf,
-                                       int                           nout,
+                                       std::optional<int>            output_count,
                                        const InternalStepCallback&   internal_step_callback,
                                        std::optional<OutputCallback> step_callback = {});
       int deleteSimulation();

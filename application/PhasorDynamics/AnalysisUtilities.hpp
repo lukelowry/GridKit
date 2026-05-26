@@ -140,6 +140,33 @@ namespace GridKit
       return fs;
     }
 
+    template <typename DataContainerT>
+    void clearMonitoredVariables(DataContainerT& data)
+    {
+      for (auto& entry : data)
+      {
+        entry.monitored_variables.clear();
+      }
+    }
+
+    template <typename RealT, typename IdxT>
+    void disableVariableMonitoring(SystemModelData<RealT, IdxT>& model_data)
+    {
+      model_data.monitor_sink.clear();
+      clearMonitoredVariables(model_data.bus);
+      clearMonitoredVariables(model_data.branch);
+      clearMonitoredVariables(model_data.bus_fault);
+      clearMonitoredVariables(model_data.genrou);
+      clearMonitoredVariables(model_data.gensal);
+      clearMonitoredVariables(model_data.genclassical);
+      clearMonitoredVariables(model_data.load);
+      clearMonitoredVariables(model_data.loadzip);
+      clearMonitoredVariables(model_data.gov);
+      clearMonitoredVariables(model_data.exciter);
+      clearMonitoredVariables(model_data.sexspti);
+      clearMonitoredVariables(model_data.stabilizer);
+    }
+
     /**
      * @brief Wrapper function to parse `StudyData` from JSON and perform
      * follow-up configuration
@@ -171,6 +198,12 @@ namespace GridKit
 
       auto csv        = ::GridKit::Model::VariableMonitorFormat::CSV;
       data.model_data = parseSystemModelData(data.system_model_file);
+      if (data.output_file.empty())
+      {
+        disableVariableMonitoring(data.model_data);
+        return data;
+      }
+
       std::string model_output_file;
       // Find output file (CSV) specified in model input file
       for (const auto& sink : data.model_data.monitor_sink)

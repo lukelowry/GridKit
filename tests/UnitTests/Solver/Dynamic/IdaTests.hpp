@@ -1,3 +1,4 @@
+#include <optional>
 #include <stdexcept>
 
 #include <GridKit/Model/Evaluator.hpp>
@@ -300,6 +301,23 @@ namespace GridKit
         ida.runSimulation(1.0, n_steps, output_cb);
 
         success *= (observed_steps == n_steps);
+
+        Model::NullEvaluator<ScalarT, IdxT> solver_step_model;
+        Ida<double, size_t>                 solver_step_ida(&solver_step_model);
+        solver_step_ida.configureSimulation();
+
+        unsigned observed_solver_steps = 0;
+        auto     solver_step_cb        = [&]([[maybe_unused]] double t)
+        {
+          observed_solver_steps++;
+        };
+
+        solver_step_ida.initializeSimulation(0.0, false);
+        solver_step_ida.runSimulation(1.0, std::nullopt, solver_step_cb);
+
+        const auto solver_step_stats  = solver_step_ida.getStats();
+        success                      *= (observed_solver_steps > 0);
+        success                      *= (observed_solver_steps == static_cast<unsigned>(solver_step_stats.num_steps_));
 
         Model::NullEvaluator<ScalarT, IdxT> invalid_model(0.0, 1.0e-8);
         Ida<double, size_t>                 invalid_ida(&invalid_model);
