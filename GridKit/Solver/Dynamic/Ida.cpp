@@ -1,12 +1,18 @@
 
 #include "Ida.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
+#include <stdexcept>
 
 #include <idas/idas.h>
 #include <idas/idas_ls.h>
+#include <sundials/sundials_config.h>
+#include <sundials/sundials_logger.h>
 
 #include <GridKit/Model/Evaluator.hpp>
 
@@ -17,7 +23,8 @@ namespace AnalysisManager
   {
 
     template <class ScalarT, typename IdxT>
-    Ida<ScalarT, IdxT>::Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model)
+    Ida<ScalarT, IdxT>::Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model,
+                            std::optional<IdaLogOptions>              log_options)
       : DynamicSolver<ScalarT, IdxT>(model)
     {
       int retval = 0;
@@ -25,6 +32,10 @@ namespace AnalysisManager
       // Create the SUNDIALS context that all SUNDIALS objects require
       retval = SUNContext_Create(SUN_COMM_NULL, &context_);
       checkOutput(retval, "SUNContext");
+      if (log_options.has_value())
+      {
+        configureLogger(*log_options);
+      }
       solver_ = IDACreate(context_);
     }
 
@@ -43,6 +54,11 @@ namespace AnalysisManager
       deleteAdjoint();
       deleteSimulation();
       deleteBackwardSimulation();
+      if (logger_)
+      {
+        SUNContext_SetLogger(context_, nullptr);
+        SUNLogger_Destroy(&logger_);
+      }
       SUNContext_Free(&context_);
     }
 
@@ -84,11 +100,8 @@ namespace AnalysisManager
       checkOutput(retval, "IDASetUserData");
 
       // Set tolerances
-      RealT rel_tol;
-      RealT abs_tol;
-
-      model_->setTolerances(rel_tol, abs_tol); ///< \todo Function name should be "getTolerances"!
-      retval = IDASStolerances(solver_, rel_tol, abs_tol);
+      const auto [rel_tol, abs_tol] = getScalarTolerances(); ///< \todo Function name should be "getTolerances"!
+      retval                        = IDASStolerances(solver_, rel_tol, abs_tol);
       checkOutput(retval, "IDASStolerances");
 
       IdxT msa;
@@ -255,7 +268,9 @@ namespace AnalysisManager
      * @tparam IdxT
      */
     template <class ScalarT, typename IdxT>
-    int Ida<ScalarT, IdxT>::initializeSimulation(RealT t0, bool findConsistent)
+    int Ida<ScalarT, IdxT>::initializeSimulation(RealT                t0,
+                                                 bool                 findConsistent,
+                                                 std::optional<RealT> consistent_tout)
     {
       int retval = 0;
 
@@ -273,7 +288,16 @@ namespace AnalysisManager
         if (tag_)
           initType = IDA_YA_YDP_INIT;
 
-        retval = IDACalcIC(solver_, initType, t0 + 0.1);
+        // Loosen IDA's IC Newton/linesearch: discrete events (i.e. fault)
+        // can move the algebraic solution far away from previous op point.
+        // the bumped values below let
+        // Newton work harder before quitting
+        IDASetMaxNumItersIC(solver_, 100);
+        IDASetMaxBacksIC(solver_, 1000);
+        IDASetNonlinConvCoefIC(solver_, 1.0e-3);
+        IDASetLineSearchOffIC(solver_, SUNTRUE);
+
+        retval = IDACalcIC(solver_, initType, consistent_tout.value_or(t0 + 0.1));
         checkOutput(retval, "IDACalcIC");
 
         retval = IDAGetConsistentIC(solver_, yy_, yp_);
@@ -308,7 +332,7 @@ namespace AnalysisManager
      * @todo Consider adding initial time as the function argument, as well.
      */
     template <class ScalarT, typename IdxT>
-    int Ida<ScalarT, IdxT>::runSimulation(RealT tf, int nout, const std::optional<std::function<void(RealT)>> step_callback)
+    int Ida<ScalarT, IdxT>::runSimulation(RealT tf, int nout, const std::optional<OutputCallback> step_callback)
     {
       int   retval = 0;
       int   iout   = 0;
@@ -324,24 +348,7 @@ namespace AnalysisManager
         retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
         checkOutput(retval, "IDASolve");
 
-        if (step_callback.has_value() || model_->monitoring())
-        {
-          // The callback may try to observe upated values in the model, so we
-          // should update them here (At this point, the model's values are one
-          // internal integrator step out of date)
-          copyVec(yy_, model_->y());
-          copyVec(yp_, model_->yp());
-          model_->updateTime(tret, 0.0);
-
-          if (model_->monitoring())
-          {
-            model_->printMonitoredVariables();
-          }
-          if (step_callback.has_value())
-          {
-            (*step_callback)(tret);
-          }
-        }
+        publishOutput(tret, step_callback);
 
         if (retval == IDA_SUCCESS)
         {
@@ -360,6 +367,93 @@ namespace AnalysisManager
       // }
 
       // std::cout << "\n";
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::runSimulationWithStepHistory(RealT                         tf,
+                                                         int                           nout,
+                                                         const InternalStepCallback&   internal_step_callback,
+                                                         std::optional<OutputCallback> step_callback)
+    {
+      int   retval = 0;
+      int   iout   = 0;
+      RealT tret;
+
+      if (nout <= 0)
+      {
+        return IDA_SUCCESS;
+      }
+
+      RealT dt   = (tf - t_init_) / static_cast<RealT>(nout);
+      auto  tout = [this, tf, nout, dt](int output_index)
+      {
+        return (output_index + 1 == nout) ? tf : t_init_ + dt * static_cast<RealT>(output_index + 1);
+      };
+
+      const RealT time_scale = std::max({static_cast<RealT>(1.0), std::abs(t_init_), std::abs(tf)});
+      const RealT time_tol   = static_cast<RealT>(100.0) * std::numeric_limits<RealT>::epsilon() * time_scale;
+
+      retval = IDASetStopTime(solver_, tf);
+      checkOutput(retval, "IDASetStopTime");
+
+      try
+      {
+        while (nout > iout)
+        {
+          retval = IDASolve(solver_, tout(iout), &tret, yy_, yp_, IDA_ONE_STEP);
+          checkOutput(retval, "IDASolve");
+
+          const auto step_stats = getStats();
+          internal_step_callback(step_stats);
+
+          bool interpolated_for_output = false;
+          while (nout > iout && step_stats.current_time_ + time_tol >= tout(iout))
+          {
+            const RealT output_time = tout(iout);
+            interpolateSolution(output_time);
+            publishOutput(output_time, step_callback);
+            interpolated_for_output = true;
+            ++iout;
+          }
+
+          if (retval == IDA_TSTOP_RETURN)
+          {
+            retval = IDA_SUCCESS;
+            break;
+          }
+
+          if (retval != IDA_SUCCESS)
+          {
+            break;
+          }
+
+          if (interpolated_for_output && nout > iout)
+          {
+            interpolateSolution(static_cast<RealT>(step_stats.current_time_));
+          }
+        }
+
+        const auto final_stats = getStats();
+        if (final_stats.current_time_ + time_tol >= tf)
+        {
+          // Leave the public solution vectors and model state at the requested
+          // segment end, matching IDA_NORMAL's interpolated-output contract.
+          interpolateSolution(tf);
+          copyVec(yy_, model_->y());
+          copyVec(yp_, model_->yp());
+          model_->updateTime(tf, 0.0);
+        }
+      }
+      catch (...)
+      {
+        IDAClearStopTime(solver_);
+        throw;
+      }
+
+      const int clear_retval = IDAClearStopTime(solver_);
+      checkOutput(clear_retval, "IDAClearStopTime");
+
       return retval;
     }
 
@@ -403,8 +497,7 @@ namespace AnalysisManager
       checkOutput(retval, "IDAQuadInit");
 
       // Set tolerances and error control for quadratures
-      RealT rel_tol, abs_tol;
-      model_->setTolerances(rel_tol, abs_tol);
+      const auto [rel_tol, abs_tol] = getScalarTolerances();
 
       // Set tolerances for quadrature stricter than for integration
       retval = IDAQuadSStolerances(solver_, rel_tol * 0.1, abs_tol * 0.1);
@@ -544,9 +637,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::initializeBackwardSimulation(RealT tf)
     {
-      int   retval = 0;
-      RealT rel_tol;
-      RealT abs_tol;
+      int retval = 0;
 
       model_->initializeAdjoint();
 
@@ -561,8 +652,8 @@ namespace AnalysisManager
       retval = IDAInitB(solver_, backwardID_, this->adjointResidual, tf, yyB_, ypB_);
       checkOutput(retval, "IDAInitB");
 
-      model_->setTolerances(rel_tol, abs_tol);
-      retval = IDASStolerancesB(solver_, backwardID_, rel_tol, abs_tol);
+      const auto [rel_tol, abs_tol] = getScalarTolerances();
+      retval                        = IDASStolerancesB(solver_, backwardID_, rel_tol, abs_tol);
       checkOutput(retval, "IDASStolerancesB");
 
       retval = IDASetUserDataB(solver_, backwardID_, model_);
@@ -916,6 +1007,58 @@ namespace AnalysisManager
       std::copy(x.cbegin(), x.cend(), ydata);
     }
 
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::interpolateSolution(RealT t)
+    {
+      int retval = IDAGetDky(solver_, t, 0, yy_);
+      checkOutput(retval, "IDAGetDky");
+      retval = IDAGetDky(solver_, t, 1, yp_);
+      checkOutput(retval, "IDAGetDky");
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::publishOutput(RealT t, const std::optional<OutputCallback>& step_callback)
+    {
+      if (!step_callback.has_value() && !model_->monitoring())
+      {
+        return;
+      }
+
+      copyVec(yy_, model_->y());
+      copyVec(yp_, model_->yp());
+      model_->updateTime(t, 0.0);
+
+      if (model_->monitoring())
+      {
+        model_->printMonitoredVariables();
+      }
+      if (step_callback.has_value())
+      {
+        (*step_callback)(t);
+      }
+    }
+
+    template <class ScalarT, typename IdxT>
+    std::pair<typename Ida<ScalarT, IdxT>::RealT, typename Ida<ScalarT, IdxT>::RealT>
+    Ida<ScalarT, IdxT>::getScalarTolerances() const
+    {
+      RealT rel_tol = std::numeric_limits<RealT>::quiet_NaN();
+      RealT abs_tol = std::numeric_limits<RealT>::quiet_NaN();
+
+      model_->setTolerances(rel_tol, abs_tol);
+
+      if (!std::isfinite(rel_tol) || !std::isfinite(abs_tol) || rel_tol <= static_cast<RealT>(0.0)
+          || abs_tol <= static_cast<RealT>(0.0))
+      {
+        std::stringstream msg;
+        msg << "IDA requires positive finite scalar tolerances, but the model provided rel_tol=" << rel_tol
+            << " and abs_tol=" << abs_tol;
+        throw std::invalid_argument(msg.str());
+      }
+
+      return {rel_tol, abs_tol};
+    }
+
     /**
      * @brief Print output
      *
@@ -973,18 +1116,62 @@ namespace AnalysisManager
       checkOutput(retval, "IDAPrintAllStats");
     }
 
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::configureLogger(const IdaLogOptions& options)
+    {
+      int retval = SUNLogger_Create(SUN_COMM_NULL, 0, &logger_);
+      checkOutput(retval, "SUNLogger_Create");
+
+      const auto file = options.file.string();
+      retval          = SUNLogger_SetErrorFilename(logger_, file.c_str());
+      checkOutput(retval, "SUNLogger_SetErrorFilename");
+      if (options.level == IdaLogLevel::Warning)
+      {
+        retval = SUNLogger_SetWarningFilename(logger_, file.c_str());
+        checkOutput(retval, "SUNLogger_SetWarningFilename");
+      }
+
+      retval = SUNContext_SetLogger(context_, logger_);
+      checkOutput(retval, "SUNContext_SetLogger");
+    }
+
     /**
      * @brief Accumulate another stats object into this one, allowing for stats to be kept
      *        across multiple simulations with IDA
      */
     IdaStats& IdaStats::operator+=(const IdaStats& other)
     {
+      sundials_version_                 = other.sundials_version_;
+      sundials_logging_level_           = other.sundials_logging_level_;
       num_steps_                       += other.num_steps_;
       num_residual_evals_              += other.num_residual_evals_;
-      num_linear_decompositions_       += other.num_linear_decompositions_;
+      num_linear_solver_setups_        += other.num_linear_solver_setups_;
       num_error_test_fails_            += other.num_error_test_fails_;
+      num_backtrack_operations_        += other.num_backtrack_operations_;
       num_nonlinear_iters_             += other.num_nonlinear_iters_;
       num_nonlinear_convergence_fails_ += other.num_nonlinear_convergence_fails_;
+      num_nonlinear_step_fails_        += other.num_nonlinear_step_fails_;
+      num_jacobian_evals_              += other.num_jacobian_evals_;
+      num_linear_iters_                += other.num_linear_iters_;
+      num_linear_convergence_fails_    += other.num_linear_convergence_fails_;
+      num_linear_residual_evals_       += other.num_linear_residual_evals_;
+      num_preconditioner_evals_        += other.num_preconditioner_evals_;
+      num_preconditioner_solves_       += other.num_preconditioner_solves_;
+      num_jtimes_setup_evals_          += other.num_jtimes_setup_evals_;
+      num_jtimes_evals_                += other.num_jtimes_evals_;
+
+      last_linear_flag_      = other.last_linear_flag_;
+      last_linear_flag_name_ = other.last_linear_flag_name_;
+      last_jacobian_step_    = other.last_jacobian_step_;
+      last_order_            = other.last_order_;
+      current_order_         = other.current_order_;
+      actual_initial_step_   = other.actual_initial_step_;
+      last_step_             = other.last_step_;
+      current_step_          = other.current_step_;
+      current_time_          = other.current_time_;
+      current_cj_            = other.current_cj_;
+      jacobian_time_         = other.jacobian_time_;
+      jacobian_cj_           = other.jacobian_cj_;
 
       return *this;
     }
@@ -1000,12 +1187,15 @@ namespace AnalysisManager
       int               stat_width  = 12;
       std::stringstream out;
 
-      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
-          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
-          << std::setw(label_width) << "Linear decompositions" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
+      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_steps_ << '\n'
+          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
+          << std::setw(label_width) << "Linear solver setups" << " : " << std::setw(stat_width) << num_linear_solver_setups_ << '\n'
           << std::setw(label_width) << "Error test failures" << " : " << std::setw(stat_width) << num_error_test_fails_ << '\n'
           << std::setw(label_width) << "Nonlinear iterations" << " : " << std::setw(stat_width) << num_nonlinear_iters_ << '\n'
-          << std::setw(label_width) << "Nonlinear convergence failures" << " : " << std::setw(stat_width) << num_nonlinear_convergence_fails_;
+          << std::setw(label_width) << "Nonlinear convergence failures" << " : " << std::setw(stat_width) << num_nonlinear_convergence_fails_ << '\n'
+          << std::setw(label_width) << "Jacobian evals" << " : " << std::setw(stat_width) << num_jacobian_evals_ << '\n'
+          << std::setw(label_width) << "Linear iterations" << " : " << std::setw(stat_width) << num_linear_iters_ << '\n'
+          << std::setw(label_width) << "Linear convergence failures" << " : " << std::setw(stat_width) << num_linear_convergence_fails_;
 
       return out.str();
     }
@@ -1019,26 +1209,60 @@ namespace AnalysisManager
     IdaStats Ida<ScalarT, IdxT>::getStats() const
     {
       IdaStats stats;
-
-      // Dummies for ignoring stats
-      int         dummy;
-      sunrealtype dummy2;
+      stats.sundials_version_       = SUNDIALS_VERSION;
+      stats.sundials_logging_level_ = SUNDIALS_LOGGING_LEVEL;
 
       int retval = IDAGetIntegratorStats(solver_,
                                          &stats.num_steps_,
                                          &stats.num_residual_evals_,
-                                         &stats.num_linear_decompositions_,
+                                         &stats.num_linear_solver_setups_,
                                          &stats.num_error_test_fails_,
-                                         &dummy,
-                                         &dummy,
-                                         &dummy2,
-                                         &dummy2,
-                                         &dummy2,
-                                         &dummy2);
+                                         &stats.last_order_,
+                                         &stats.current_order_,
+                                         &stats.actual_initial_step_,
+                                         &stats.last_step_,
+                                         &stats.current_step_,
+                                         &stats.current_time_);
       checkOutput(retval, "IDAGetIntegratorStats");
 
       retval = IDAGetNonlinSolvStats(solver_, &stats.num_nonlinear_iters_, &stats.num_nonlinear_convergence_fails_);
       checkOutput(retval, "IDAGetNonlinSolvStats");
+
+      retval = IDAGetNumBacktrackOps(solver_, &stats.num_backtrack_operations_);
+      checkOutput(retval, "IDAGetNumBacktrackOps");
+      retval = IDAGetNumStepSolveFails(solver_, &stats.num_nonlinear_step_fails_);
+      checkOutput(retval, "IDAGetNumStepSolveFails");
+      retval = IDAGetCurrentCj(solver_, &stats.current_cj_);
+      checkOutput(retval, "IDAGetCurrentCj");
+
+      retval = IDAGetNumJacEvals(solver_, &stats.num_jacobian_evals_);
+      checkOutput(retval, "IDAGetNumJacEvals");
+      retval = IDAGetJacNumSteps(solver_, &stats.last_jacobian_step_);
+      checkOutput(retval, "IDAGetJacNumSteps");
+      retval = IDAGetJacTime(solver_, &stats.jacobian_time_);
+      checkOutput(retval, "IDAGetJacTime");
+      retval = IDAGetJacCj(solver_, &stats.jacobian_cj_);
+      checkOutput(retval, "IDAGetJacCj");
+      retval = IDAGetNumLinIters(solver_, &stats.num_linear_iters_);
+      checkOutput(retval, "IDAGetNumLinIters");
+      retval = IDAGetNumLinConvFails(solver_, &stats.num_linear_convergence_fails_);
+      checkOutput(retval, "IDAGetNumLinConvFails");
+      retval = IDAGetNumLinResEvals(solver_, &stats.num_linear_residual_evals_);
+      checkOutput(retval, "IDAGetNumLinResEvals");
+      retval = IDAGetNumPrecEvals(solver_, &stats.num_preconditioner_evals_);
+      checkOutput(retval, "IDAGetNumPrecEvals");
+      retval = IDAGetNumPrecSolves(solver_, &stats.num_preconditioner_solves_);
+      checkOutput(retval, "IDAGetNumPrecSolves");
+      retval = IDAGetNumJTSetupEvals(solver_, &stats.num_jtimes_setup_evals_);
+      checkOutput(retval, "IDAGetNumJTSetupEvals");
+      retval = IDAGetNumJtimesEvals(solver_, &stats.num_jtimes_evals_);
+      checkOutput(retval, "IDAGetNumJtimesEvals");
+      retval = IDAGetLastLinFlag(solver_, &stats.last_linear_flag_);
+      checkOutput(retval, "IDAGetLastLinFlag");
+      if (char* flag_name = IDAGetLinReturnFlagName(stats.last_linear_flag_))
+      {
+        stats.last_linear_flag_name_ = flag_name;
+      }
 
       return stats;
     }

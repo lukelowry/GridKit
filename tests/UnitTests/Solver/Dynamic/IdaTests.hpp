@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
@@ -15,7 +17,9 @@ namespace GridKit
     public:
       using RealT = typename Model::Evaluator<ScalarT, IdxT>::RealT;
 
-      NullEvaluator()
+      NullEvaluator(RealT rel_tol = 1.0e-6, RealT abs_tol = 1.0e-8)
+        : rel_tol_(rel_tol),
+          abs_tol_(abs_tol)
       {
       }
 
@@ -61,8 +65,10 @@ namespace GridKit
         return 0;
       }
 
-      void setTolerances([[maybe_unused]] RealT& rel_tol, [[maybe_unused]] RealT& abs_tol) const override
+      void setTolerances(RealT& rel_tol, RealT& abs_tol) const override
       {
+        rel_tol = rel_tol_;
+        abs_tol = abs_tol_;
       }
 
       void setMaxSteps(IdxT& msa) const override
@@ -262,6 +268,9 @@ namespace GridKit
       std::vector<ScalarT> param_;
       std::vector<ScalarT> param_up_;
       std::vector<ScalarT> param_lo_;
+
+      RealT rel_tol_;
+      RealT abs_tol_;
     };
   } // namespace Model
 
@@ -291,6 +300,19 @@ namespace GridKit
         ida.runSimulation(1.0, n_steps, output_cb);
 
         success *= (observed_steps == n_steps);
+
+        Model::NullEvaluator<ScalarT, IdxT> invalid_model(0.0, 1.0e-8);
+        Ida<double, size_t>                 invalid_ida(&invalid_model);
+        bool                                invalid_tolerance_rejected = false;
+        try
+        {
+          invalid_ida.configureSimulation();
+        }
+        catch (const std::invalid_argument&)
+        {
+          invalid_tolerance_rejected = true;
+        }
+        success *= invalid_tolerance_rejected;
 
         return success.report(__func__);
       }
