@@ -66,6 +66,7 @@
 - Added support for running IDA with fixed time steps
 - Added IDA option to suppress algebraic variables in local error tests.
 - Removed `COO_Matrix` class.
+- Added `HYGOV` governor model implementation for PhasorDynamics.
 
 ## v0.1
 
