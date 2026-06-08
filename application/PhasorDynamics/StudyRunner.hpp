@@ -73,6 +73,12 @@ namespace GridKit
           result.solve_status = 1;
           return false;
         }
+        if (study.ida_max_steps.has_value() && study.ida_max_steps.value() <= 0)
+        {
+          Log::error() << "ida_max_steps must be positive" << std::endl;
+          result.solve_status = 1;
+          return false;
+        }
         if (!(study.mu > 0.0 && std::isfinite(study.mu)))
         {
           Log::error() << "mu must be a positive finite number" << std::endl;
@@ -193,6 +199,10 @@ namespace GridKit
         if (study_.ida_max_order.has_value())
         {
           ida_.setMaxOrder(study_.ida_max_order.value());
+        }
+        if (study_.ida_max_steps.has_value())
+        {
+          ida_.setMaxNumSteps(study_.ida_max_steps.value());
         }
         if (study_.ida_max_dt.has_value())
         {
@@ -347,6 +357,7 @@ namespace GridKit
 #endif
         config.model_size       = static_cast<long int>(sys_.size());
         config.ida_max_order    = study_.ida_max_order;
+        config.ida_max_steps    = study_.ida_max_steps;
         config.ida_max_dt       = study_.ida_max_dt;
         config.rel_tol          = study_.rel_tol;
         config.abs_tol          = study_.abs_tol;

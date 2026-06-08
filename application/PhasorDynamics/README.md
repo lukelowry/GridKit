@@ -8,6 +8,7 @@
   `dt`                | A nonnegative output sample interval; `0` outputs at solver-selected steps
   `tmax`              | A floating point value for max time
   `ida_max_order`     | Optional integer from 1 to 5 limiting IDA's maximum integrator order
+  `ida_max_steps`     | Optional positive integer limiting IDA's maximum internal steps per solve call
   `ida_max_dt`        | Optional positive floating point value limiting IDA's internal max step
   `rel_tol`           | Optional positive scalar IDA relative tolerance; must be paired with `abs_tol`
   `abs_tol`           | Optional positive scalar IDA absolute tolerance; must be paired with `rel_tol`

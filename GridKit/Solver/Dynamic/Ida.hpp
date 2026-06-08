@@ -118,6 +118,7 @@ namespace AnalysisManager
       int getDefaultInitialCondition();
       int setIntegrationTime(RealT t_init, RealT t_final, int nout);
       int setMaxOrder(int max_order);
+      int setMaxNumSteps(long int max_steps);
       int setMaxStep(RealT hmax);
       int setTolerances(RealT rel_tol, RealT abs_tol);
       int initializeSimulation(RealT                t0,

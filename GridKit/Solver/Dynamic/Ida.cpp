@@ -268,6 +268,14 @@ namespace AnalysisManager
     }
 
     template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::setMaxNumSteps(long int max_steps)
+    {
+      int retval = IDASetMaxNumSteps(solver_, max_steps);
+      checkOutput(retval, "IDASetMaxNumSteps");
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::setMaxStep(RealT hmax)
     {
       int retval = IDASetMaxStep(solver_, hmax);

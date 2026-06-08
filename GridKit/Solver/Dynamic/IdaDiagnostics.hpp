@@ -27,6 +27,7 @@ namespace AnalysisManager
       long int                model_size{0};
       std::optional<long int> jacobian_nnz; ///< Only when a sparse Jacobian is used
       std::optional<int>      ida_max_order;
+      std::optional<long int> ida_max_steps;
       std::optional<double>   ida_max_dt;
       std::optional<double>   rel_tol; ///< Applied scalar relative tolerance, when overridden
       std::optional<double>   abs_tol; ///< Applied scalar absolute tolerance, when overridden

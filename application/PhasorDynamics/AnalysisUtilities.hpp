@@ -58,6 +58,8 @@ namespace GridKit
       double                   tmax;
       /// optional IDA maximum integrator order
       std::optional<int>       ida_max_order;
+      /// optional IDA maximum internal steps per solve call
+      std::optional<long int>  ida_max_steps;
       /// optional IDA maximum internal time step
       std::optional<double>    ida_max_dt;
       /// optional IDA scalar relative tolerance (overrides the model default)
@@ -102,6 +104,10 @@ namespace GridKit
       if (j.contains("ida_max_order"))
       {
         c.ida_max_order = j.at("ida_max_order").get<int>();
+      }
+      if (j.contains("ida_max_steps"))
+      {
+        c.ida_max_steps = j.at("ida_max_steps").get<long int>();
       }
       if (j.contains("rel_tol"))
       {

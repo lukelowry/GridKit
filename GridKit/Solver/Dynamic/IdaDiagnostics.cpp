@@ -102,6 +102,7 @@ namespace AnalysisManager
             {"model_size", config.model_size},
             {"jacobian_nnz", config.jacobian_nnz.has_value() ? nlohmann::json(*config.jacobian_nnz) : nlohmann::json()},
             {"ida_max_order", config.ida_max_order.has_value() ? nlohmann::json(*config.ida_max_order) : nlohmann::json()},
+            {"ida_max_steps", config.ida_max_steps.has_value() ? nlohmann::json(*config.ida_max_steps) : nlohmann::json()},
             {"ida_max_dt", config.ida_max_dt.has_value() ? nlohmann::json(*config.ida_max_dt) : nlohmann::json()},
             {"rel_tol", config.rel_tol.has_value() ? nlohmann::json(*config.rel_tol) : nlohmann::json()},
             {"abs_tol", config.abs_tol.has_value() ? nlohmann::json(*config.abs_tol) : nlohmann::json()},
