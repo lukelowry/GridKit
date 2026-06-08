@@ -224,7 +224,7 @@ namespace GridKit
         ScalarT Ec    = std::sqrt(vreal * vreal + vimag * vimag);
 
         ScalarT efdp = efd0 / (ONE<RealT> + omega * Ispdlim_);
-        ScalarT ksat = SB_ * Math::qramp(efdp - SA_);
+        ScalarT ksat = SB_ * Math::qramp(efdp - SA_, this->mu_);
         ScalarT ve   = ksat * efdp;
         ScalarT vr   = Ke_ * efdp + ve;
         ScalarT vtr  = vr / Ka_;
@@ -318,7 +318,7 @@ namespace GridKit
 
         // Internal Differential Equations
         f[0] = -Tr_ * vts_dot + Ec - vts;
-        f[1] = -Ta_ * vr_dot + Ta_ * Math::antiwindup(vr, func, Vrmin_, Vrmax_);
+        f[1] = -Ta_ * vr_dot + Ta_ * Math::antiwindup(vr, func, Vrmin_, Vrmax_, this->mu_);
         f[2] = -Te_ * efdp_dot + vr - ve - Ke_ * efdp;
         f[3] = -Tf_ * vfx_dot + vf;
 
@@ -328,7 +328,7 @@ namespace GridKit
         f[6] = -ve + ksat * efdp;
         f[7] = -efd + efdp + omega * efdp * Ispdlim_;
 
-        f[8] = -ksat + SB_ * Math::qramp(efdp - SA_);
+        f[8] = -ksat + SB_ * Math::qramp(efdp - SA_, this->mu_);
 
         return 0;
       }
@@ -459,7 +459,7 @@ namespace GridKit
         monitor_->set(Variable::efd, [this]
                       { return efd_signal_->read(); });
         monitor_->set(Variable::ksat, [this]
-                      { return SB_ * Math::qramp(y_[2] - SA_); });
+                      { return SB_ * Math::qramp(y_[2] - SA_, this->mu_); });
       }
     } // namespace Exciter
   } // namespace PhasorDynamics

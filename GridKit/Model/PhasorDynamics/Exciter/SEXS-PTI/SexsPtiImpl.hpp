@@ -198,7 +198,7 @@ namespace GridKit
         ScalarT func = (-efd + (K_ / Tb_) * (-vr + Ta_ * vtr)) / Te_;
 
         f[0] = -vr_dot + (-vr + Ta_ * vtr) / Tb_ - vtr;
-        f[1] = -efd_dot + Math::antiwindup(efd, func, Efdmin_, Efdmax_);
+        f[1] = -efd_dot + Math::antiwindup(efd, func, Efdmin_, Efdmax_, this->mu_);
         f[2] = -vtr - Ec + vref_ + vs + vOEL_ + vUEL_;
 
         return 0;

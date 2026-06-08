@@ -104,6 +104,7 @@ namespace GridKit
       void addFault(ComponentT* component);
 
       void setSystemBase(RealT freq_system_base, RealT va_system_base);
+      void setMu(RealT mu);
 
       BusT*                    getBus(IdxT bus_id);
       SignalT*                 getSignal(IdxT signal_id);

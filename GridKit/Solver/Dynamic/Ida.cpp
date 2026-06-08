@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -32,10 +33,7 @@ namespace AnalysisManager
       // Create the SUNDIALS context that all SUNDIALS objects require
       retval = SUNContext_Create(SUN_COMM_NULL, &context_);
       checkOutput(retval, "SUNContext");
-      if (log_options.has_value())
-      {
-        configureLogger(*log_options);
-      }
+      setLogger(log_options);
       solver_ = IDACreate(context_);
     }
 
@@ -277,6 +275,14 @@ namespace AnalysisManager
       return retval;
     }
 
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::setTolerances(RealT rel_tol, RealT abs_tol)
+    {
+      int retval = IDASStolerances(solver_, rel_tol, abs_tol);
+      checkOutput(retval, "IDASStolerances");
+      return retval;
+    }
+
     /**
      * @brief Initialize the simulation
      *
@@ -327,6 +333,24 @@ namespace AnalysisManager
     }
 
     /**
+     * @brief Call IDASolve and record its raw return flag.
+     *
+     * @param[in]  tout Target output time passed to IDASolve.
+     * @param[out] tret Time actually reached by IDASolve.
+     * @param[in]  task IDASolve task (IDA_NORMAL or IDA_ONE_STEP).
+     * @return The IDASolve return flag (also stored in `last_solve_flag_`).
+     *
+     * @post `last_solve_flag_` holds the flag even if the caller's subsequent
+     *       `checkOutput` throws, so diagnostics can report why a solve failed.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::idaSolveStep(RealT tout, RealT& tret, int task)
+    {
+      last_solve_flag_ = IDASolve(solver_, tout, &tret, yy_, yp_, task);
+      return last_solve_flag_;
+    }
+
+    /**
      * @brief Run the IDA solver on the given model and produce a solution at
      * the given final time.
      *
@@ -367,7 +391,7 @@ namespace AnalysisManager
         {
           while (true)
           {
-            retval = IDASolve(solver_, tf, &tret, yy_, yp_, IDA_ONE_STEP);
+            retval = idaSolveStep(tf, tret, IDA_ONE_STEP);
             checkOutput(retval, "IDASolve");
 
             publishOutput(tret, step_callback);
@@ -413,7 +437,7 @@ namespace AnalysisManager
       // printOutput(0.0);
       while (nout > iout)
       {
-        retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
+        retval = idaSolveStep(tout, tret, IDA_NORMAL);
         checkOutput(retval, "IDASolve");
 
         publishOutput(tret, step_callback);
@@ -457,7 +481,7 @@ namespace AnalysisManager
         {
           while (true)
           {
-            retval = IDASolve(solver_, tf, &tret, yy_, yp_, IDA_ONE_STEP);
+            retval = idaSolveStep(tf, tret, IDA_ONE_STEP);
             checkOutput(retval, "IDASolve");
 
             const auto step_stats = getStats();
@@ -513,7 +537,7 @@ namespace AnalysisManager
       {
         while (nout > iout)
         {
-          retval = IDASolve(solver_, tout(iout), &tret, yy_, yp_, IDA_ONE_STEP);
+          retval = idaSolveStep(tout(iout), tret, IDA_ONE_STEP);
           checkOutput(retval, "IDASolve");
 
           const auto step_stats = getStats();
@@ -587,6 +611,58 @@ namespace AnalysisManager
       SUNMatDestroy(JacobianMat_);
       IDAFree(&solver_);
       return 0;
+    }
+
+    template <class ScalarT, typename IdxT>
+    typename Ida<ScalarT, IdxT>::SolutionCheckpoint Ida<ScalarT, IdxT>::saveSolutionCheckpoint(RealT time) const
+    {
+      SolutionCheckpoint checkpoint;
+      checkpoint.time = time;
+      checkpoint.y.resize(model_->y().size());
+      checkpoint.yp.resize(model_->yp().size());
+
+      copyVec(yy_, checkpoint.y);
+      copyVec(yp_, checkpoint.yp);
+
+      return checkpoint;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::restoreSolutionCheckpoint(const SolutionCheckpoint& checkpoint)
+    {
+      if (checkpoint.y.size() != model_->y().size() || checkpoint.yp.size() != model_->yp().size())
+      {
+        throw std::invalid_argument("IDA solution checkpoint size does not match model state size");
+      }
+
+      copyVec(checkpoint.y, yy_);
+      copyVec(checkpoint.yp, yp_);
+      model_->y()  = checkpoint.y;
+      model_->yp() = checkpoint.yp;
+      model_->updateTime(checkpoint.time, 0.0);
+
+      t_init_          = checkpoint.time;
+      last_solve_flag_ = IDA_SUCCESS;
+      const int retval = IDAReInit(solver_, checkpoint.time, yy_, yp_);
+      checkOutput(retval, "IDAReInit");
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::setLogger(std::optional<IdaLogOptions> log_options)
+    {
+      if (logger_)
+      {
+        int retval = SUNContext_SetLogger(context_, nullptr);
+        checkOutput(retval, "SUNContext_SetLogger");
+        SUNLogger_Destroy(&logger_);
+        logger_ = nullptr;
+      }
+
+      if (log_options.has_value())
+      {
+        configureLogger(*log_options);
+      }
     }
 
     /**
@@ -1272,18 +1348,21 @@ namespace AnalysisManager
       num_jtimes_setup_evals_          += other.num_jtimes_setup_evals_;
       num_jtimes_evals_                += other.num_jtimes_evals_;
 
-      last_linear_flag_      = other.last_linear_flag_;
-      last_linear_flag_name_ = other.last_linear_flag_name_;
-      last_jacobian_step_    = other.last_jacobian_step_;
-      last_order_            = other.last_order_;
-      current_order_         = other.current_order_;
-      actual_initial_step_   = other.actual_initial_step_;
-      last_step_             = other.last_step_;
-      current_step_          = other.current_step_;
-      current_time_          = other.current_time_;
-      current_cj_            = other.current_cj_;
-      jacobian_time_         = other.jacobian_time_;
-      jacobian_cj_           = other.jacobian_cj_;
+      last_linear_flag_       = other.last_linear_flag_;
+      last_linear_flag_name_  = other.last_linear_flag_name_;
+      last_jacobian_step_     = other.last_jacobian_step_;
+      last_order_             = other.last_order_;
+      current_order_          = other.current_order_;
+      actual_initial_step_    = other.actual_initial_step_;
+      last_step_              = other.last_step_;
+      current_step_           = other.current_step_;
+      current_time_           = other.current_time_;
+      current_cj_             = other.current_cj_;
+      jacobian_eval_time_     = other.jacobian_eval_time_;
+      jacobian_cj_            = other.jacobian_cj_;
+      tol_scale_factor_       = other.tol_scale_factor_;
+      solve_return_flag_      = other.solve_return_flag_;
+      solve_return_flag_name_ = other.solve_return_flag_name_;
 
       return *this;
     }
@@ -1351,7 +1430,7 @@ namespace AnalysisManager
       checkOutput(retval, "IDAGetNumJacEvals");
       retval = IDAGetJacNumSteps(solver_, &stats.last_jacobian_step_);
       checkOutput(retval, "IDAGetJacNumSteps");
-      retval = IDAGetJacTime(solver_, &stats.jacobian_time_);
+      retval = IDAGetJacTime(solver_, &stats.jacobian_eval_time_);
       checkOutput(retval, "IDAGetJacTime");
       retval = IDAGetJacCj(solver_, &stats.jacobian_cj_);
       checkOutput(retval, "IDAGetJacCj");
@@ -1371,9 +1450,26 @@ namespace AnalysisManager
       checkOutput(retval, "IDAGetNumJtimesEvals");
       retval = IDAGetLastLinFlag(solver_, &stats.last_linear_flag_);
       checkOutput(retval, "IDAGetLastLinFlag");
+      // IDAGetLinReturnFlagName allocates the returned string; free it after copying.
       if (char* flag_name = IDAGetLinReturnFlagName(stats.last_linear_flag_))
       {
         stats.last_linear_flag_name_ = flag_name;
+        free(flag_name);
+      }
+
+      retval = IDAGetTolScaleFactor(solver_, &stats.tol_scale_factor_);
+      checkOutput(retval, "IDAGetTolScaleFactor");
+
+      // Surface the most recent IDASolve return flag captured by the run methods.
+      // IDA_TSTOP_RETURN is the normal way an IDA_ONE_STEP segment reaches its stop
+      // time, so report it as a success. IDAGetReturnFlagName allocates the returned
+      // string; free it after copying.
+      const int solve_flag     = (last_solve_flag_ == IDA_TSTOP_RETURN) ? IDA_SUCCESS : last_solve_flag_;
+      stats.solve_return_flag_ = solve_flag;
+      if (char* solve_flag_name = IDAGetReturnFlagName(static_cast<long int>(solve_flag)))
+      {
+        stats.solve_return_flag_name_ = solve_flag_name;
+        free(solve_flag_name);
       }
 
       return stats;

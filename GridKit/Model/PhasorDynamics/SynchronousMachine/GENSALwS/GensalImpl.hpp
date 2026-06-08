@@ -289,7 +289,7 @@ namespace GridKit
       ScalarT psidp   = psidpp - (Xdpp_ - Xl_) * id;
       ScalarT Eqp     = psidp + Xd2_ * id;
       ScalarT Eqp_sat = Eqp - SA_;
-      ScalarT ksat    = SB_ * Eqp_sat * Eqp_sat * Math::sigmoid(Eqp_sat);
+      ScalarT ksat    = SB_ * Eqp_sat * Eqp_sat * Math::sigmoid(Eqp_sat, this->mu_);
       ScalarT Te      = (psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id;
 
       y_[0]  = delta;
@@ -399,7 +399,7 @@ namespace GridKit
       /* 9 Gensal algebraic equations */
       f[5]            = psidpp - (psidp * Xd4_ + Eqp * Xd5_);
       ScalarT Eqp_sat = Eqp - SA_;
-      f[6]            = ksat - SB_ * Eqp_sat * Eqp_sat * Math::sigmoid(Eqp_sat);
+      f[6]            = ksat - SB_ * Eqp_sat * Eqp_sat * Math::sigmoid(Eqp_sat, this->mu_);
       f[7]            = vd + psiqpp * (ONE<RealT> + omega);
       f[8]            = vq - psidpp * (ONE<RealT> + omega);
       f[9]            = telec - ((psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id);

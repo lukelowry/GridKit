@@ -287,7 +287,7 @@ namespace GridKit
 
         // Internal Differential Equations
         f[0] = -T3_ * ptx_dot - ptx + (T3_ - T2_) * pv;
-        f[1] = -T1_ * pv_dot + Math::antiwindup(pv, func, Pvmin_, Pvmax_);
+        f[1] = -T1_ * pv_dot + Math::antiwindup(pv, func, Pvmin_, Pvmax_, this->mu_);
 
         // Internal Algebraic Equations
         f[2] = -toComponentBase(pmech) + (ptx + T2_ * pv) / T3_ - (Dt_ * omega);

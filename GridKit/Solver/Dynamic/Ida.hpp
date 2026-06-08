@@ -8,6 +8,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <nvector/nvector_serial.h>
 #include <sundials/sundials_context.h>
@@ -60,8 +61,11 @@ namespace AnalysisManager
       sunrealtype current_step_        = 0.0;
       sunrealtype current_time_        = 0.0;
       sunrealtype current_cj_          = 0.0;
-      sunrealtype jacobian_time_       = 0.0;
+      sunrealtype jacobian_eval_time_  = 0.0; ///< Simulation time of the last Jacobian eval (not wall-clock)
       sunrealtype jacobian_cj_         = 0.0;
+      sunrealtype tol_scale_factor_    = 0.0; ///< IDAGetTolScaleFactor: suggested tolerance scaling
+      int         solve_return_flag_   = 0;   ///< Last IDASolve return flag for the segment
+      std::string solve_return_flag_name_;    ///< Human-readable name of solve_return_flag_
 
       IdaStats&   operator+=(const IdaStats& other);
       std::string report() const;
@@ -79,6 +83,16 @@ namespace AnalysisManager
       IdaLogLevel           level{IdaLogLevel::Warning};
     };
 
+    template <class ScalarT>
+    struct IdaSolutionCheckpoint
+    {
+      using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
+
+      RealT                time{0.0};
+      std::vector<ScalarT> y;
+      std::vector<ScalarT> yp;
+    };
+
     template <class ScalarT, typename IdxT>
     class Ida : public DynamicSolver<ScalarT, IdxT>
     {
@@ -89,6 +103,7 @@ namespace AnalysisManager
     public:
       using OutputCallback       = std::function<void(RealT)>;
       using InternalStepCallback = std::function<void(const IdaStats&)>;
+      using SolutionCheckpoint   = IdaSolutionCheckpoint<ScalarT>;
 
       Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model,
           std::optional<IdaLogOptions>              log_options = {});
@@ -104,18 +119,22 @@ namespace AnalysisManager
       int setIntegrationTime(RealT t_init, RealT t_final, int nout);
       int setMaxOrder(int max_order);
       int setMaxStep(RealT hmax);
+      int setTolerances(RealT rel_tol, RealT abs_tol);
       int initializeSimulation(RealT                t0,
                                bool                 findConsistent  = false,
                                std::optional<RealT> consistent_tout = {});
 
-      int runSimulation(RealT                         tf,
-                        std::optional<int>            output_count  = 1,
-                        std::optional<OutputCallback> step_callback = {});
-      int runSimulationWithStepHistory(RealT                         tf,
-                                       std::optional<int>            output_count,
-                                       const InternalStepCallback&   internal_step_callback,
+      int                runSimulation(RealT                         tf,
+                                       std::optional<int>            output_count  = 1,
                                        std::optional<OutputCallback> step_callback = {});
-      int deleteSimulation();
+      int                runSimulationWithStepHistory(RealT                         tf,
+                                                      std::optional<int>            output_count,
+                                                      const InternalStepCallback&   internal_step_callback,
+                                                      std::optional<OutputCallback> step_callback = {});
+      int                deleteSimulation();
+      SolutionCheckpoint saveSolutionCheckpoint(RealT time) const;
+      int                restoreSolutionCheckpoint(const SolutionCheckpoint& checkpoint);
+      void               setLogger(std::optional<IdaLogOptions> log_options);
 
       int configureQuadrature();
       int initializeQuadrature();
@@ -252,10 +271,12 @@ namespace AnalysisManager
 
       int       backwardID_{};
       SUNLogger logger_{};
+      int       last_solve_flag_{}; ///< Raw return flag of the most recent IDASolve call
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);
       void                    configureLogger(const IdaLogOptions& options);
+      int                     idaSolveStep(RealT tout, RealT& tret, int task);
       static void             copyVec(const N_Vector x, std::vector<ScalarT>& y);
       static void             copyVec(const std::vector<ScalarT>& x, N_Vector y);
       static void             copyVec(const std::vector<bool>& x, N_Vector y);

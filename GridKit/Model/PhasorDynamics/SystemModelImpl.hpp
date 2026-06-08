@@ -937,6 +937,7 @@ namespace GridKit
     {
       IdxT gridkit_component_id = static_cast<IdxT>(components_.size());
       component->setGridKitComponentID(gridkit_component_id);
+      component->setMu(this->mu_);
       component->setSystemBase(this->freq_system_base_,
                                this->va_system_base_);
       components_.push_back(component);
@@ -973,6 +974,17 @@ namespace GridKit
       for (auto* component : components_)
       {
         component->setSystemBase(freq_system_base, va_system_base);
+      }
+    }
+
+    template <typename scalar_type, typename index_type>
+    void SystemModel<scalar_type, index_type>::setMu(RealT mu)
+    {
+      ComponentT::setMu(mu);
+
+      for (auto* component : components_)
+      {
+        component->setMu(mu);
       }
     }
 

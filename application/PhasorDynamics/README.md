@@ -9,12 +9,15 @@
   `tmax`              | A floating point value for max time
   `ida_max_order`     | Optional integer from 1 to 5 limiting IDA's maximum integrator order
   `ida_max_dt`        | Optional positive floating point value limiting IDA's internal max step
+  `rel_tol`           | Optional positive scalar IDA relative tolerance; must be paired with `abs_tol`
+  `abs_tol`           | Optional positive scalar IDA absolute tolerance; must be paired with `rel_tol`
+  `mu`                | Optional positive CommonMath smoothing scale; defaults to `240`
   `events`            | An array of event groups (see [Events](#events) below)
   `output_file`       | Optional path to monitor output (CSV); omitted means monitors are disabled
   `ida_stats`         | Optional path to IDA aggregate statistics JSON
   `ida_steps`         | Optional path to IDA accepted-step JSON
-  `reference_file`    | A string containing the name of the case
-  `error_tolerance`   | A string containing the name of the case
+  `reference_file`    | Optional path to a reference CSV used by validation tooling
+  `error_tolerance`   | Optional floating point validation error tolerance
 
 [^1]: See system model [case format](../../Model/PhasorDynamics/INPUT_FORMAT.md)
 

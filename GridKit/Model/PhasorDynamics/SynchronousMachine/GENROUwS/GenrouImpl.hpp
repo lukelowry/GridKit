@@ -583,7 +583,7 @@ namespace GridKit
       f[7]              = psidpp - (psidp * Xd4_ + Eqp * Xd5_);
       f[8]              = psipp - std::sqrt((psidpp * psidpp) + (psiqpp * psiqpp));
       ScalarT psipp_sat = psipp - SA_;
-      f[9]              = ksat - SB_ * psipp_sat * psipp_sat * Math::sigmoid(psipp_sat);
+      f[9]              = ksat - SB_ * psipp_sat * psipp_sat * Math::sigmoid(psipp_sat, this->mu_);
       f[10]             = vd + psiqpp * (ONE<RealT> + omega);
       f[11]             = vq - psidpp * (ONE<RealT> + omega);
       f[12]             = telec - ((psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id);

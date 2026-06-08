@@ -12,18 +12,47 @@ namespace AnalysisManager
 {
   namespace Sundials
   {
+    /// Phase of a recorded statistics segment.
+    enum class SegmentKind
+    {
+      Solve,           ///< A normal IDASolve integration interval
+      InitialCondition ///< An IDACalcIC consistent-initial-condition solve
+    };
+
+    /// Static solver/study configuration, recorded so zero counters are interpretable.
+    struct IdaRunConfig
+    {
+      std::string             linear_solver_kind; ///< "KLU" or "dense"
+      bool                    sparse_enabled{false};
+      long int                model_size{0};
+      std::optional<long int> jacobian_nnz; ///< Only when a sparse Jacobian is used
+      std::optional<int>      ida_max_order;
+      std::optional<double>   ida_max_dt;
+      std::optional<double>   rel_tol; ///< Applied scalar relative tolerance, when overridden
+      std::optional<double>   abs_tol; ///< Applied scalar absolute tolerance, when overridden
+      double                  mu{0.0}; ///< Applied CommonMath smoothing scale
+      double                  dt{0.0};
+      double                  tmax{0.0};
+      std::string             sundials_version;
+    };
+
     struct IdaStatsSegment
     {
-      double   start_time{};
-      double   end_time{};
-      int      output_steps{};
-      IdaStats stats;
+      double              start_time{};
+      double              end_time{};
+      int                 output_steps{};
+      SegmentKind         kind{SegmentKind::Solve};
+      std::optional<bool> calc_ic_success; ///< Set for InitialCondition segments
+      IdaStats            stats;
     };
 
     struct IdaDiagnosticsOutput
     {
       std::filesystem::path        file;
       std::optional<IdaLogOptions> log;
+      std::optional<std::string>   timing_scope;       ///< e.g. "dynamic_simulation" | "contingency"
+      std::optional<double>        wall_clock_seconds; ///< Measured wall-clock run time
+      std::optional<IdaRunConfig>  config;             ///< Static solver/study configuration
     };
 
     struct IdaStatsReport
@@ -81,7 +110,12 @@ namespace AnalysisManager
       }
 
       template <class IdaT>
-      void endSegment(const IdaT& ida, double start_time, double end_time, int output_steps)
+      void endSegment(const IdaT&         ida,
+                      double              start_time,
+                      double              end_time,
+                      int                 output_steps,
+                      SegmentKind         kind            = SegmentKind::Solve,
+                      std::optional<bool> calc_ic_success = {})
       {
         if (!enabled_)
         {
@@ -93,18 +127,20 @@ namespace AnalysisManager
         }
 
         const auto end_stats = ida.getStats();
-        recordSegment(*segment_start_stats_, end_stats, start_time, end_time, output_steps);
+        recordSegment(*segment_start_stats_, end_stats, start_time, end_time, output_steps, kind, calc_ic_success);
         segment_start_stats_.reset();
       }
 
       IdaStatsReport report(std::optional<IdaLogOptions> log = {}) const;
 
     private:
-      void recordSegment(const IdaStats& start_stats,
-                         const IdaStats& end_stats,
-                         double          start_time,
-                         double          end_time,
-                         int             output_steps);
+      void recordSegment(const IdaStats&     start_stats,
+                         const IdaStats&     end_stats,
+                         double              start_time,
+                         double              end_time,
+                         int                 output_steps,
+                         SegmentKind         kind,
+                         std::optional<bool> calc_ic_success);
 
       bool                         enabled_{false};
       std::optional<IdaStats>      segment_start_stats_;
@@ -165,7 +201,10 @@ namespace AnalysisManager
       std::size_t                          accepted_steps_{0};
     };
 
-    IdaStats idaStatsDelta(const IdaStats& end_stats, const IdaStats& start_stats);
+    IdaStats       idaStatsDelta(const IdaStats& end_stats, const IdaStats& start_stats);
+    IdaStatsReport combineIdaStatsReports(const IdaStatsReport&        prefix,
+                                          const IdaStatsReport&        suffix,
+                                          std::optional<IdaLogOptions> log = {});
 
     void writeIdaStatsJson(const IdaStatsReport& report, const IdaDiagnosticsOutput& output);
     void writeIdaStepHistoryJson(const IdaStepHistoryReport& report, const IdaDiagnosticsOutput& output);

@@ -16,6 +16,7 @@ target_link_libraries(
   ContingencyAnalysis
   PUBLIC GridKit::phasor_dynamics_systemmodel
          GridKit::solvers_dyn
+         GridKit::solvers_dyn_io
          GridKit::Utilities
          GridKit::testing)
 target_include_directories(

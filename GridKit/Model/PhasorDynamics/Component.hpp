@@ -218,6 +218,16 @@ namespace GridKit
         va_system_base_   = va_system_base;
       }
 
+      void setMu(RealT mu)
+      {
+        mu_ = mu;
+      }
+
+      RealT getMu() const
+      {
+        return mu_;
+      }
+
       virtual int setGridKitComponentID(IdxT) = 0;
 
       IdxT getGridKitComponentID() const
@@ -278,6 +288,7 @@ namespace GridKit
 
       RealT freq_system_base_{60.0};
       RealT va_system_base_{100.0e6};
+      RealT mu_{Math::DEFAULT_MU<RealT>};
 
       using NotImplementedError = GridKit::Utilities::NotImplementedError;
 

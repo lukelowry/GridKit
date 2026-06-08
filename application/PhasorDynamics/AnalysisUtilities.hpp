@@ -11,6 +11,7 @@
 #include <magic_enum/magic_enum.hpp>
 #include <nlohmann/json.hpp>
 
+#include <GridKit/CommonMath.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
@@ -59,6 +60,12 @@ namespace GridKit
       std::optional<int>       ida_max_order;
       /// optional IDA maximum internal time step
       std::optional<double>    ida_max_dt;
+      /// optional IDA scalar relative tolerance (overrides the model default)
+      std::optional<double>    rel_tol;
+      /// optional IDA scalar absolute tolerance (overrides the model default)
+      std::optional<double>    abs_tol;
+      /// CommonMath smoothing scale
+      double                   mu{Math::DEFAULT_MU<double>};
       /// set of system events
       std::vector<SystemEvent> events;
       /// path to monitor output file
@@ -96,6 +103,15 @@ namespace GridKit
       {
         c.ida_max_order = j.at("ida_max_order").get<int>();
       }
+      if (j.contains("rel_tol"))
+      {
+        c.rel_tol = j.at("rel_tol").get<double>();
+      }
+      if (j.contains("abs_tol"))
+      {
+        c.abs_tol = j.at("abs_tol").get<double>();
+      }
+      c.mu = j.value("mu", Math::DEFAULT_MU<double>);
 
       for (auto& raw_event : j.at("events"))
       {
@@ -261,6 +277,75 @@ namespace GridKit
       }
 
       return data;
+    }
+
+    /**
+     * @brief Return the base directory under which a study's outputs live.
+     *
+     * Derived from the first available of the IDA stats, IDA steps, monitor
+     * output, or system model paths.
+     */
+    fs::path studyOutputBaseDirectory(const StudyData& study_data)
+    {
+      const fs::path candidates[] = {
+          study_data.ida_stats,
+          study_data.ida_steps,
+          study_data.output_file,
+          study_data.system_model_file};
+      for (const auto& candidate : candidates)
+      {
+        if (!candidate.empty())
+        {
+          return candidate.parent_path();
+        }
+      }
+      return fs::current_path();
+    }
+
+    /**
+     * @brief Return `<base>/results/<app_name>` for a study's outputs.
+     */
+    fs::path studyResultsDirectory(const StudyData& study_data, const std::string& app_name)
+    {
+      return studyOutputBaseDirectory(study_data) / "results" / app_name;
+    }
+
+    /**
+     * @brief Return `output_dir / <filename of file_path>`.
+     */
+    fs::path resultFilePath(const fs::path& output_dir, const fs::path& file_path)
+    {
+      return output_dir / file_path.filename();
+    }
+
+    /**
+     * @brief Redirect a study's output artifacts (IDA stats/steps, monitor CSV)
+     * into `output_dir`, creating it if needed.
+     *
+     * @post `output_dir` exists; `ida_stats`, `ida_steps`, `output_file`, and the
+     *       monitor sinks point at files inside `output_dir`. Used to give each
+     *       contingency its own results folder.
+     */
+    void setStudyOutputDirectory(StudyData& study_data, const fs::path& output_dir)
+    {
+      fs::create_directories(output_dir);
+
+      if (!study_data.ida_stats.empty())
+      {
+        study_data.ida_stats = resultFilePath(output_dir, study_data.ida_stats);
+      }
+      if (!study_data.ida_steps.empty())
+      {
+        study_data.ida_steps = resultFilePath(output_dir, study_data.ida_steps);
+      }
+      if (!study_data.output_file.empty())
+      {
+        study_data.output_file = resultFilePath(output_dir, study_data.output_file);
+      }
+      for (auto& sink : study_data.model_data.monitor_sink)
+      {
+        sink.file_name = resultFilePath(output_dir, fs::path(sink.file_name)).string();
+      }
     }
 
     void checkCommandLine(int argc, const std::string& appName)

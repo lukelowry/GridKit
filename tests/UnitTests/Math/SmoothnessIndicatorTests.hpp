@@ -181,10 +181,12 @@ namespace GridKit
       {
         TestStatus success = true;
 
+        const RealT   custom_mu   = 500.0;
         const ScalarT tol         = scalar(kSmoothTolerance);
         const ScalarT roundoff    = scalar(kRoundoffTolerance);
-        const ScalarT tau         = scalar(1.0 / Math::MU<RealT>);
+        const ScalarT tau         = scalar(1.0 / Math::DEFAULT_MU<RealT>);
         const ScalarT at_zero     = tau * std::log(scalar(2.0));
+        const ScalarT custom_zero = std::log(scalar(2.0)) / scalar(custom_mu);
         const ScalarT far_above   = scalar(4.0);
         const ScalarT far_below   = scalar(-4.0);
         const ScalarT lower       = scalar(-0.25);
@@ -196,6 +198,8 @@ namespace GridKit
         success *= (Math::ramp(scalar(1.0)) > scalar(kNearOne));
         success *= (Math::ramp(scalar(-1.0)) < tol);
         success *= (std::abs(Math::ramp(scalar(0.0)) - at_zero) < roundoff);
+        success *= (std::abs(Math::ramp(scalar(0.0), custom_mu) - custom_zero) < roundoff);
+        success *= (std::abs(Math::dsigmoid(scalar(0.0), custom_mu) - scalar(custom_mu * 0.25)) < roundoff);
         success *= (Math::ramp(-tol) > scalar(0.0));
         success *= (Math::ramp(tol) > Math::ramp(scalar(0.0)));
         success *= std::isfinite(Math::ramp(far_above));
@@ -251,7 +255,7 @@ namespace GridKit
                     < scalar(kRoundoffTolerance));
 
         const ScalarT point = scalar(0.25);
-        const ScalarT bias  = std::log(scalar(2.0)) / scalar(Math::MU<RealT>);
+        const ScalarT bias  = std::log(scalar(2.0)) / scalar(Math::DEFAULT_MU<RealT>);
 
         success *= (std::abs(Math::max(point, point) - (point + bias))
                     < scalar(kRoundoffTolerance));

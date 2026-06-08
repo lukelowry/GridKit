@@ -273,6 +273,42 @@ namespace GridKit
       RealT rel_tol_;
       RealT abs_tol_;
     };
+
+    template <class ScalarT, typename IdxT>
+    class DecayEvaluator : public NullEvaluator<ScalarT, IdxT>
+    {
+    public:
+      using RealT = typename NullEvaluator<ScalarT, IdxT>::RealT;
+
+      DecayEvaluator(RealT rel_tol = 1.0e-8, RealT abs_tol = 1.0e-10)
+        : NullEvaluator<ScalarT, IdxT>(rel_tol, abs_tol)
+      {
+      }
+
+      int initialize() override
+      {
+        this->y_  = {1};
+        this->yp_ = {-1};
+
+        this->tag_ = {true};
+
+        this->f_ = {0};
+        this->g_ = {0};
+        return 0;
+      }
+
+      int tagDifferentiable() override
+      {
+        this->tag_ = {true};
+        return 0;
+      }
+
+      int evaluateResidual() override
+      {
+        this->f_[0] = this->yp_[0] + this->y_[0];
+        return 0;
+      }
+    };
   } // namespace Model
 
   namespace Testing
@@ -319,6 +355,20 @@ namespace GridKit
         const auto solver_step_stats  = solver_step_ida.getStats();
         success                      *= (observed_solver_steps > 0);
         success                      *= (observed_solver_steps == static_cast<unsigned>(solver_step_stats.num_steps_));
+
+        Model::DecayEvaluator<ScalarT, IdxT> checkpoint_model;
+        Ida<double, size_t>                  checkpoint_ida(&checkpoint_model);
+        checkpoint_ida.configureSimulation();
+        checkpoint_ida.initializeSimulation(0.0, false);
+        checkpoint_ida.runSimulation(0.5, 1);
+        const auto checkpoint = checkpoint_ida.saveSolutionCheckpoint(0.5);
+        checkpoint_ida.runSimulation(1.0, 1);
+        const auto first_final_y = checkpoint_model.y()[0];
+        checkpoint_ida.restoreSolutionCheckpoint(checkpoint);
+        success *= isEqual(checkpoint_model.y()[0], checkpoint.y[0], 1.0e-12);
+        success *= isEqual(checkpoint_model.yp()[0], checkpoint.yp[0], 1.0e-12);
+        checkpoint_ida.runSimulation(1.0, 1);
+        success *= isEqual(checkpoint_model.y()[0], first_final_y, 1.0e-8);
 
         Model::NullEvaluator<ScalarT, IdxT> invalid_model(0.0, 1.0e-8);
         Ida<double, size_t>                 invalid_ida(&invalid_model);

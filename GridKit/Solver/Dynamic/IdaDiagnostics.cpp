@@ -13,17 +13,28 @@ namespace AnalysisManager
   {
     namespace
     {
+      constexpr const char* IDA_STATS_SCHEMA = "gridkit.ida_stats.v1";
+      constexpr const char* IDA_STEPS_SCHEMA = "gridkit.ida_steps.v2";
+      constexpr const char* IDA_STEPS_SOURCE = "actual_solve";
+      constexpr const char* IDA_STEPS_DRIVER = "IDA_ONE_STEP";
+
       std::string logLevelName(IdaLogLevel level)
       {
         return level == IdaLogLevel::Error ? "error" : "warning";
       }
 
-      nlohmann::json idaStatsJson(const IdaStats& stats)
+      std::string segmentKindName(SegmentKind kind)
+      {
+        return kind == SegmentKind::InitialCondition ? "initial_condition" : "solve";
+      }
+
+      // Counter blocks shared by the aggregate stats and the per-step deltas.
+      // finite_difference_residual_evals is IDAGetNumLinResEvals: residual calls
+      // from internal finite-difference Jacobian/J*v approximations only
+      // (approximately 0 when an analytic Jacobian is supplied).
+      nlohmann::json idaCounterJson(const IdaStats& stats)
       {
         return nlohmann::json{
-            {"sundials",
-             {{"version", stats.sundials_version_},
-              {"logging_level", stats.sundials_logging_level_}}},
             {"integrator",
              {{"steps", stats.num_steps_},
               {"residual_evals", stats.num_residual_evals_},
@@ -36,26 +47,9 @@ namespace AnalysisManager
               {"step_solve_failures", stats.num_nonlinear_step_fails_}}},
             {"linear_solver",
              {{"jacobian_evals", stats.num_jacobian_evals_},
-              {"last_jacobian_step", stats.last_jacobian_step_},
-              {"jacobian_time", stats.jacobian_time_},
-              {"jacobian_cj", stats.jacobian_cj_},
               {"iterations", stats.num_linear_iters_},
               {"convergence_failures", stats.num_linear_convergence_fails_},
-              {"residual_evals", stats.num_linear_residual_evals_},
-              {"preconditioner_evals", stats.num_preconditioner_evals_},
-              {"preconditioner_solves", stats.num_preconditioner_solves_},
-              {"jtimes_setup_evals", stats.num_jtimes_setup_evals_},
-              {"jtimes_evals", stats.num_jtimes_evals_},
-              {"last_flag", stats.last_linear_flag_},
-              {"last_flag_name", stats.last_linear_flag_name_}}},
-            {"final_state",
-             {{"last_order", stats.last_order_},
-              {"current_order", stats.current_order_},
-              {"actual_initial_step", stats.actual_initial_step_},
-              {"last_step", stats.last_step_},
-              {"current_step", stats.current_step_},
-              {"current_time", stats.current_time_},
-              {"current_cj", stats.current_cj_}}}};
+              {"finite_difference_residual_evals", stats.num_linear_residual_evals_}}}};
       }
 
       nlohmann::json idaFinalStateJson(const IdaStats& stats)
@@ -67,27 +61,70 @@ namespace AnalysisManager
             {"last_step", stats.last_step_},
             {"current_step", stats.current_step_},
             {"current_time", stats.current_time_},
-            {"current_cj", stats.current_cj_}};
+            {"current_cj", stats.current_cj_},
+            {"tol_scale_factor", stats.tol_scale_factor_}};
+      }
+
+      nlohmann::json idaStatsJson(const IdaStats& stats)
+      {
+        auto json        = idaCounterJson(stats);
+        json["sundials"] = {
+            {"version", stats.sundials_version_},
+            {"logging_level", stats.sundials_logging_level_}};
+
+        // jacobian_eval_time is IDAGetJacTime: the simulation time of the last
+        // Jacobian evaluation, not wall-clock compute time.
+        auto& linear_solver                    = json["linear_solver"];
+        linear_solver["last_jacobian_step"]    = stats.last_jacobian_step_;
+        linear_solver["jacobian_eval_time"]    = stats.jacobian_eval_time_;
+        linear_solver["jacobian_cj"]           = stats.jacobian_cj_;
+        linear_solver["preconditioner_evals"]  = stats.num_preconditioner_evals_;
+        linear_solver["preconditioner_solves"] = stats.num_preconditioner_solves_;
+        linear_solver["jtimes_setup_evals"]    = stats.num_jtimes_setup_evals_;
+        linear_solver["jtimes_evals"]          = stats.num_jtimes_evals_;
+        linear_solver["last_flag"]             = stats.last_linear_flag_;
+        linear_solver["last_flag_name"]        = stats.last_linear_flag_name_;
+
+        json["final_state"] = idaFinalStateJson(stats);
+        return json;
       }
 
       nlohmann::json idaStepCounterDeltaJson(const IdaStats& stats)
       {
+        return idaCounterJson(stats);
+      }
+
+      nlohmann::json idaRunConfigJson(const IdaRunConfig& config)
+      {
         return nlohmann::json{
-            {"integrator",
-             {{"steps", stats.num_steps_},
-              {"residual_evals", stats.num_residual_evals_},
-              {"linear_solver_setups", stats.num_linear_solver_setups_},
-              {"error_test_failures", stats.num_error_test_fails_},
-              {"backtrack_operations", stats.num_backtrack_operations_}}},
-            {"nonlinear_solver",
-             {{"iterations", stats.num_nonlinear_iters_},
-              {"convergence_failures", stats.num_nonlinear_convergence_fails_},
-              {"step_solve_failures", stats.num_nonlinear_step_fails_}}},
-            {"linear_solver",
-             {{"jacobian_evals", stats.num_jacobian_evals_},
-              {"iterations", stats.num_linear_iters_},
-              {"convergence_failures", stats.num_linear_convergence_fails_},
-              {"residual_evals", stats.num_linear_residual_evals_}}}};
+            {"linear_solver_kind", config.linear_solver_kind},
+            {"sparse_enabled", config.sparse_enabled},
+            {"model_size", config.model_size},
+            {"jacobian_nnz", config.jacobian_nnz.has_value() ? nlohmann::json(*config.jacobian_nnz) : nlohmann::json()},
+            {"ida_max_order", config.ida_max_order.has_value() ? nlohmann::json(*config.ida_max_order) : nlohmann::json()},
+            {"ida_max_dt", config.ida_max_dt.has_value() ? nlohmann::json(*config.ida_max_dt) : nlohmann::json()},
+            {"rel_tol", config.rel_tol.has_value() ? nlohmann::json(*config.rel_tol) : nlohmann::json()},
+            {"abs_tol", config.abs_tol.has_value() ? nlohmann::json(*config.abs_tol) : nlohmann::json()},
+            {"mu", config.mu},
+            {"dt", config.dt},
+            {"tmax", config.tmax},
+            {"sundials_version", config.sundials_version}};
+      }
+
+      void addOptionalSections(nlohmann::json& json, const IdaDiagnosticsOutput& output)
+      {
+        if (output.config.has_value())
+        {
+          json["config"] = idaRunConfigJson(*output.config);
+        }
+        if (output.wall_clock_seconds.has_value())
+        {
+          json["timing"] = {{"wall_clock_seconds", *output.wall_clock_seconds}};
+          if (output.timing_scope.has_value())
+          {
+            json["timing"]["scope"] = *output.timing_scope;
+          }
+        }
       }
 
       nlohmann::json idaStepSampleJson(const IdaStepSample& sample)
@@ -129,9 +166,22 @@ namespace AnalysisManager
       {
         auto json = idaStatsJson(segment.stats);
         json.erase("sundials");
+        json["phase"]        = segmentKindName(segment.kind);
         json["start_time"]   = segment.start_time;
         json["end_time"]     = segment.end_time;
         json["output_steps"] = segment.output_steps;
+        if (segment.kind == SegmentKind::InitialCondition)
+        {
+          if (segment.calc_ic_success.has_value())
+          {
+            json["calc_ic_success"] = *segment.calc_ic_success;
+          }
+        }
+        else
+        {
+          json["solve_status"]      = segment.stats.solve_return_flag_;
+          json["solve_status_name"] = segment.stats.solve_return_flag_name_;
+        }
         return json;
       }
     } // namespace
@@ -198,15 +248,17 @@ namespace AnalysisManager
       return {segments_};
     }
 
-    void IdaStatsRecorder::recordSegment(const IdaStats& start_stats,
-                                         const IdaStats& end_stats,
-                                         double          start_time,
-                                         double          end_time,
-                                         int             output_steps)
+    void IdaStatsRecorder::recordSegment(const IdaStats&     start_stats,
+                                         const IdaStats&     end_stats,
+                                         double              start_time,
+                                         double              end_time,
+                                         int                 output_steps,
+                                         SegmentKind         kind,
+                                         std::optional<bool> calc_ic_success)
     {
       auto stats  = idaStatsDelta(end_stats, start_stats);
       summary_   += stats;
-      segments_.push_back({start_time, end_time, output_steps, std::move(stats)});
+      segments_.push_back({start_time, end_time, output_steps, kind, calc_ic_success, std::move(stats)});
     }
 
     IdaStatsReport IdaStatsRecorder::report(std::optional<IdaLogOptions> log) const
@@ -240,6 +292,19 @@ namespace AnalysisManager
       return delta;
     }
 
+    IdaStatsReport combineIdaStatsReports(const IdaStatsReport&        prefix,
+                                          const IdaStatsReport&        suffix,
+                                          std::optional<IdaLogOptions> log)
+    {
+      IdaStatsReport combined;
+      combined.summary   = prefix.summary;
+      combined.summary  += suffix.summary;
+      combined.segments  = prefix.segments;
+      combined.segments.insert(combined.segments.end(), suffix.segments.begin(), suffix.segments.end());
+      combined.log = std::move(log);
+      return combined;
+    }
+
     void writeIdaStatsJson(const IdaStatsReport& report, const IdaDiagnosticsOutput& output)
     {
       std::ofstream stream(output.file);
@@ -248,7 +313,9 @@ namespace AnalysisManager
         throw std::runtime_error("failed to open IDA stats output file '" + output.file.string() + "'");
       }
 
-      auto json             = idaStatsJson(report.summary);
+      auto json      = idaStatsJson(report.summary);
+      json["schema"] = IDA_STATS_SCHEMA;
+      addOptionalSections(json, output);
       json["segment_count"] = report.segments.size();
       json["segments"]      = nlohmann::json::array();
       for (const auto& segment : report.segments)
@@ -276,12 +343,14 @@ namespace AnalysisManager
       }
 
       nlohmann::json json{
-          {"schema", "gridkit.ida_steps.v1"},
-          {"source", "actual_solve"},
-          {"driver", "IDA_ONE_STEP"},
+          {"schema", IDA_STEPS_SCHEMA},
+          {"source", IDA_STEPS_SOURCE},
+          {"driver", IDA_STEPS_DRIVER},
           {"stop_time_enforced", true},
           {"segment_count", report.segments.size()},
           {"segments", nlohmann::json::array()}};
+
+      addOptionalSections(json, output);
 
       if (!report.segments.empty())
       {
