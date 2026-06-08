@@ -1,4 +1,5 @@
-gridkit_example_add_file(texas.json)
+gridkit_example_add_file(texas.case.json)
+gridkit_example_add_file(texas.ref.csv)
 gridkit_example_add_file(texas.solver.json)
 
 add_test(
