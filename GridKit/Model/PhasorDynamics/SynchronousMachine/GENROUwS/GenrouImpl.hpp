@@ -52,7 +52,7 @@ namespace GridKit
         S12_(0.),
         mva_base_(100.)
     {
-      size_ = 19;
+      size_ = 17;
       setDerivedParams();
     }
 
@@ -103,7 +103,7 @@ namespace GridKit
         S12_(S12),
         mva_base_(100.)
     {
-      size_ = 19;
+      size_ = 17;
       setDerivedParams();
     }
 
@@ -119,7 +119,7 @@ namespace GridKit
       initializeParameters(data);
       initializeMonitor();
 
-      size_ = 19;
+      size_ = 17;
       setDerivedParams();
     }
 
@@ -137,7 +137,7 @@ namespace GridKit
       initializeParameters(data);
       initializeMonitor();
 
-      size_ = 19;
+      size_ = 17;
       setDerivedParams();
     }
 
@@ -156,7 +156,7 @@ namespace GridKit
       initializeParameters(data);
       initializeMonitor();
 
-      size_ = 19;
+      size_ = 17;
       setDerivedParams();
     }
 
@@ -294,13 +294,19 @@ namespace GridKit
     {
       using Variable = typename ModelDataT::MonitorableVariables;
       monitor_->set(Variable::ir, [this]
-                    { return toSystemBase(y_[15]); });
+                    { return toSystemBase(y_[15] - G_ * Vr() + B_ * Vi()); });
       monitor_->set(Variable::ii, [this]
-                    { return toSystemBase(y_[16]); });
+                    { return toSystemBase(y_[16] - B_ * Vr() - G_ * Vi()); });
       monitor_->set(Variable::p, [this]
-                    { return toSystemBase(Vr() * y_[15] + Vi() * y_[16]); });
+                    {
+                      ScalarT ir = y_[15] - G_ * Vr() + B_ * Vi();
+                      ScalarT ii = y_[16] - B_ * Vr() - G_ * Vi();
+                      return toSystemBase(Vr() * ir + Vi() * ii); });
       monitor_->set(Variable::q, [this]
-                    { return toSystemBase(Vi() * y_[15] - Vr() * y_[16]); });
+                    {
+                      ScalarT ir = y_[15] - G_ * Vr() + B_ * Vi();
+                      ScalarT ii = y_[16] - B_ * Vr() - G_ * Vi();
+                      return toSystemBase(Vi() * ir - Vr() * ii); });
       monitor_->set(Variable::delta, [this]
                     { return y_[0]; });
       monitor_->set(Variable::omega, [this]
@@ -480,11 +486,9 @@ namespace GridKit
       y_[12]      = (psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id;
       y_[13]      = id;
       y_[14]      = iq;
-      y_[15]      = ir;
-      y_[16]      = ii;
-      y_[17]      = G_ * (vd * std::sin(delta) + vq * std::cos(delta))
+      y_[15]      = G_ * (vd * std::sin(delta) + vq * std::cos(delta))
                - B_ * (vd * -std::cos(delta) + vq * std::sin(delta));
-      y_[18] = B_ * (vd * std::sin(delta) + vq * std::cos(delta))
+      y_[16] = B_ * (vd * std::sin(delta) + vq * std::cos(delta))
                + G_ * (vd * -std::cos(delta) + vq * std::sin(delta));
 
       ScalarT Te = y_[12];
@@ -549,10 +553,8 @@ namespace GridKit
       ScalarT telec  = y[12];
       ScalarT id     = y[13];
       ScalarT iq     = y[14];
-      ScalarT ir     = y[15];
-      ScalarT ii     = y[16];
-      ScalarT inr    = y[17];
-      ScalarT ini    = y[18];
+      ScalarT inr    = y[15];
+      ScalarT ini    = y[16];
 
       /* Read derivatives */
       ScalarT delta_dot = yp[0];
@@ -578,7 +580,11 @@ namespace GridKit
       f[4] = psiqp_dot - (ONE<RealT> / Tqopp_) * (Edp - psiqp + Xq2_ * iq);
       f[5] = Edp_dot - (ONE<RealT> / Tqop_) * (-Edp + Xqd_ * psiqpp * ksat + Xq1_ * (iq - Xq3_ * (Edp + iq * Xq2_ - psiqp)));
 
-      /* 11 Genrou algebraic equations */
+      /* Terminal current injection, eliminated from the Norton interface equations */
+      ScalarT ir = inr - G_ * vr + B_ * vi;
+      ScalarT ii = ini - B_ * vr - G_ * vi;
+
+      /* 9 Genrou algebraic equations */
       f[6]              = psiqpp - (-psiqp * Xq4_ - Edp * Xq5_);
       f[7]              = psidpp - (psidp * Xd4_ + Eqp * Xd5_);
       f[8]              = psipp - std::sqrt((psidpp * psidpp) + (psiqpp * psiqpp));
@@ -589,12 +595,10 @@ namespace GridKit
       f[12]             = telec - ((psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id);
       f[13]             = id - (ir * std::sin(delta) - ii * std::cos(delta));
       f[14]             = iq - (ir * std::cos(delta) + ii * std::sin(delta));
-      f[15]             = ir + G_ * vr - B_ * vi - inr;
-      f[16]             = ii + B_ * vr + G_ * vi - ini;
 
       /* 2 Genrou current source definitions */
-      f[17] = inr - (G_ * (std::sin(delta) * vd + std::cos(delta) * vq) - B_ * (-std::cos(delta) * vd + std::sin(delta) * vq));
-      f[18] = ini - (B_ * (std::sin(delta) * vd + std::cos(delta) * vq) + G_ * (-std::cos(delta) * vd + std::sin(delta) * vq));
+      f[15] = inr - (G_ * (std::sin(delta) * vd + std::cos(delta) * vq) - B_ * (-std::cos(delta) * vd + std::sin(delta) * vq));
+      f[16] = ini - (B_ * (std::sin(delta) * vd + std::cos(delta) * vq) + G_ * (-std::cos(delta) * vd + std::sin(delta) * vq));
 
       return 0;
     }
@@ -610,8 +614,8 @@ namespace GridKit
         ScalarT*                  wb,
         ScalarT*                  h)
     {
-      ScalarT inr = y[17];
-      ScalarT ini = y[18];
+      ScalarT inr = y[15];
+      ScalarT ini = y[16];
       ScalarT vr  = wb[0];
       ScalarT vi  = wb[1];
 

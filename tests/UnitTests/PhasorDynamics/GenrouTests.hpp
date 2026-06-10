@@ -234,10 +234,8 @@ namespace GridKit
             1.4,
             0.31,
             2.211,
-            0.85,
-            1.2,
-            static_cast<ScalarT>(64.) / static_cast<ScalarT>(65.),
-            -static_cast<ScalarT>(237.) / static_cast<ScalarT>(130.),
+            -static_cast<ScalarT>(253.) / static_cast<ScalarT>(260.),
+            static_cast<ScalarT>(14.) / static_cast<ScalarT>(65.),
             -static_cast<ScalarT>(141.) / static_cast<ScalarT>(130.),
             -static_cast<ScalarT>(241.) / static_cast<ScalarT>(260.)};
 
@@ -266,10 +264,8 @@ namespace GridKit
         gen.y()[12] = 2;    // telec
         gen.y()[13] = 1.1;  // id
         gen.y()[14] = .3;   // iq
-        gen.y()[15] = .9;   // ir
-        gen.y()[16] = .25;  // ii
-        gen.y()[17] = .3;   // inr
-        gen.y()[18] = .15;  // ini
+        gen.y()[15] = .3;   // inr
+        gen.y()[16] = .15;  // ini
 
         // Set derivative values matching the answer key
         gen.yp()[0] = 2 * M_PI * 60.0; // delta_dot
