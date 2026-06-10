@@ -42,6 +42,7 @@ namespace GridKit
       using namespace Governor;
       using namespace Exciter;
       using namespace Stabilizer;
+      using namespace Converter;
 
       owns_components_ = true;
 
@@ -104,6 +105,69 @@ namespace GridKit
         }
 
         addComponent(adapter);
+      }
+
+      // Add REECA electrical controllers
+      for (const auto& reecadata : data.reeca)
+      {
+        IdxT bus_index = 0;
+        if (reecadata.ports.contains(ReecaPorts::bus))
+        {
+          bus_index = reecadata.ports.at(ReecaPorts::bus);
+        }
+
+        auto* reeca = new Reeca<ScalarT, IdxT>(getBus(bus_index), reecadata);
+
+        if (reecadata.ports.contains(ReecaPorts::pe))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::pe);
+          constexpr auto PE     = ReecaExternalVariables::PE;
+          reeca->getSignals().template attachSignalNode<PE>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::qgen))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::qgen);
+          constexpr auto QGEN   = ReecaExternalVariables::QGEN;
+          reeca->getSignals().template attachSignalNode<QGEN>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::omega))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::omega);
+          constexpr auto OMEGA  = ReecaExternalVariables::OMEGA;
+          reeca->getSignals().template attachSignalNode<OMEGA>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::qext))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::qext);
+          constexpr auto QEXT   = ReecaExternalVariables::QEXT;
+          reeca->getSignals().template attachSignalNode<QEXT>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::pfaref))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::pfaref);
+          constexpr auto PFAREF = ReecaExternalVariables::PFAREF;
+          reeca->getSignals().template attachSignalNode<PFAREF>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::pref))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::pref);
+          constexpr auto PREF   = ReecaExternalVariables::PREF;
+          reeca->getSignals().template attachSignalNode<PREF>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::iqcmd))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::iqcmd);
+          constexpr auto IQCMD  = ReecaInternalVariables::IQCMD;
+          reeca->getSignals().template assignSignalNode<IQCMD>(getSignal(signal));
+        }
+        if (reecadata.ports.contains(ReecaPorts::ipcmd))
+        {
+          const IdxT     signal = reecadata.ports.at(ReecaPorts::ipcmd);
+          constexpr auto IPCMD  = ReecaInternalVariables::IPCMD;
+          reeca->getSignals().template assignSignalNode<IPCMD>(getSignal(signal));
+        }
+
+        addComponent(reeca);
       }
 
       // Add branches
