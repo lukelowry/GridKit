@@ -1,13 +1,10 @@
 {
     "system_model_file": "texas.case.json",
-    "dt": 0.00833333333333,
-    "ida_max_order": 5,
+    "dt": 0.0,
     "tmax": 20.0,
     "events": [
         { "time": 1.0, "type": "fault_on", "element_id": 1 },
         { "time": 1.1, "type": "fault_off", "element_id": 1 }
     ],
-    "ida_stats": "texas.ida_stats.json",
-    "ida_steps": "texas.ida_steps.json",
     "reference_file": "texas.ref.csv"
 }

@@ -538,6 +538,8 @@ namespace AnalysisManager
       const RealT time_scale = std::max({static_cast<RealT>(1.0), std::abs(t_init_), std::abs(tf)});
       const RealT time_tol   = static_cast<RealT>(100.0) * std::numeric_limits<RealT>::epsilon() * time_scale;
 
+      const bool want_output = step_callback.has_value() || model_->monitoring();
+
       retval = IDASetStopTime(solver_, tf);
       checkOutput(retval, "IDASetStopTime");
 
@@ -554,10 +556,13 @@ namespace AnalysisManager
           bool interpolated_for_output = false;
           while (nout > iout && step_stats.current_time_ + time_tol >= tout(iout))
           {
-            const RealT output_time = tout(iout);
-            interpolateSolution(output_time);
-            publishOutput(output_time, step_callback);
-            interpolated_for_output = true;
+            if (want_output)
+            {
+              const RealT output_time = tout(iout);
+              interpolateSolution(output_time);
+              publishOutput(output_time, step_callback);
+              interpolated_for_output = true;
+            }
             ++iout;
           }
 

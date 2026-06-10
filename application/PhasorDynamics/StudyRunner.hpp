@@ -220,6 +220,10 @@ namespace GridKit
         {
           return 1;
         }
+        if (!sys_.monitoring())
+        {
+          return 1;
+        }
         if (study_.dt == 0.0)
         {
           return std::nullopt;
