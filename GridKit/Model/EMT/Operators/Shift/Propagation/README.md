@@ -1,26 +1,53 @@
 # Propagation Model
 
-`Propagation` represents an EMT modal propagation operator, a sum of $M$
-delayed modal shaping functions:
+`Propagation` represents the current-form EMT propagation operator used by
+`LineDistributed`. It composes two fitted `StateSpace` factors with one scalar
+`Delay` block per propagation mode.
 
 ```math
-\mathbf{H}(s) =
-\sum_{m=1}^{M} e^{-s\tau_m}\mathbf{H}^{\mathrm{mps}}_m(s)
+\mathbf{H}_i(s)
+=
+\mathbf{F}_{\mathrm{out}}(s)
+\boldsymbol{\Delta}_{\tau}(s)
+\mathbf{F}_{\mathrm{in}}(s)
+```
+
+where
+
+```math
+\begin{aligned}
+\mathbf{F}_{\mathrm{in}}(s) &\approx
+\widehat{\mathbf{H}}^{\mathrm{mps}}(s)\mathbf{T}_v(s)^{\mathsf H} \\
+\boldsymbol{\Delta}_{\tau}(s) &=
+\operatorname{diag}\left(e^{-s\tau_1},\ldots,e^{-s\tau_M}\right) \\
+\mathbf{F}_{\mathrm{out}}(s) &\approx
+\mathbf{T}_i(s).
+\end{aligned}
+```
+
+The state-space factors use the existing `StateSpace` form:
+
+```math
+\mathbf{F}_{r}(s)
+\approx
+\mathbf{D}_{r}
++ s\mathbf{E}_{r}
++ \mathbf{C}_{r}(s\mathbf{I}-\mathbf{P}_{r})^{-1}\mathbf{B}_{r},
+\qquad
+r \in \{\mathrm{in},\mathrm{out}\}.
 ```
 
 The Laplace domain representation of this model is:
+
 ```math
-\mathbf{Y}(s) = \mathbf{H}(s)\mathbf{U}(s)
+\mathbf{Y}(s)=\mathbf{H}_i(s)\mathbf{U}(s)
 ```
 
 The time domain representation of this model is:
-```math
-\mathbf{y}(t) = (\mathbf{h}*\mathbf{u})(t)
-```
 
-Notes:
-- The propagation operator uses pole-memory dynamics without $\mathbf{D}$ or $\mathbf{E}$ feedthrough terms.
-- Each mode shares the pole vector $\mathbf{p}$ and has per-mode factors $\mathbf{C}_m$ and $\mathbf{B}_m$.
+```math
+\mathbf{y}(t)=(\mathbf{h}_i*\mathbf{u})(t)
+```
 
 ## Block Diagram
 
@@ -32,40 +59,37 @@ Notes:
 
 ## Model Parameters
 
-For conductor count $K$, modal count $M$, and pole count $Q$:
+For conductor count $K$ and modal count $M$:
 
 Symbol | Units | JSON | Description | Note
 ------ | ----- | ---- | ----------- | ----
-$\boldsymbol{\tau}$ | [s] | `tau` | Modal propagation delays | $\boldsymbol{\tau} \in \mathbb{R}^M$
-$\Delta t_{\min}$ | [s] | `dt_min` | Block resolution | Required, positive
-$\mathbf{p}$ | [1/s] | `poles` | Poles | $\mathbf{p} \in \mathbb{C}^Q$
-$\mathbf{C}_0,\dots,\mathbf{C}_M$ | [-] | `C` | Output matrices per propagation mode | $\mathbf{C}_m \in \mathbb{C}^{K \times Q}$
-$\mathbf{B}_0,\dots,\mathbf{B}_M$ | [1/s] | `B` | Input matrices per propagation mode | $\mathbf{B}_m \in \mathbb{C}^{K \times Q}$
+$\mathbf{F}_{\mathrm{in}}$ | [-] | `input` | Input-side fitted factor | `StateSpace`, $M \times K$
+$\boldsymbol{\tau}$ | [s] | `tau` | Modal propagation delays | $\boldsymbol{\tau}\in\mathbb{R}^M$
+$\Delta t_{\min}$ | [s] | `dt_min` | Delay block resolution | passed to each scalar `Delay`
+$\mathbf{F}_{\mathrm{out}}$ | [-] | `output` | Output-side fitted factor | `StateSpace`, $K \times M$
 
 ### Parameter Validation
 
 ```math
 \begin{aligned}
-\tau_m &> 0,\qquad \forall m \in \{1,\dots,M\} \\
+\tau_m &> 0,\qquad m=1,\ldots,M \\
 \Delta t_{\min} &> 0
 \end{aligned}
 ```
 
-Complex-valued poles and the columns of $\mathbf{C}_m$ and $\mathbf{B}_m$ must
-be ordered as adjacent conjugate pairs.
+The `StateSpace` child models validate their own poles and factor matrices.
 
 ### Model Derived Parameters
 
-```math
-\begin{aligned}
-n &= \operatorname{floor}\left(\dfrac{\tau_m}{\Delta t_{\min}}\right),\qquad \forall m \in \{1,\dots,M\} \\
-\mathbf{P} &= \operatorname{diag}(p_1,\dots,p_Q) \\
-\mathbf{a} &= \operatorname{Re}(\mathbf{p}) \\
-\boldsymbol{\omega} &= \operatorname{Im}(\mathbf{p}) \\
-\mathbf{A} &= \operatorname{diag}(a_1,\dots,a_Q) \\
-\boldsymbol{\Omega} &= \operatorname{diag}(\omega_1,\dots,\omega_Q)
-\end{aligned}
-```
+None. The child `StateSpace` and `Delay` models own their derived parameters.
+
+### Model Submodels
+
+Submodel | Inputs | Outputs
+-------- | ------ | -------
+[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{in}}$ | $\mathbf{u}\in\mathbb{R}^K$ | $\hat{\mathbf{u}}\in\mathbb{R}^M$
+[`Delay`](../Delay/README.md) $\delta_m$, $m=1,\ldots,M$ | $\hat{u}_m$, $\tau_m$ | $\hat{z}_m$
+[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{out}}$ | $\hat{\mathbf{z}}\in\mathbb{R}^M$ | $\mathbf{y}\in\mathbb{R}^K$
 
 ## Model Variables
 
@@ -73,23 +97,22 @@ n &= \operatorname{floor}\left(\dfrac{\tau_m}{\Delta t_{\min}}\right),\qquad \fo
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{z}_1,\dots,\mathbf{z}_n$ | [-] | Modal delay-chain states | $nK$ states per mode
-$\mathbf{x}_{\mathrm{r}}$ | [-] | Real modal memory states | $\mathbf{x}_{\mathrm{r}} \in \mathbb{R}^Q$
-$\mathbf{x}_{\mathrm{i}}$ | [-] | Imaginary modal memory states | $\mathbf{x}_{\mathrm{i}} \in \mathbb{R}^Q$
+None. The child `StateSpace` and `Delay` models own their differential states.
 
 #### Algebraic
 
-None.
+Symbol | Units | Description | Note
+------ | ----- | ----------- | ----
+$\hat{\mathbf{u}}$ | [-] | Modal signal after input-side factor | $\hat{\mathbf{u}}\in\mathbb{R}^M$
+$\hat{\mathbf{z}}$ | [-] | Delayed modal signal | $\hat{\mathbf{z}}\in\mathbb{R}^M$
 
 ### External Variables
 
 #### Differential
 
-Symbol         | Units | Description                         | Note
----------------|-------|-------------------------------------|-----
-$\mathbf{u}$   | [-]   | Input vector read from `input` port | $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | Description | Note
+------ | ----- | ----------- | ----
+$\mathbf{u}$ | [-] | Input vector | $\mathbf{u}\in\mathbb{R}^K$
 
 #### Algebraic
 
@@ -99,34 +122,14 @@ None.
 
 Symbol | Port | Type | Units | Description | Note
 ------ | ---- | ---- | ----- | ----------- | ----
-$\mathbf{u}$ | `input` | Input | [-] | Input vector port | $\mathbf{u} \in \mathbb{R}^K$
-$\mathbf{y}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y} \in \mathbb{R}^K$
+$\mathbf{u}$ | `input` | Input | [-] | Input vector port | $\mathbf{u}\in\mathbb{R}^K$
+$\mathbf{y}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y}\in\mathbb{R}^K$
 
 ## Model Equations
 
 ### Differential Equations
 
-For real-valued poles, the imaginary-memory equation is not needed.
-
-```math
-\forall m \in \{1,\dots,M\}:\quad
-\left\{
-\begin{aligned}
-0 &= -\tau_m\,\dot{\mathbf{z}}_1 + n\,(\mathbf{u} - \mathbf{z}_1) \\
-0 &= -\tau_m\,\dot{\mathbf{z}}_2 + n\,(\mathbf{z}_1 - \mathbf{z}_2) \\
-&\vdots \\
-0 &= -\tau_m\,\dot{\mathbf{z}}_n + n\,(\mathbf{z}_{n-1} - \mathbf{z}_n) \\
-0 &= -\dot{\mathbf{x}}_{\mathrm{r}}
-     + \mathbf{A}\mathbf{x}_{\mathrm{r}}
-     - \boldsymbol{\Omega}\mathbf{x}_{\mathrm{i}}
-     + \operatorname{Re}(\mathbf{B}_m^T)\mathbf{z}_n \\
-0 &= -\dot{\mathbf{x}}_{\mathrm{i}}
-     + \boldsymbol{\Omega}\mathbf{x}_{\mathrm{r}}
-     + \mathbf{A}\mathbf{x}_{\mathrm{i}}
-     + \operatorname{Im}(\mathbf{B}_m^T)\mathbf{z}_n
-\end{aligned}
-\right.
-```
+None. The child `StateSpace` and `Delay` models own their differential equations.
 
 ### Algebraic Equations
 
@@ -135,42 +138,24 @@ None.
 ### Port Equations
 
 ```math
-\mathbf{y} = \sum_{m=1}^{M}
-  \operatorname{Re}(\mathbf{C}_m)\mathbf{x}_{\mathrm{r}}^m
-  - \operatorname{Im}(\mathbf{C}_m)\mathbf{x}_{\mathrm{i}}^m
+\begin{aligned}
+\hat{\mathbf{u}} &= \mathbf{f}_{\mathrm{in}} * \mathbf{u} \\
+\hat{z}_m &= \delta(t-\tau_m) * \hat{u}_m,\qquad m=1,\ldots,M \\
+\mathbf{y} &= \mathbf{f}_{\mathrm{out}} * \hat{\mathbf{z}}.
+\end{aligned}
 ```
 
 ## Initialization
 
-For a constant input $\mathbf{u}_0$ at $t_0$, the modal delay chains are at rest:
+Initialization is delegated to the child `StateSpace` and `Delay` models. The
+wrapper initializes internal signals with the same interconnection equations:
 
 ```math
-\forall m \in \{1,\dots,M\}:\quad
-\left\{
 \begin{aligned}
-\mathbf{z}_1(t_0) = \mathbf{z}_2(t_0) = \cdots = \mathbf{z}_n(t_0) &= \mathbf{u}_0 \\
-\dot{\mathbf{z}}_1(t_0) = \dot{\mathbf{z}}_2(t_0) = \cdots = \dot{\mathbf{z}}_n(t_0) &= \mathbf{0}
+\hat{\mathbf{u}}_0 &= (\mathbf{f}_{\mathrm{in}} * \mathbf{u})_0 \\
+\hat{z}_{m,0} &= \hat{u}_{m,0},\qquad m=1,\ldots,M \\
+\mathbf{y}_0 &= (\mathbf{f}_{\mathrm{out}} * \hat{\mathbf{z}})_0.
 \end{aligned}
-\right.
-```
-
-The modal memory states initialize from the final delay-chain state:
-
-```math
-\forall m \in \{1,\dots,M\}:\quad
-\left\{
-\begin{aligned}
-\mathbf{x}_0^m &= -\mathbf{P}^{-1}\mathbf{B}_m^T\mathbf{z}_n(t_0) - \mathbf{P}^{-2}\mathbf{B}_m^T\dot{\mathbf{z}}_n(t_0) \\
-\mathbf{x}_{\mathrm{r},0}^m &= \operatorname{Re}(\mathbf{x}_0^m) \\
-\mathbf{x}_{\mathrm{i},0}^m &= \operatorname{Im}(\mathbf{x}_0^m)
-\end{aligned}
-\right.
-```
-
-The port contribution initializes from the modal memory states:
-
-```math
-\mathbf{y}_0 = \sum_{m=1}^{M}\operatorname{Re}(\mathbf{C}_m)\mathbf{x}_{\mathrm{r},0}^m - \operatorname{Im}(\mathbf{C}_m)\mathbf{x}_{\mathrm{i},0}^m
 ```
 
 ## Monitors

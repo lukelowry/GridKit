@@ -11,7 +11,7 @@ The rational approximation is represented in state-space form:
 
 ```math
 \mathbf{H}(s) \approx \mathbf{D} + s\mathbf{E}
-  + \mathbf{C}(s\mathbf{I} - \mathbf{P})^{-1}\mathbf{B}^T
+  + \mathbf{C}(s\mathbf{I} - \mathbf{P})^{-1}\mathbf{B}
 ```
 The Laplace domain representation of this model is:
 ```math
@@ -41,7 +41,7 @@ $\mathbf{D}$ | [-] | `D` | Constant coefficient | | $\mathbf{D} \in \mathbb{R}^{
 $\mathbf{E}$ | [s] | `E` | Linear coefficient | | $\mathbf{E} \in \mathbb{R}^{N \times K}$
 $\mathbf{p}$ | [1/s] | `poles` | Poles | | $\mathbf{p} \in \mathbb{C}^Q$
 $\mathbf{C}$ | [-] | `C` | Output matrix | | $\mathbf{C} \in \mathbb{C}^{N \times Q}$
-$\mathbf{B}$ | [1/s] | `B` | Input matrix | | $\mathbf{B} \in \mathbb{C}^{K \times Q}$
+$\mathbf{B}$ | [1/s] | `B` | Input matrix | | $\mathbf{B} \in \mathbb{C}^{Q \times K}$
 
 ### Parameter Validation
 
@@ -52,8 +52,8 @@ each pair, with $q$ the first index:
 p_q = (p_{q+1})^*
 ```
 
-The corresponding columns of $\mathbf{C}$ and $\mathbf{B}$ must follow the same
-conjugate-pair ordering.
+The corresponding columns of $\mathbf{C}$ and rows of $\mathbf{B}$ must follow
+the same conjugate-pair ordering.
 
 ### Model Derived Parameters
 
@@ -123,11 +123,11 @@ For real-valued poles, the imaginary-memory equation is not needed.
 0 &= -\dot{\mathbf{x}}_{\mathrm{r}}
      + \mathbf{A}\mathbf{x}_{\mathrm{r}}
      - \boldsymbol{\Omega}\mathbf{x}_{\mathrm{i}}
-     + \mathbf{B}_{\mathrm{r}}^T\mathbf{u} \\
+     + \mathbf{B}_{\mathrm{r}}\mathbf{u} \\
 0 &= -\dot{\mathbf{x}}_{\mathrm{i}}
      + \boldsymbol{\Omega}\mathbf{x}_{\mathrm{r}}
      + \mathbf{A}\mathbf{x}_{\mathrm{i}}
-     + \mathbf{B}_{\mathrm{i}}^T\mathbf{u}
+     + \mathbf{B}_{\mathrm{i}}\mathbf{u}
 \end{aligned}
 ```
 
@@ -149,7 +149,7 @@ For an affine initial input trajectory, let subscript $0$ denote initial values.
 The complex pole-memory state initializes to:
 
 ```math
-\mathbf{x}_0 = -\mathbf{P}^{-1}\mathbf{B}^T\mathbf{u}_0 - \mathbf{P}^{-2}\mathbf{B}^T\dot{\mathbf{u}}_0
+\mathbf{x}_0 = -\mathbf{P}^{-1}\mathbf{B}\mathbf{u}_0 - \mathbf{P}^{-2}\mathbf{B}\dot{\mathbf{u}}_0
 ```
 
 The real-valued state vectors and port contribution initialize to:
