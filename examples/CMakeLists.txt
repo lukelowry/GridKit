@@ -59,4 +59,8 @@ if(GRIDKIT_ENABLE_ENZYME)
   add_subdirectory(Enzyme)
 endif()
 
+if(GRIDKIT_ENABLE_ENZYME AND TARGET SUNDIALS::idas)
+  add_subdirectory(EMT)
+endif()
+
 add_subdirectory(Consumer)

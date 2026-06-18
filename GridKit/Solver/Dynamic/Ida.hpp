@@ -19,6 +19,7 @@
 
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Solver/Dynamic/DynamicSolver.hpp>
+#include <GridKit/Solver/Dynamic/IdaOptions.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
 
 namespace AnalysisManager
@@ -50,6 +51,16 @@ namespace AnalysisManager
     public:
       Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model);
       ~Ida();
+
+      void setOptions(const IdaOptions& options)
+      {
+        options_ = options;
+      }
+
+      const IdaOptions& options() const
+      {
+        return options_;
+      }
 
       int configureSimulation();
       int configureLinearSolver();
@@ -197,7 +208,8 @@ namespace AnalysisManager
       N_Vector ypB_{}; ///< Adjoint solution derivatives vector
       N_Vector qB_{};  ///< Backward integrand vector
 
-      int backwardID_{};
+      int        backwardID_{};
+      IdaOptions options_{};
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);

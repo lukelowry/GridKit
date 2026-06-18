@@ -5,7 +5,7 @@
 #    - Cameron Rutherford <cameron.rutherford@pnnl.gov>
 #]]
 
-set(_install_headers DynamicSolver.hpp Ida.hpp)
+set(_install_headers DynamicSolver.hpp Ida.hpp IdaOptions.hpp)
 
 if(GRIDKIT_ENABLE_SUNDIALS_SPARSE)
   gridkit_add_library(

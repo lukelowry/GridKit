@@ -1,4 +1,8 @@
+#include <algorithm>
+#include <cmath>
+
 #include <GridKit/Model/Evaluator.hpp>
+#include <GridKit/Model/LogEvaluator.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Testing/Testing.hpp>
@@ -61,8 +65,10 @@ namespace GridKit
         return 0;
       }
 
-      void setTolerances([[maybe_unused]] RealT& rel_tol, [[maybe_unused]] RealT& abs_tol) const override
+      void setTolerances(RealT& rel_tol, RealT& abs_tol) const override
       {
+        rel_tol = 1.0e-7;
+        abs_tol = 1.0e-9;
       }
 
       void setMaxSteps(IdxT& msa) const override
@@ -263,6 +269,77 @@ namespace GridKit
       std::vector<ScalarT> param_up_;
       std::vector<ScalarT> param_lo_;
     };
+
+    template <class ScalarT, typename IdxT>
+    class AlgebraicRootEvaluator : public NullEvaluator<ScalarT, IdxT>
+    {
+    public:
+      using RealT = typename NullEvaluator<ScalarT, IdxT>::RealT;
+
+      int initialize() override
+      {
+        NullEvaluator<ScalarT, IdxT>::initialize();
+        this->y_[0] = 1.0;
+        time_       = 1.0;
+        return 0;
+      }
+
+      int evaluateResidual() override
+      {
+        this->f_[0] = this->y_[0] * this->y_[0] - static_cast<ScalarT>(time_);
+        return 0;
+      }
+
+      void updateTime(RealT t, RealT) override
+      {
+        time_ = t;
+      }
+
+    private:
+      RealT time_{1.0};
+    };
+
+    template <class ScalarT, typename IdxT>
+    class DifferentialRampEvaluator : public NullEvaluator<ScalarT, IdxT>
+    {
+    public:
+      using RealT = typename NullEvaluator<ScalarT, IdxT>::RealT;
+
+      int initialize() override
+      {
+        NullEvaluator<ScalarT, IdxT>::initialize();
+        this->y_[0]   = static_cast<ScalarT>(coordinate_);
+        this->yp_[0]  = 1.0;
+        this->tag_[0] = true;
+        return 0;
+      }
+
+      int evaluateResidual() override
+      {
+        this->f_[0] = this->yp_[0] - 1.0;
+        return 0;
+      }
+
+      void updateTime(RealT coordinate, RealT alpha) override
+      {
+        coordinate_ = coordinate;
+        alpha_      = alpha;
+      }
+
+      RealT coordinate() const
+      {
+        return coordinate_;
+      }
+
+      RealT alpha() const
+      {
+        return alpha_;
+      }
+
+    private:
+      RealT coordinate_{1.0};
+      RealT alpha_{0.0};
+    };
   } // namespace Model
 
   namespace Testing
@@ -278,7 +355,7 @@ namespace GridKit
 
         Model::NullEvaluator<ScalarT, IdxT> model;
 
-        Ida<double, size_t> ida(&model);
+        Ida<ScalarT, IdxT> ida(&model);
         ida.configureSimulation();
 
         unsigned observed_steps = 0;
@@ -291,6 +368,89 @@ namespace GridKit
         ida.runSimulation(1.0, n_steps, output_cb);
 
         success *= (observed_steps == n_steps);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome algebraic_error_control()
+      {
+        Model::AlgebraicRootEvaluator<ScalarT, IdxT> model;
+
+        Ida<ScalarT, IdxT> ida(&model);
+        ida.configureSimulation();
+
+        ScalarT max_error = 0.0;
+        auto    output_cb = [&](ScalarT t)
+        {
+          const ScalarT expected = std::sqrt(t);
+          max_error              = std::max(max_error, std::abs(model.y()[0] - expected));
+        };
+
+        ida.initializeSimulation(1.0, false);
+        ida.runSimulation(100.0, 20, output_cb);
+
+        TestStatus success  = true;
+        success            *= (max_error < 1.0e-3);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome log_evaluator_algebraic()
+      {
+        Model::AlgebraicRootEvaluator<ScalarT, IdxT> model;
+        Model::LogEvaluator<ScalarT, IdxT>           log_model(model, 1.0);
+
+        log_model.allocate();
+
+        Ida<ScalarT, IdxT> ida(&log_model);
+        ida.configureSimulation();
+
+        ScalarT max_error = 0.0;
+        auto    output_cb = [&](ScalarT s)
+        {
+          const ScalarT expected = std::sqrt(std::exp(s));
+          max_error              = std::max(max_error, std::abs(log_model.y()[0] - expected));
+        };
+
+        ida.initializeSimulation(0.0, false);
+        ida.runSimulation(std::log(100.0), 20, output_cb);
+
+        TestStatus success  = true;
+        success            *= (max_error < 1.0e-3);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome log_evaluator_derivative_scaling()
+      {
+        Model::DifferentialRampEvaluator<ScalarT, IdxT> model;
+        Model::LogEvaluator<ScalarT, IdxT>              log_model(model, 1.0);
+
+        log_model.allocate();
+
+        Ida<ScalarT, IdxT> ida(&log_model);
+        ida.configureSimulation();
+        ida.initializeSimulation(0.0, false);
+        ida.runSimulation(std::log(10.0), 20);
+
+        TestStatus success  = true;
+        success            *= isEqual(log_model.y()[0], static_cast<ScalarT>(10.0), static_cast<ScalarT>(1.0e-5));
+
+        return success.report(__func__);
+      }
+
+      TestOutcome log_evaluator_alpha_scaling()
+      {
+        Model::DifferentialRampEvaluator<ScalarT, IdxT> model;
+        Model::LogEvaluator<ScalarT, IdxT>              log_model(model, 1.0);
+
+        log_model.allocate();
+        log_model.initialize();
+        log_model.updateTime(std::log(10.0), 30.0);
+
+        TestStatus success  = true;
+        success            *= isEqual(model.coordinate(), static_cast<ScalarT>(10.0), static_cast<ScalarT>(1.0e-12));
+        success            *= isEqual(model.alpha(), static_cast<ScalarT>(3.0), static_cast<ScalarT>(1.0e-12));
 
         return success.report(__func__);
       }

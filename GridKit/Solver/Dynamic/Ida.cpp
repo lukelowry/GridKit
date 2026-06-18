@@ -1,6 +1,7 @@
 
 #include "Ida.hpp"
 
+#include <algorithm>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -109,8 +110,18 @@ namespace AnalysisManager
 
         retval = IDASetId(solver_, tag_);
         checkOutput(retval, "IDASetId");
-        retval = IDASetSuppressAlg(solver_, SUNTRUE);
-        checkOutput(retval, "IDASetSuppressAlg");
+
+        const bool has_differential = std::any_of(tag.begin(), tag.end(), [](bool is_diff)
+                                                  { return is_diff; });
+        const bool has_algebraic    = std::any_of(tag.begin(), tag.end(), [](bool is_diff)
+                                               { return !is_diff; });
+        if (has_differential && has_algebraic)
+        {
+          retval = IDASetSuppressAlg(
+              solver_,
+              options_.suppress_algebraic_error ? SUNTRUE : SUNFALSE);
+          checkOutput(retval, "IDASetSuppressAlg");
+        }
       }
 
       // Set up linear solver
@@ -281,6 +292,7 @@ namespace AnalysisManager
 
         copyVec(yy_, model_->y());
         copyVec(yp_, model_->yp());
+        model_->updateTime(t0, 0.0);
       }
 
       return retval;

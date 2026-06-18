@@ -521,7 +521,7 @@ namespace GridKit
         IdxT  col    = col_temp[i];
         RealT val    = val_temp[i];
         bool  exists = false;
-        for (size_t j = 0; j < nnz; j++)
+        for (size_t j = 0; j < static_cast<size_t>(nnz); j++)
         {
           if (this->row_indices_[j] == row && this->column_indices_[j] == col)
           {

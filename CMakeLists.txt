@@ -147,6 +147,12 @@ if(GRIDKIT_ENABLE_THREADS)
   find_package(Threads REQUIRED)
 endif()
 
+find_package(
+  Eigen3
+  3.3
+  REQUIRED
+  CONFIG)
+
 # Macro that adds libraries
 include(GridkitAddLibrary)
 
