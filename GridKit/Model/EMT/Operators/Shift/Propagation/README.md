@@ -72,6 +72,9 @@ $\mathbf{F}_{\mathrm{out}}$ | [-] | `output` | Output-side fitted factor | `Stat
 
 ```math
 \begin{aligned}
+\mathbf{F}_{\mathrm{in}} &: M \times K \\
+\boldsymbol{\tau} &\in \mathbb{R}^M \\
+\mathbf{F}_{\mathrm{out}} &: K \times M \\
 \tau_m &> 0,\qquad m=1,\ldots,M \\
 \Delta t_{\min} &> 0
 \end{aligned}
@@ -87,9 +90,9 @@ None. The child `StateSpace` and `Delay` models own their derived parameters.
 
 Submodel | Inputs | Outputs
 -------- | ------ | -------
-[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{in}}$ | $\mathbf{u}\in\mathbb{R}^K$ | $\hat{\mathbf{u}}\in\mathbb{R}^M$
-[`Delay`](../Delay/README.md) $\delta_m$, $m=1,\ldots,M$ | $\hat{u}_m$, $\tau_m$ | $\hat{z}_m$
-[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{out}}$ | $\hat{\mathbf{z}}\in\mathbb{R}^M$ | $\mathbf{y}\in\mathbb{R}^K$
+[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{in}}$ | $\mathbf{u}\in\mathbb{R}^K$ | $\mathbf{u}_{\mathrm{mod}}\in\mathbb{R}^M$
+[`Delay`](../Delay/README.md) $\delta_m$, $m=1,\ldots,M$ | $u_{\mathrm{mod},m}$, $\tau_m$ | $d_{m,\mathrm{out}}$
+[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{out}}$ | $\mathbf{z}_{\mathrm{mod}}\in\mathbb{R}^M$ | $\mathbf{y}\in\mathbb{R}^K$
 
 ## Model Variables
 
@@ -101,10 +104,17 @@ None. The child `StateSpace` and `Delay` models own their differential states.
 
 #### Algebraic
 
+The child `StateSpace` and `Delay` models own their algebraic outputs.
+`Propagation` owns only the temporary gather state needed to provide a
+contiguous modal input to the output-side `StateSpace`.
+The matching derivative storage `dot(z_mod)` is not a separate model variable
+and is not tagged differential. It is initialized from the derivative storage
+of the scalar `Delay` outputs so the output-side `StateSpace` can read a
+consistent input derivative when $\mathbf{E}_{\mathrm{out}}$ is nonzero.
+
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
-$\hat{\mathbf{u}}$ | [-] | Modal signal after input-side factor | $\hat{\mathbf{u}}\in\mathbb{R}^M$
-$\hat{\mathbf{z}}$ | [-] | Delayed modal signal | $\hat{\mathbf{z}}\in\mathbb{R}^M$
+$\mathbf{z}_{\mathrm{mod}}$ | [-] | Contiguous delayed modal signal | $\mathbf{z}_{\mathrm{mod}}\in\mathbb{R}^M$, temporary wrapper-owned algebraic state
 
 ### External Variables
 
@@ -133,15 +143,29 @@ None. The child `StateSpace` and `Delay` models own their differential equations
 
 ### Algebraic Equations
 
-None.
+The current `Signal` contract requires the output-side `StateSpace` input to be
+a contiguous vector. Until EMT supports strided or gathered signals, the wrapper
+owns a temporary algebraic gather state $\mathbf{z}_{\mathrm{mod}}$:
+
+```math
+0
+= -z_{\mathrm{mod},m}
+  + d_{m,\mathrm{out}},
+\qquad m=1,\ldots,M.
+```
+
+Here $d_{m,\mathrm{out}}$ denotes the `out` port of the $m$th scalar `Delay`
+child. This temporary state should be removed once the output-side `StateSpace`
+can read the scalar `Delay` outputs directly.
 
 ### Port Equations
 
 ```math
 \begin{aligned}
-\hat{\mathbf{u}} &= \mathbf{f}_{\mathrm{in}} * \mathbf{u} \\
-\hat{z}_m &= \delta(t-\tau_m) * \hat{u}_m,\qquad m=1,\ldots,M \\
-\mathbf{y} &= \mathbf{f}_{\mathrm{out}} * \hat{\mathbf{z}}.
+\mathbf{u}_{\mathrm{mod}} &= \mathbf{f}_{\mathrm{in}} * \mathbf{u} \\
+d_{m,\mathrm{out}} &= \delta(t-\tau_m) * u_{\mathrm{mod},m},
+  \qquad m=1,\ldots,M \\
+\mathbf{y} &= \mathbf{f}_{\mathrm{out}} * \mathbf{z}_{\mathrm{mod}}.
 \end{aligned}
 ```
 
@@ -152,9 +176,11 @@ wrapper initializes internal signals with the same interconnection equations:
 
 ```math
 \begin{aligned}
-\hat{\mathbf{u}}_0 &= (\mathbf{f}_{\mathrm{in}} * \mathbf{u})_0 \\
-\hat{z}_{m,0} &= \hat{u}_{m,0},\qquad m=1,\ldots,M \\
-\mathbf{y}_0 &= (\mathbf{f}_{\mathrm{out}} * \hat{\mathbf{z}})_0.
+\mathbf{u}_{\mathrm{mod},0} &= (\mathbf{f}_{\mathrm{in}} * \mathbf{u})_0 \\
+d_{m,\mathrm{out},0} &= u_{\mathrm{mod},m,0},\qquad m=1,\ldots,M \\
+z_{\mathrm{mod},m,0} &= d_{m,\mathrm{out},0},\qquad m=1,\ldots,M \\
+\dot{z}_{\mathrm{mod},m,0} &= \dot{d}_{m,\mathrm{out},0},\qquad m=1,\ldots,M \\
+\mathbf{y}_0 &= (\mathbf{f}_{\mathrm{out}} * \mathbf{z}_{\mathrm{mod}})_0.
 \end{aligned}
 ```
 

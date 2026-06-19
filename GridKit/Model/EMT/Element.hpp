@@ -57,17 +57,20 @@ namespace GridKit
         base_   = base;
         gy_     = y;
         gyp_    = yp;
+        gf_     = f;
         gindex_ = index;
         y_      = y + base;
         yp_     = yp + base;
         f_      = f + base;
         index_  = index + base;
+        bindChildren();
       }
 
       void setCoordinate(RealT coordinate, RealT alpha)
       {
         coordinate_ = coordinate;
         alpha_      = alpha;
+        setChildCoordinate(coordinate, alpha);
       }
 
       MatrixT& jacobian()
@@ -76,6 +79,14 @@ namespace GridKit
       }
 
     protected:
+      virtual void bindChildren()
+      {
+      }
+
+      virtual void setChildCoordinate(RealT, RealT)
+      {
+      }
+
       RealT coordinate() const
       {
         return coordinate_;
@@ -284,6 +295,7 @@ namespace GridKit
 
       ScalarT* gy_{nullptr};
       ScalarT* gyp_{nullptr};
+      ScalarT* gf_{nullptr};
       IdxT*    gindex_{nullptr};
       ScalarT* y_{nullptr};
       ScalarT* yp_{nullptr};

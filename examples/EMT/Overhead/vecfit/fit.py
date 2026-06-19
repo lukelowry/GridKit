@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import csv
-import json
 import math
 import re
 import shutil
 import subprocess
 from pathlib import Path
+
+from mps import HMIN_CSV, hmin_value, tau_min_by_mode, write_mps_inputs_from_rows
 
 
 HERE = Path(__file__).resolve().parent
@@ -14,14 +15,18 @@ EXAMPLE_DIR = HERE.parent
 INPUT_CSV = EXAMPLE_DIR / "overhead.response.csv"
 OUTPUT_DIR = EXAMPLE_DIR / "output"
 YC_CSV = OUTPUT_DIR / "yc.csv"
-HMIN_CSV = OUTPUT_DIR / "hmin.csv"
-DELAY_JSON = OUTPUT_DIR / "delay.json"
+FIN_CSV = OUTPUT_DIR / "Fin.csv"
+FOUT_CSV = OUTPUT_DIR / "Fout.csv"
 YC_MODEL_JSON = OUTPUT_DIR / "yc.model.json"
 HMIN_MODEL_JSON = OUTPUT_DIR / "hmin.model.json"
+FIN_MODEL_JSON = OUTPUT_DIR / "Fin.model.json"
+FOUT_MODEL_JSON = OUTPUT_DIR / "Fout.model.json"
 YC_POLES = 10
 HMIN_POLES = 20
+FIN_POLES = 20
+FOUT_POLES = 20
 
-YC_COLUMN = re.compile(r"^Overhead_Yc_(real|imag)_(\d+)_(\d+)$")
+MONITOR_MATRIX_COLUMN = re.compile(r"^Overhead_(\w+)_(real|imag)_(\d+)_(\d+)$")
 
 
 def coordinate_column(fieldnames: list[str]) -> str:
@@ -43,25 +48,30 @@ def read_monitor_csv() -> tuple[list[str], str, list[dict[str, str]]]:
         return fieldnames, omega_column, list(reader)
 
 
-def yc_columns(fieldnames: list[str]) -> tuple[int, int, list[tuple[int, int]]]:
+def complex_matrix_columns(
+    fieldnames: list[str],
+    variable: str,
+) -> tuple[int, int, list[tuple[int, int]]]:
     columns: dict[str, set[tuple[int, int]]] = {"real": set(), "imag": set()}
 
     for name in fieldnames:
-        match = YC_COLUMN.match(name)
+        match = MONITOR_MATRIX_COLUMN.match(name)
         if match is None:
             continue
-        part, row, col = match.groups()
+        parsed_variable, part, row, col = match.groups()
+        if parsed_variable != variable:
+            continue
         columns[part].add((int(row), int(col)))
 
     real = columns["real"]
     imag = columns["imag"]
     if not real:
-        raise ValueError(f"{INPUT_CSV} contains no Overhead_Yc monitor columns")
+        raise ValueError(f"{INPUT_CSV} contains no Overhead_{variable} monitor columns")
     if real != imag:
         missing_imag = sorted(real - imag)
         missing_real = sorted(imag - real)
         raise ValueError(
-            f"Yc real/imag columns are mismatched: "
+            f"{variable} real/imag columns are mismatched: "
             f"missing imag {missing_imag}, missing real {missing_real}"
         )
 
@@ -70,58 +80,20 @@ def yc_columns(fieldnames: list[str]) -> tuple[int, int, list[tuple[int, int]]]:
     expected = {(row, col) for row in range(rows) for col in range(cols)}
     if real != expected:
         missing = sorted(expected - real)
-        raise ValueError(f"Yc matrix columns are not complete: missing {missing}")
+        raise ValueError(f"{variable} matrix columns are not complete: missing {missing}")
 
     return rows, cols, sorted(real)
 
 
-def h_modes(fieldnames: list[str]) -> list[int]:
-    real_prefix = "Overhead_H_real_"
-    imag_prefix = "Overhead_H_imag_"
-    tau_prefix = "Overhead_Tau_"
-
-    real = {
-        int(name.removeprefix(real_prefix))
-        for name in fieldnames
-        if name.startswith(real_prefix)
-    }
-    imag = {
-        int(name.removeprefix(imag_prefix))
-        for name in fieldnames
-        if name.startswith(imag_prefix)
-    }
-    tau = {
-        int(name.removeprefix(tau_prefix))
-        for name in fieldnames
-        if name.startswith(tau_prefix)
-    }
-
-    if not real:
-        raise ValueError(f"{INPUT_CSV} contains no Overhead_H monitor columns")
-    if real != imag or real != tau:
-        raise ValueError(
-            f"H real/imag/Tau columns are mismatched: "
-            f"missing imag {sorted(real - imag)}, missing real {sorted(imag - real)}, "
-            f"missing tau {sorted(real - tau)}"
-        )
-
-    return sorted(real)
+def monitor_complex(input_row: dict[str, str], variable: str, row: int, col: int) -> complex:
+    return complex(
+        float(input_row[f"Overhead_{variable}_real_{row}_{col}"]),
+        float(input_row[f"Overhead_{variable}_imag_{row}_{col}"]),
+    )
 
 
 def frequency_hz(input_row: dict[str, str], omega_column: str) -> float:
     return float(input_row[omega_column]) / (2.0 * math.pi)
-
-
-def hmin_value(input_row: dict[str, str], mode: int, tau_min: float, omega: float) -> complex:
-    real = float(input_row[f"Overhead_H_real_{mode}"])
-    imag = float(input_row[f"Overhead_H_imag_{mode}"])
-    angle = omega * tau_min
-    cos_angle = math.cos(angle)
-    sin_angle = math.sin(angle)
-    return complex(
-        real * cos_angle - imag * sin_angle,
-        real * sin_angle + imag * cos_angle,
-    )
 
 
 def write_vecfit_yc_csv(
@@ -144,47 +116,115 @@ def write_vecfit_yc_csv(
             writer.writerow(output_row)
 
 
-def write_vecfit_hmin_csv(
+def write_vecfit_complex_matrix_csv(
+    csv_path: Path,
+    name: str,
+    rows: int,
+    cols: int,
     monitor_rows: list[dict[str, str]],
     omega_column: str,
-    modes: list[int],
-) -> list[float]:
-    tau_min_by_mode = {
-        mode: min(float(row[f"Overhead_Tau_{mode}"]) for row in monitor_rows)
-        for mode in modes
-    }
-
-    with HMIN_CSV.open("w", newline="") as out_stream:
+    value,
+) -> None:
+    with csv_path.open("w", newline="") as out_stream:
         writer = csv.writer(out_stream)
         header = ["freq_Hz"]
-        for mode in modes:
-            header.extend([f"re_Hmin_{mode}_0", f"im_Hmin_{mode}_0"])
+        for row in range(rows):
+            for col in range(cols):
+                header.extend([f"re_{name}_{row}_{col}", f"im_{name}_{row}_{col}"])
         writer.writerow(header)
 
         for input_row in monitor_rows:
+            output_row = [f"{frequency_hz(input_row, omega_column):.17e}"]
             omega = float(input_row[omega_column])
-            output_row = [f"{omega / (2.0 * math.pi):.17e}"]
-            for mode in modes:
-                value = hmin_value(input_row, mode, tau_min_by_mode[mode], omega)
-                output_row.extend([f"{value.real:.17e}", f"{value.imag:.17e}"])
+            for row in range(rows):
+                for col in range(cols):
+                    entry = value(input_row, omega, row, col)
+                    output_row.extend([f"{entry.real:.17e}", f"{entry.imag:.17e}"])
             writer.writerow(output_row)
 
-    return [tau_min_by_mode[mode] for mode in modes]
+
+def write_vecfit_propagation_csvs(
+    fieldnames: list[str],
+    monitor_rows: list[dict[str, str]],
+    omega_column: str,
+    modes: list[int],
+    conductor_count: int,
+) -> None:
+    tv_rows, tv_cols, _ = complex_matrix_columns(fieldnames, "Tv")
+    ti_rows, ti_cols, _ = complex_matrix_columns(fieldnames, "Ti")
+    mode_count = len(modes)
+
+    if modes != list(range(mode_count)):
+        raise ValueError(f"Propagation modes must be contiguous from zero: {modes}")
+    if tv_rows != conductor_count or ti_rows != conductor_count:
+        raise ValueError(
+            f"Tv/Ti row dimensions must match conductor count {conductor_count}: "
+            f"Tv is {tv_rows}x{tv_cols}, Ti is {ti_rows}x{ti_cols}"
+        )
+    if tv_cols != mode_count or ti_cols != mode_count:
+        raise ValueError(
+            f"Tv/Ti column dimensions must match modal count {mode_count}: "
+            f"Tv is {tv_rows}x{tv_cols}, Ti is {ti_rows}x{ti_cols}"
+        )
+
+    tau_min = tau_min_by_mode(monitor_rows, modes)
+
+    def fin_value(input_row: dict[str, str], omega: float, mode: int, conductor: int) -> complex:
+        hmin = hmin_value(input_row, mode, tau_min[mode], omega)
+        tv_h = monitor_complex(input_row, "Tv", conductor, mode).conjugate()
+        return hmin * tv_h
+
+    def fout_value(input_row: dict[str, str], omega: float, conductor: int, mode: int) -> complex:
+        _ = omega
+        return monitor_complex(input_row, "Ti", conductor, mode)
+
+    write_vecfit_complex_matrix_csv(
+        FIN_CSV,
+        "Fin",
+        mode_count,
+        conductor_count,
+        monitor_rows,
+        omega_column,
+        fin_value,
+    )
+    write_vecfit_complex_matrix_csv(
+        FOUT_CSV,
+        "Fout",
+        conductor_count,
+        mode_count,
+        monitor_rows,
+        omega_column,
+        fout_value,
+    )
+
+    print(f"wrote {mode_count}x{conductor_count} Fin vecfit CSV: {FIN_CSV}")
+    print(f"wrote {conductor_count}x{mode_count} Fout vecfit CSV: {FOUT_CSV}")
 
 
 def write_vecfit_inputs() -> None:
     fieldnames, omega_column, monitor_rows = read_monitor_csv()
-    yc_rows, yc_cols, yc_entries = yc_columns(fieldnames)
-    modes = h_modes(fieldnames)
+    yc_rows, yc_cols, yc_entries = complex_matrix_columns(fieldnames, "Yc")
+    if yc_rows != yc_cols:
+        raise ValueError(f"Yc must be square to determine conductor count: {yc_rows}x{yc_cols}")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     write_vecfit_yc_csv(monitor_rows, omega_column, yc_entries)
-    tau_min = write_vecfit_hmin_csv(monitor_rows, omega_column, modes)
-    DELAY_JSON.write_text(json.dumps(tau_min, indent=2) + "\n")
+    modes = write_mps_inputs_from_rows(
+        fieldnames,
+        omega_column,
+        monitor_rows,
+        INPUT_CSV,
+        OUTPUT_DIR,
+    )
+    write_vecfit_propagation_csvs(
+        fieldnames,
+        monitor_rows,
+        omega_column,
+        modes,
+        yc_rows,
+    )
 
     print(f"wrote {yc_rows}x{yc_cols} Yc vecfit CSV: {YC_CSV}")
-    print(f"wrote {len(modes)}x1 Hmin vecfit CSV: {HMIN_CSV}")
-    print(f"wrote modal tau_min delays: {DELAY_JSON}")
 
     fit_vecfit_model(YC_CSV, YC_MODEL_JSON, yc_rows, yc_cols, YC_POLES)
     fit_vecfit_model(
@@ -193,6 +233,24 @@ def write_vecfit_inputs() -> None:
         len(modes),
         1,
         HMIN_POLES,
+        terms="none",
+        state_space=True,
+    )
+    fit_vecfit_model(
+        FIN_CSV,
+        FIN_MODEL_JSON,
+        len(modes),
+        yc_rows,
+        FIN_POLES,
+        terms="none",
+        state_space=True,
+    )
+    fit_vecfit_model(
+        FOUT_CSV,
+        FOUT_MODEL_JSON,
+        yc_rows,
+        len(modes),
+        FOUT_POLES,
         terms="none",
         state_space=True,
     )

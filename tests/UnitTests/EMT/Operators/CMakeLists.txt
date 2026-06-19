@@ -10,4 +10,24 @@ target_link_libraries(
 
 add_test(NAME EMTStateSpaceTest COMMAND $<TARGET_FILE:test_emt_state_space>)
 
-install(TARGETS test_emt_delay test_emt_state_space RUNTIME DESTINATION bin)
+add_executable(test_emt_propagation runPropagationTests.cpp)
+target_link_libraries(
+  test_emt_propagation GridKit::emt_propagation GridKit::testing)
+
+add_test(NAME EMTPropagationTest COMMAND $<TARGET_FILE:test_emt_propagation>)
+
+add_executable(test_emt_propagation_parser runPropagationParserTests.cpp)
+target_link_libraries(
+  test_emt_propagation_parser GridKit::emt_propagation GridKit::testing)
+target_include_directories(
+  test_emt_propagation_parser
+  PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include)
+
+add_test(NAME EMTPropagationParserTest COMMAND $<TARGET_FILE:test_emt_propagation_parser>)
+
+install(
+  TARGETS test_emt_delay
+          test_emt_state_space
+          test_emt_propagation
+          test_emt_propagation_parser
+  RUNTIME DESTINATION bin)
