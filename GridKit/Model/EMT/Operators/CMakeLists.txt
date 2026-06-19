@@ -3,3 +3,4 @@
 # ]]
 
 add_subdirectory(Shift)
+add_subdirectory(Rational)
