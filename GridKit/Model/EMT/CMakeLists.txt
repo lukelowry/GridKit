@@ -18,4 +18,5 @@ gridkit_add_library(
     INTERFACE
     GridKit::sparse_matrix)
 
+add_subdirectory(Operators)
 add_subdirectory(Parameters)
