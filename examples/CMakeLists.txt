@@ -55,6 +55,10 @@ if(TARGET SUNDIALS::idas)
   add_subdirectory(PhasorDynamics)
 endif()
 
+if(GRIDKIT_ENABLE_SUNDIALS_SPARSE AND TARGET SUNDIALS::arkode)
+  add_subdirectory(EMT)
+endif()
+
 if(GRIDKIT_ENABLE_ENZYME)
   add_subdirectory(Enzyme)
 endif()

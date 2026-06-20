@@ -90,7 +90,16 @@ None.
 
 ## Initialization
 
-For an affine initial input trajectory, let subscript $0$ denote initial values:
+By default, each section is initialized from the input history:
+
+```math
+\begin{aligned}
+y_{n,0} &= u(t_0-(n+1)T) \\
+\dot{y}_{n,0} &= \dot{u}(t_0-(n+1)T)
+\end{aligned}
+```
+
+For an affine input history this reduces to:
 
 ```math
 \begin{aligned}
@@ -99,6 +108,9 @@ y_{n,0} &= u_0 - (n+1)T\dot{u}_0 \\
 y_{\mathrm{out},0} &= u_0 - \tau\dot{u}_0
 \end{aligned}
 ```
+
+The prototype constructor also accepts an optional per-section initializer for
+$y_n$ and $\dot{y}_n$.
 
 ## Monitors
 

@@ -194,6 +194,11 @@ namespace AnalysisManager
         N_VDestroy(yy0_);
         yy0_ = nullptr;
       }
+      if (solver_)
+      {
+        ARKodeFree(&solver_);
+        solver_ = nullptr;
+      }
       if (linearSolver_)
       {
         SUNLinSolFree(linearSolver_);
@@ -214,8 +219,6 @@ namespace AnalysisManager
         SUNMatDestroy(MassMat_);
         MassMat_ = nullptr;
       }
-      if (solver_)
-        ARKodeFree(&solver_);
       return 0;
     }
 
