@@ -243,7 +243,7 @@ def write_vecfit_inputs() -> None:
         yc_rows,
         FIN_POLES,
         terms="none",
-        state_space=True,
+        conjugate_residues=True,
     )
     fit_vecfit_model(
         FOUT_CSV,
@@ -252,7 +252,7 @@ def write_vecfit_inputs() -> None:
         len(modes),
         FOUT_POLES,
         terms="none",
-        state_space=True,
+        conjugate_residues=True,
     )
 
 
@@ -264,6 +264,7 @@ def fit_vecfit_model(
     poles: int,
     terms: str | None = None,
     state_space: bool = False,
+    conjugate_residues: bool = False,
 ) -> None:
     vecfit = shutil.which("vecfit")
     if vecfit is None:
@@ -286,6 +287,8 @@ def fit_vecfit_model(
     ]
     if terms is not None:
         command.extend(["--terms", terms])
+    if conjugate_residues:
+        command.append("--conjugate-residues")
     if state_space:
         command.append("--state-space")
     command.extend(["--output", str(model_path)])

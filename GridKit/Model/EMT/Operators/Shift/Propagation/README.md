@@ -1,8 +1,8 @@
 # Propagation Model
 
 `Propagation` represents the current-form EMT propagation operator used by
-`LineDistributed`. It composes two fitted `StateSpace` factors with one scalar
-`Delay` block per propagation mode.
+`LineDistributed`. It composes two fitted `VectorFit` factors with scalar
+`Delay` blocks, one per propagation mode.
 
 ```math
 \mathbf{H}_i(s)
@@ -25,37 +25,8 @@ where
 \end{aligned}
 ```
 
-The state-space factors use the existing `StateSpace` form:
-
-```math
-\mathbf{F}_{r}(s)
-\approx
-\mathbf{D}_{r}
-+ s\mathbf{E}_{r}
-+ \mathbf{C}_{r}(s\mathbf{I}-\mathbf{P}_{r})^{-1}\mathbf{B}_{r},
-\qquad
-r \in \{\mathrm{in},\mathrm{out}\}.
-```
-
-The Laplace domain representation of this model is:
-
-```math
-\mathbf{Y}(s)=\mathbf{H}_i(s)\mathbf{U}(s)
-```
-
-The time domain representation of this model is:
-
-```math
-\mathbf{y}(t)=(\mathbf{h}_i*\mathbf{u})(t)
-```
-
-## Block Diagram
-
-<div align="center">
-   <img align="center" src="../../../../../../docs/Figures/EMT/Propagation/diagram.png">
-
-  Figure 1: Propagation model
-</div>
+The fitted factors use the full-residue real-port
+[`VectorFit`](../../Rational/VectorFit/README.md) form.
 
 ## Model Parameters
 
@@ -63,10 +34,10 @@ For conductor count $K$ and modal count $M$:
 
 Symbol | Units | JSON | Description | Note
 ------ | ----- | ---- | ----------- | ----
-$\mathbf{F}_{\mathrm{in}}$ | [-] | `input` | Input-side fitted factor | `StateSpace`, $M \times K$
+$\mathbf{F}_{\mathrm{in}}$ | [-] | `input` | Input-side fitted factor | `VectorFit`, $M\times K$
 $\boldsymbol{\tau}$ | [s] | `tau` | Modal propagation delays | $\boldsymbol{\tau}\in\mathbb{R}^M$
 $\Delta t_{\min}$ | [s] | `dt_min` | Delay block resolution | passed to each scalar `Delay`
-$\mathbf{F}_{\mathrm{out}}$ | [-] | `output` | Output-side fitted factor | `StateSpace`, $K \times M$
+$\mathbf{F}_{\mathrm{out}}$ | [-] | `output` | Output-side fitted factor | `VectorFit`, $K\times M$
 
 ### Parameter Validation
 
@@ -80,19 +51,20 @@ $\mathbf{F}_{\mathrm{out}}$ | [-] | `output` | Output-side fitted factor | `Stat
 \end{aligned}
 ```
 
-The `StateSpace` child models validate their own poles and factor matrices.
+The child `VectorFit` models validate their own real-port conjugate pole and
+residue contracts.
 
 ### Model Derived Parameters
 
-None. The child `StateSpace` and `Delay` models own their derived parameters.
+None. The child `VectorFit` and `Delay` models own their derived parameters.
 
 ### Model Submodels
 
 Submodel | Inputs | Outputs
 -------- | ------ | -------
-[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{in}}$ | $\mathbf{u}\in\mathbb{R}^K$ | $\mathbf{u}_{\mathrm{mod}}\in\mathbb{R}^M$
+[`VectorFit`](../../Rational/VectorFit/README.md) $\mathbf{F}_{\mathrm{in}}$ | $\mathbf{u}\in\mathbb{R}^K$ | $\mathbf{u}_{\mathrm{mod}}\in\mathbb{R}^M$
 [`Delay`](../Delay/README.md) $\delta_m$, $m=1,\ldots,M$ | $u_{\mathrm{mod},m}$, $\tau_m$ | $d_{m,\mathrm{out}}$
-[`StateSpace`](../../Rational/StateSpace/README.md) $\mathbf{F}_{\mathrm{out}}$ | $\mathbf{z}_{\mathrm{mod}}\in\mathbb{R}^M$ | $\mathbf{y}\in\mathbb{R}^K$
+[`VectorFit`](../../Rational/VectorFit/README.md) $\mathbf{F}_{\mathrm{out}}$ | $\mathbf{z}_{\mathrm{mod}}\in\mathbb{R}^M$ | $\mathbf{y}\in\mathbb{R}^K$
 
 ## Model Variables
 
@@ -100,17 +72,11 @@ Submodel | Inputs | Outputs
 
 #### Differential
 
-None. The child `StateSpace` and `Delay` models own their differential states.
+None. The child `VectorFit` and `Delay` models own their differential states.
 
 #### Algebraic
 
-The child `StateSpace` and `Delay` models own their algebraic outputs.
-`Propagation` owns only the temporary gather state needed to provide a
-contiguous modal input to the output-side `StateSpace`.
-The matching derivative storage `dot(z_mod)` is not a separate model variable
-and is not tagged differential. It is initialized from the derivative storage
-of the scalar `Delay` outputs so the output-side `StateSpace` can read a
-consistent input derivative when $\mathbf{E}_{\mathrm{out}}$ is nonzero.
+None.
 
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
@@ -139,13 +105,13 @@ $\mathbf{y}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y}\in\
 
 ### Differential Equations
 
-None. The child `StateSpace` and `Delay` models own their differential equations.
+None. The child `VectorFit` and `Delay` models own their differential equations.
 
 ### Algebraic Equations
 
-The current `Signal` contract requires the output-side `StateSpace` input to be
-a contiguous vector. Until EMT supports strided or gathered signals, the wrapper
-owns a temporary algebraic gather state $\mathbf{z}_{\mathrm{mod}}$:
+The current `Signal` contract requires the output-side `VectorFit` input to be a
+contiguous vector. Until EMT supports strided or gathered signals, the wrapper
+owns a temporary algebraic gather state:
 
 ```math
 0
@@ -154,9 +120,8 @@ owns a temporary algebraic gather state $\mathbf{z}_{\mathrm{mod}}$:
 \qquad m=1,\ldots,M.
 ```
 
-Here $d_{m,\mathrm{out}}$ denotes the `out` port of the $m$th scalar `Delay`
-child. This temporary state should be removed once the output-side `StateSpace`
-can read the scalar `Delay` outputs directly.
+Here $d_{m,\mathrm{out}}$ denotes the `out` port of the scalar `Delay` child for
+mode $m$.
 
 ### Port Equations
 
@@ -171,7 +136,7 @@ d_{m,\mathrm{out}} &= \delta(t-\tau_m) * u_{\mathrm{mod},m},
 
 ## Initialization
 
-Initialization is delegated to the child `StateSpace` and `Delay` models. The
+Initialization is delegated to the child `VectorFit` and `Delay` models. The
 wrapper initializes internal signals with the same interconnection equations:
 
 ```math
