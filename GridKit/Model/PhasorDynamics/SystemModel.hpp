@@ -54,6 +54,9 @@ namespace GridKit
       using PhasorDynamics::Component<scalar_type, index_type>::J_;
       using PhasorDynamics::Component<scalar_type, index_type>::variable_indices_;
       using PhasorDynamics::Component<scalar_type, index_type>::residual_indices_;
+      using PhasorDynamics::Component<scalar_type, index_type>::offset_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocateVectors;
 
     public:
       using ScalarT    = scalar_type;
@@ -95,7 +98,6 @@ namespace GridKit
         return csr_jac_;
       }
 
-      void updateVariables();
       void updateTime(RealT t, RealT a) override;
 
       void addBus(BusT* bus);

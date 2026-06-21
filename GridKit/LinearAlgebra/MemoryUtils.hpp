@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <iostream>
 
 namespace GridKit
@@ -206,8 +207,7 @@ namespace GridKit
       template <typename I, typename T>
       int allocateArrayOnHost(T** v, I n)
       {
-        std::size_t arraysize = static_cast<std::size_t>(n) * sizeof(T);
-        *v                    = new T[arraysize];
+        *v = new T[static_cast<std::size_t>(n)]();
         return *v == nullptr ? 1 : 0;
       }
 
@@ -222,16 +222,14 @@ namespace GridKit
       template <typename I, typename T>
       int copyArrayHostToHost(T* dst, const T* src, I n)
       {
-        std::size_t arraysize = static_cast<std::size_t>(n) * sizeof(T);
-        memcpy(dst, src, arraysize);
+        std::copy_n(src, static_cast<std::size_t>(n), dst);
         return 0;
       }
 
       template <typename I, typename T>
       int setZeroArrayOnHost(T* v, I n)
       {
-        std::size_t arraysize = static_cast<std::size_t>(n) * sizeof(T);
-        memset(v, 0, arraysize);
+        std::fill_n(v, static_cast<std::size_t>(n), T{});
         return 0;
       }
 

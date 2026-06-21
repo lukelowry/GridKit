@@ -45,7 +45,8 @@ namespace AnalysisManager
     {
       using DynamicSolver<ScalarT, IdxT>::model_;
 
-      using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
+      using RealT   = typename GridKit::ScalarTraits<ScalarT>::RealT;
+      using VectorT = typename GridKit::Model::Evaluator<ScalarT, IdxT>::VectorT;
 
     public:
       Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model);
@@ -231,9 +232,8 @@ namespace AnalysisManager
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);
-      static void copyVec(const N_Vector x, std::vector<ScalarT>& y);
-      static void copyVec(const std::vector<ScalarT>& x, N_Vector y);
-      static void copyVec(const std::vector<bool>& x, N_Vector y);
+      static void copyVec(const N_Vector x, VectorT& y);
+      static void copyVec(const VectorT& x, N_Vector y);
 
       // int check_flag(void *flagvalue, const char *funcname, int opt);
       static void checkAllocation(void* v, const char* functionName);

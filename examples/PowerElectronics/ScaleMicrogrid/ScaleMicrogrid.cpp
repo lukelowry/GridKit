@@ -260,7 +260,7 @@ int test(index_type Nsize, real_type error_tol, bool debug_output)
   sys_model->evaluateResidual();
   // print the residual in matrix market format
   sys_model->printResidualMatrixMarket("ScaleMicrogrid_Residual_N" + std::to_string(Nsize) + ".mtx", "ScaleMicrogrid Residual N" + std::to_string(Nsize));
-  std::vector<real_type>& fres = sys_model->getResidual();
+  auto& fres = sys_model->getResidual();
   if (debug_output)
   {
     std::cout << "Verify initial resisdual is zero: {\n";
@@ -294,7 +294,7 @@ int test(index_type Nsize, real_type error_tol, bool debug_output)
 
   idas->runSimulation(t_final);
 
-  std::vector<real_type>& yfinal = sys_model->y();
+  auto& yfinal = sys_model->y();
 
   if (debug_output)
   {

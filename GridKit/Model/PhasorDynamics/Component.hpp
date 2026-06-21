@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cassert>
+#include <cstddef>
 #include <vector>
 
 #include <GridKit/AutomaticDifferentiation/DependencyTracking/Variable.hpp>
@@ -23,6 +25,7 @@ namespace GridKit
     public:
       using RealT   = typename Model::Evaluator<ScalarT, IdxT>::RealT;
       using MatrixT = typename Model::Evaluator<ScalarT, IdxT>::MatrixT;
+      using VectorT = typename Model::Evaluator<ScalarT, IdxT>::VectorT;
 
       Component() = default;
 
@@ -51,54 +54,24 @@ namespace GridKit
         return nnz_;
       }
 
-      std::vector<ScalarT>& y() override
-      {
-        return y_;
-      }
-
-      const std::vector<ScalarT>& y() const override
-      {
-        return y_;
-      }
-
-      std::vector<ScalarT>& yp() override
-      {
-        return yp_;
-      }
-
-      const std::vector<ScalarT>& yp() const override
-      {
-        return yp_;
-      }
-
-      std::vector<bool>& tag() override
+      VectorT& tag() override
       {
         return tag_;
       }
 
-      const std::vector<bool>& tag() const override
+      const VectorT& tag() const override
       {
         return tag_;
       }
 
-      std::vector<ScalarT>& absoluteTolerance() override
+      VectorT& absoluteTolerance() override
       {
         return abs_tol_;
       }
 
-      const std::vector<ScalarT>& absoluteTolerance() const override
+      const VectorT& absoluteTolerance() const override
       {
         return abs_tol_;
-      }
-
-      std::vector<ScalarT>& getResidual() override
-      {
-        return f_;
-      }
-
-      const std::vector<ScalarT>& getResidual() const override
-      {
-        return f_;
       }
 
       MatrixT& getJacobian() override
@@ -143,6 +116,17 @@ namespace GridKit
         return residual_indices_;
       }
 
+    protected:
+      using Model::Evaluator<ScalarT, IdxT>::y_;
+      using Model::Evaluator<ScalarT, IdxT>::yp_;
+      using Model::Evaluator<ScalarT, IdxT>::f_;
+      using Model::Evaluator<ScalarT, IdxT>::tag_;
+      using Model::Evaluator<ScalarT, IdxT>::abs_tol_;
+      using Model::Evaluator<ScalarT, IdxT>::offset_;
+      using Model::Evaluator<ScalarT, IdxT>::allocated_;
+      using Model::Evaluator<ScalarT, IdxT>::allocateVectors;
+
+    public:
       /// @todo Remove this method. It should be part of DynamicSolver class.
       bool hasJacobian() override
       {
@@ -182,11 +166,6 @@ namespace GridKit
       /// Global (system-level) residual indices
       std::vector<IdxT> residual_indices_;
 
-      std::vector<ScalarT> y_;
-      std::vector<ScalarT> yp_;
-      std::vector<bool>    tag_;
-      std::vector<ScalarT> abs_tol_;
-      std::vector<ScalarT> f_;
       std::vector<ScalarT> g_;
 
       MatrixT J_;
@@ -233,52 +212,52 @@ namespace GridKit
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& yB() override
+      [[noreturn]] VectorT& yB() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& yB() const override
+      [[noreturn]] const VectorT& yB() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& ypB() override
+      [[noreturn]] VectorT& ypB() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& ypB() const override
+      [[noreturn]] const VectorT& ypB() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& param() override
+      [[noreturn]] VectorT& param() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& param() const override
+      [[noreturn]] const VectorT& param() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& param_up() override
+      [[noreturn]] VectorT& param_up() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& param_up() const override
+      [[noreturn]] const VectorT& param_up() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& param_lo() override
+      [[noreturn]] VectorT& param_lo() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& param_lo() const override
+      [[noreturn]] const VectorT& param_lo() const override
       {
         throw NotImplementedError(__func__);
       }
@@ -303,32 +282,32 @@ namespace GridKit
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& getIntegrand() override
+      [[noreturn]] VectorT& getIntegrand() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& getIntegrand() const override
+      [[noreturn]] const VectorT& getIntegrand() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& getAdjointResidual() override
+      [[noreturn]] VectorT& getAdjointResidual() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& getAdjointResidual() const override
+      [[noreturn]] const VectorT& getAdjointResidual() const override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] std::vector<ScalarT>& getAdjointIntegrand() override
+      [[noreturn]] VectorT& getAdjointIntegrand() override
       {
         throw NotImplementedError(__func__);
       }
 
-      [[noreturn]] const std::vector<ScalarT>& getAdjointIntegrand() const override
+      [[noreturn]] const VectorT& getAdjointIntegrand() const override
       {
         throw NotImplementedError(__func__);
       }

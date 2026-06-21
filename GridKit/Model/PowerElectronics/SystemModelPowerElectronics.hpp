@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <vector>
@@ -24,8 +25,8 @@ namespace GridKit
    * @param header Additional header information/comments
    * @return true if the write was successful, false otherwise
    */
-  template <typename T>
-  void writeVectorToMatrixMarket(const std::vector<T>& vec, const std::string& filename, const std::string& header)
+  template <typename VectorT>
+  void writeVectorToMatrixMarket(const VectorT& vec, const std::string& filename, const std::string& header)
   {
     std::ofstream outFile(filename);
 
@@ -49,9 +50,9 @@ namespace GridKit
 
     // Write the vector elements
     outFile << std::scientific << std::setprecision(16);
-    for (const auto& val : vec)
+    for (std::size_t i = 0; i < vec.size(); ++i)
     {
-      outFile << val << std::endl;
+      outFile << vec.data()[i] << std::endl;
     }
 
     outFile.close();
@@ -80,6 +81,8 @@ namespace GridKit
     using CircuitComponent<ScalarT, IdxT>::f_int_;
     using CircuitComponent<ScalarT, IdxT>::tag_;
     using CircuitComponent<ScalarT, IdxT>::abs_tol_;
+    using CircuitComponent<ScalarT, IdxT>::allocated_;
+    using CircuitComponent<ScalarT, IdxT>::allocateVectors;
 
   public:
     /**
@@ -178,12 +181,10 @@ namespace GridKit
       n_extern_ = 0;
       size_     = n_intern_ + n_extern_;
 
-      // Allocate global vectors
-      y_.resize(size_);
-      yp_.resize(size_);
-      f_.resize(size_);
-      tag_.resize(size_);
-      abs_tol_.resize(size_);
+      if (!allocated_)
+      {
+        allocateVectors(static_cast<IdxT>(size_));
+      }
 
       { // Start node internal indexing after all component internals for proper KLU ordering
         size_t node_internal_idx = component_internal_size;
@@ -333,8 +334,8 @@ namespace GridKit
     {
       for (component_type* component : components_)
       {
-        std::vector<ScalarT>&   y         = component->y();
-        std::vector<ScalarT>&   yp        = component->yp();
+        auto&                   y         = component->y();
+        auto&                   yp        = component->yp();
         const std::set<size_t>& externals = component->getExternIndices();
 
         for (size_t j : externals)
@@ -373,7 +374,7 @@ namespace GridKit
      */
     int setAbsoluteTolerance(RealT rel_tol) final
     {
-      std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+      std::fill(abs_tol_.data(), abs_tol_.data() + abs_tol_.size(), rel_tol);
       return 0;
     }
 
@@ -405,8 +406,8 @@ namespace GridKit
         if (int err_code = component->evaluateExternalResidual())
           return err_code;
 
-        const std::vector<ScalarT>& residual  = component->getResidual();
-        const std::set<size_t>&     externals = component->getExternIndices();
+        auto&                   residual  = component->getResidual();
+        const std::set<size_t>& externals = component->getExternIndices();
 
         for (size_t j : externals)
         {

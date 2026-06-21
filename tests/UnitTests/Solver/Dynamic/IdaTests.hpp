@@ -12,8 +12,19 @@ namespace GridKit
     template <class ScalarT, typename IdxT>
     class NullEvaluator : public Model::Evaluator<ScalarT, IdxT>
     {
+    protected:
+      using Model::Evaluator<ScalarT, IdxT>::y_;
+      using Model::Evaluator<ScalarT, IdxT>::yp_;
+      using Model::Evaluator<ScalarT, IdxT>::f_;
+      using Model::Evaluator<ScalarT, IdxT>::tag_;
+      using Model::Evaluator<ScalarT, IdxT>::abs_tol_;
+      using Model::Evaluator<ScalarT, IdxT>::allocated_;
+      using Model::Evaluator<ScalarT, IdxT>::allocateVectors;
+
     public:
-      using RealT = typename Model::Evaluator<ScalarT, IdxT>::RealT;
+      using RealT   = typename Model::Evaluator<ScalarT, IdxT>::RealT;
+      using MatrixT = typename Model::Evaluator<ScalarT, IdxT>::MatrixT;
+      using VectorT = typename Model::Evaluator<ScalarT, IdxT>::VectorT;
 
       NullEvaluator()
       {
@@ -21,19 +32,25 @@ namespace GridKit
 
       int allocate() override
       {
+        if (!allocated_)
+        {
+          allocateVectors(size());
+        }
         return 0;
       }
 
       int initialize() override
       {
-        y_  = {0};
-        yp_ = {0};
+        if (!allocated_)
+        {
+          allocate();
+        }
 
-        tag_     = {false};
-        abs_tol_ = {0};
-
-        f_ = {0};
-        g_ = {0};
+        y_[0]       = 0.0;
+        yp_[0]      = 0.0;
+        tag_[0]     = 0.0;
+        abs_tol_[0] = 0.0;
+        f_[0]       = 0.0;
         return 0;
       }
 
@@ -69,13 +86,13 @@ namespace GridKit
 
       int setAbsoluteTolerance(RealT rel_tol) override
       {
-        std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+        std::fill(abs_tol_.data(), abs_tol_.data() + abs_tol_.size(), rel_tol);
         return 0;
       }
 
       int evaluateResidual() override
       {
-        f_ = y_;
+        f_[0] = y_[0];
         return 0;
       }
 
@@ -108,142 +125,92 @@ namespace GridKit
       {
       }
 
-      std::vector<ScalarT>& y() override
-      {
-        return y_;
-      }
-
-      const std::vector<ScalarT>& y() const override
-      {
-        return y_;
-      }
-
-      std::vector<ScalarT>& yp() override
-      {
-        return yp_;
-      }
-
-      const std::vector<ScalarT>& yp() const override
-      {
-        return yp_;
-      }
-
-      std::vector<bool>& tag() override
-      {
-        return tag_;
-      }
-
-      const std::vector<bool>& tag() const override
-      {
-        return tag_;
-      }
-
-      std::vector<ScalarT>& absoluteTolerance() override
-      {
-        return abs_tol_;
-      }
-
-      const std::vector<ScalarT>& absoluteTolerance() const override
-      {
-        return abs_tol_;
-      }
-
-      std::vector<ScalarT>& yB() override
+      VectorT& yB() override
       {
         return yB_;
       }
 
-      const std::vector<ScalarT>& yB() const override
+      const VectorT& yB() const override
       {
         return yB_;
       }
 
-      std::vector<ScalarT>& ypB() override
+      VectorT& ypB() override
       {
         return ypB_;
       }
 
-      const std::vector<ScalarT>& ypB() const override
+      const VectorT& ypB() const override
       {
         return ypB_;
       }
 
-      std::vector<ScalarT>& param() override
+      VectorT& param() override
       {
         return param_;
       }
 
-      const std::vector<ScalarT>& param() const override
+      const VectorT& param() const override
       {
         return param_;
       }
 
-      std::vector<ScalarT>& param_up() override
+      VectorT& param_up() override
       {
         return param_up_;
       }
 
-      const std::vector<ScalarT>& param_up() const override
+      const VectorT& param_up() const override
       {
         return param_up_;
       }
 
-      std::vector<ScalarT>& param_lo() override
+      VectorT& param_lo() override
       {
         return param_lo_;
       }
 
-      const std::vector<ScalarT>& param_lo() const override
+      const VectorT& param_lo() const override
       {
         return param_lo_;
       }
 
-      std::vector<ScalarT>& getResidual() override
-      {
-        return f_;
-      }
-
-      const std::vector<ScalarT>& getResidual() const override
-      {
-        return f_;
-      }
-
-      GridKit::LinearAlgebra::COO_Matrix<ScalarT, IdxT>& getJacobian() override
+      MatrixT& getJacobian() override
       {
         return jac_;
       }
 
-      const GridKit::LinearAlgebra::COO_Matrix<ScalarT, IdxT>& getJacobian() const override
+      const MatrixT& getJacobian() const override
       {
         return jac_;
       }
 
-      std::vector<ScalarT>& getIntegrand() override
+      VectorT& getIntegrand() override
       {
         return g_;
       }
 
-      const std::vector<ScalarT>& getIntegrand() const override
+      const VectorT& getIntegrand() const override
       {
         return g_;
       }
 
-      std::vector<ScalarT>& getAdjointResidual() override
+      VectorT& getAdjointResidual() override
       {
         return fB_;
       }
 
-      const std::vector<ScalarT>& getAdjointResidual() const override
+      const VectorT& getAdjointResidual() const override
       {
         return fB_;
       }
 
-      std::vector<ScalarT>& getAdjointIntegrand() override
+      VectorT& getAdjointIntegrand() override
       {
         return gB_;
       }
 
-      const std::vector<ScalarT>& getAdjointIntegrand() const override
+      const VectorT& getAdjointIntegrand() const override
       {
         return gB_;
       }
@@ -254,23 +221,18 @@ namespace GridKit
       }
 
     protected:
-      std::vector<ScalarT> y_;
-      std::vector<ScalarT> yp_;
-      std::vector<bool>    tag_;
-      std::vector<ScalarT> abs_tol_;
-      std::vector<ScalarT> f_;
-      std::vector<ScalarT> g_;
+      VectorT g_;
 
-      std::vector<ScalarT> yB_;
-      std::vector<ScalarT> ypB_;
-      std::vector<ScalarT> fB_;
-      std::vector<ScalarT> gB_;
+      VectorT yB_;
+      VectorT ypB_;
+      VectorT fB_;
+      VectorT gB_;
 
-      GridKit::LinearAlgebra::COO_Matrix<ScalarT, IdxT> jac_;
+      MatrixT jac_;
 
-      std::vector<ScalarT> param_;
-      std::vector<ScalarT> param_up_;
-      std::vector<ScalarT> param_lo_;
+      VectorT param_;
+      VectorT param_up_;
+      VectorT param_lo_;
     };
   } // namespace Model
 
