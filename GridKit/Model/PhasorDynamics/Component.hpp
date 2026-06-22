@@ -112,6 +112,15 @@ namespace GridKit
         return abs_tol_;
       }
 
+      int setAbsoluteTolerance(RealT rel_tol) override
+      {
+        for (IdxT i = 0; i < size_; ++i)
+        {
+          abs_tol_[static_cast<size_t>(i)] = rel_tol;
+        }
+        return 0;
+      }
+
       std::vector<ScalarT>& getResidual() override
       {
         return f_;
