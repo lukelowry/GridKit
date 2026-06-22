@@ -41,6 +41,11 @@ $$
 N=\text{ceil}\left(\dfrac{\tau}{h}\right)
 $$
 
+And 
+$$
+R_n(t)=R\left(\dfrac{t}{\tau}-\dfrac{n}{N}\right) 
+$$
+
 ## Ports
 
 - $u_{in}$ input signal
@@ -59,13 +64,26 @@ None.
 
 ## Differential Equations
 
-
+For each bus of the transmission line we need
 
 $$
 \begin{aligned}
-\dot{x}_n&=R\left(\dfrac{t}{\tau}-\dfrac{n}{N}\right) \,(-x_n +  u_\text{in}) \\ 
+\dot{I}_n&=\delta_a(x)\,( I^\text{inj}_a -I_n ) \\ 
+\dot{I}_n&=\delta_b(x)\,( I^\text{inj}_b -I_n ) \\ 
 \end{aligned}
 $$
+
+where
+
+$$
+x=1+\cos{\pi t}
+$$
+
+
+This approach assumes lossless, but still useful and multi modal
+
+This approach is nice because efficient and like an integral manifold, a fast spinning tape recorder
+
 
 ## Algebraic Equations
 
