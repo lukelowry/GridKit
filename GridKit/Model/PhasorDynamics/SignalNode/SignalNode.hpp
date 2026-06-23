@@ -34,8 +34,11 @@ namespace GridKit
       virtual ~SignalNode() = default;
 
       void    set(ScalarT* signal_in, IdxT* global_index);
+      void    set(ScalarT* signal_in, ScalarT* signal_derivative_in, IdxT* global_index, bool differential);
       bool    linked() const;
+      bool    isDifferential() const;
       ScalarT read() const;
+      ScalarT readDerivative() const;
       void    init(ScalarT signal_in);
 
       const IdxT signalId() const
@@ -55,7 +58,9 @@ namespace GridKit
 
     private:
       ScalarT* signal_{nullptr};
+      ScalarT* signal_derivative_{nullptr};
       IdxT     signal_id_{0};
+      bool     differential_{false};
 
     protected:
       const IdxT bus_id_{INVALID_INDEX<IdxT>};

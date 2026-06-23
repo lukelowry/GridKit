@@ -142,6 +142,40 @@ namespace GridKit
         return (*external_variable_signals_[static_cast<size_t>(variable)])->read();
       }
 
+      /// Returns true if the specified external variable is differential
+      ///
+      /// @tparam variable The external variable to check
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable
+      template <ExternalVariables variable>
+      auto isExternalVariableDifferential() const -> bool
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        if (!external_variable_signals_[static_cast<size_t>(variable)])
+        {
+          throw std::logic_error("A signal node has not been assigned to this external variable");
+        }
+
+        return (*external_variable_signals_[static_cast<size_t>(variable)])->isDifferential();
+      }
+
+      /// Returns the derivative of the specified external variable
+      ///
+      /// @tparam variable The external variable to read from
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable and it is differential
+      template <ExternalVariables variable>
+      auto readExternalVariableDerivative() const -> ScalarT
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        if (!external_variable_signals_[static_cast<size_t>(variable)])
+        {
+          throw std::logic_error("A signal node has not been assigned to this external variable");
+        }
+
+        return (*external_variable_signals_[static_cast<size_t>(variable)])->readDerivative();
+      }
+
       /// Returns the global index of the specified external variable
       ///
       /// @tparam variable The external variable to read from
