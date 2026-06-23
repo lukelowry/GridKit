@@ -14,6 +14,7 @@ gridkit_add_library(
           ComponentData.hpp
           ComponentLibrary.hpp
           ComponentSignals.hpp
+          VectorizedEquations.hpp
   LINK_LIBRARIES
     INTERFACE
     GridKit::definitions
