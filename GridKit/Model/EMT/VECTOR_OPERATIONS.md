@@ -9,7 +9,9 @@ r1 = i1 - Y_ * v;
 r2 = i2 - Y_ * v;
 ```
 
-The feature must preserve the existing PhasorDynamics/Enzyme architecture: residuals remain `ScalarT*` pointer kernels, state/residual storage remains flat and contiguous, and sparse Jacobians continue to use the existing `DfDy`, `DfDwb`, `DhDy`, and `DhDwb` helpers.
+The feature must preserve the existing PhasorDynamics/Enzyme architecture: residuals remain `ScalarT*` pointer kernels, state/residual storage remains flat and contiguous, and sparse Jacobians continue to use the existing `DfDy`, `DfDwb`, `DfDws`, `DhDy`, and `DhDwb` helpers.
+
+For components with repeated same-width external signal ports, keep the port count as a compile-time model parameter and write the residual reduction directly in the component kernel. Do not add a runtime vector-reduction helper to the notation layer.
 
 ## Key Changes
 
@@ -152,6 +154,31 @@ f  = [r1_a, r1_b, r1_c, r2_a, r2_b, r2_c]
 
 For mixed scalar/vector layouts, use `slice<N>(ptr, exact_offset)` instead of `block<N>(ptr, block_index)`.
 
+For repeated external signal ports, use compile-time `N` and `M` in the component implementation and keep the flat signal order as `port * N + element`:
+
+```cpp
+template <typename scalar_type, typename index_type, std::size_t N, std::size_t M>
+__attribute__((always_inline)) int MyModel<scalar_type, index_type, N, M>::evaluateInternalResidual(
+    [[maybe_unused]] ScalarT* y,
+    [[maybe_unused]] ScalarT* yp,
+    [[maybe_unused]] ScalarT* wb,
+    ScalarT*                  ws,
+    ScalarT*                  f)
+{
+  for (std::size_t n = 0; n < N; ++n)
+  {
+    ScalarT sum = 0.0;
+    for (std::size_t m = 0; m < M; ++m)
+    {
+      sum += ws[m * N + n];
+    }
+    f[n] = sum;
+  }
+
+  return 0;
+}
+```
+
 ## Enzyme Integration
 
 No changes to `GridKit/AutomaticDifferentiation/Enzyme` are required for this feature.
@@ -233,9 +260,11 @@ void updateExternalVector()
 
 For differential vector equations using `yp`, call the existing `DfDy::eval(..., alpha_, ...)` overload so Enzyme contributes `alpha * df/dyp`.
 
+For vector equations that read external signal ports through `ws`, use the existing `DfDws` wrapper with `MemberFunctions::InternalResidualWithSignal`. The residual kernel should still be the single source of truth for both residual values and sparse derivatives.
+
 ## Test Plan
 
-Add focused unit tests for the notation layer and one Enzyme-backed model test.
+Add focused unit tests for the notation layer and Enzyme-backed model tests.
 
 Test cases:
 
@@ -247,13 +276,16 @@ Test cases:
   - identity block for `dr2/di2`,
   - no cross terms between `r1` and `i2` or `r2` and `i1`,
   - two `-Y` blocks for `dr1/dv` and `dr2/dv`.
+- Enzyme sparse Jacobian for `f_n = sum_m ws_{m,n}` through `DfDws` has one nonzero entry for each matching `(n, m * N + n)` pair.
 - Repeat with diagonal `Y` to verify autosparsity drops structural zero off-diagonal entries.
 
 Use the existing PhasorDynamics unit-test and Enzyme build pattern. Do not add a separate EMT system model.
 
 ## Assumptions
 
-- Phase count is compile-time for this first implementation, with `N = 3` as the immediate target.
+- Phase count `N` is compile-time for equation kernels.
+- Repeated external signal port count `M` is compile-time for equation kernels.
+- `ComponentSignals` may still be constructed with `N` and configured with `M`; the equation kernel does not need runtime vector helper objects.
 - The helper header lives in PhasorDynamics because the implementation will use the current PhasorDynamics component/system architecture.
 - The notation layer is only a residual-kernel convenience; it does not own model state, allocate memory, or assemble Jacobians manually.
 - Existing pointer-based residual wrappers remain the Enzyme boundary.

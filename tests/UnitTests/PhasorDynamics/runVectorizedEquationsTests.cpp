@@ -8,9 +8,11 @@ int main()
   result += test.blockAssignment();
   result += test.sliceAssignment();
   result += test.residualLayout();
+  result += test.signalSumResidualLayout();
 
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.enzymeJacobian();
+  result += test.signalSumEnzymeJacobian();
 #endif
 
   return result.summary();

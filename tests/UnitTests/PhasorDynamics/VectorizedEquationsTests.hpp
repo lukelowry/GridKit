@@ -68,12 +68,38 @@ namespace GridKit
       GridKit::PhasorDynamics::Equation::Mat<RealT, N, N> Y_{};
     };
 
+    template <class ScalarT, typename IdxT, std::size_t N, std::size_t M>
+    class SignalSumModel
+    {
+    public:
+      __attribute__((always_inline)) int evaluateInternalResidual(
+          [[maybe_unused]] ScalarT* y,
+          [[maybe_unused]] ScalarT* yp,
+          [[maybe_unused]] ScalarT* wb,
+          ScalarT*                  ws,
+          ScalarT*                  f)
+      {
+        for (std::size_t n = 0; n < N; ++n)
+        {
+          ScalarT sum = 0.0;
+          for (std::size_t m = 0; m < M; ++m)
+          {
+            sum += ws[m * N + n];
+          }
+          f[n] = sum;
+        }
+
+        return 0;
+      }
+    };
+
     template <class ScalarT, typename IdxT>
     class VectorizedEquationsTests
     {
     public:
       using RealT                    = typename GridKit::ScalarTraits<ScalarT>::RealT;
       static constexpr std::size_t N = 3;
+      static constexpr std::size_t M = 2;
 
       TestOutcome blockAssignment()
       {
@@ -148,6 +174,40 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome signalSumResidualLayout()
+      {
+        TestStatus success = true;
+
+        SignalSumModel<ScalarT, IdxT, N, M> model;
+        std::array<ScalarT, 1>              y{};
+        std::array<ScalarT, 1>              yp{};
+        std::array<ScalarT, 1>              wb{};
+        std::array<ScalarT, M * N>          ws{};
+        std::array<ScalarT, N>              f{};
+
+        for (std::size_t m = 0; m < M; ++m)
+        {
+          for (std::size_t n = 0; n < N; ++n)
+          {
+            ws[m * N + n] = static_cast<ScalarT>((m + 1) * (n + 2));
+          }
+        }
+
+        model.evaluateInternalResidual(y.data(), yp.data(), wb.data(), ws.data(), f.data());
+
+        for (std::size_t n = 0; n < N; ++n)
+        {
+          ScalarT expected = 0.0;
+          for (std::size_t m = 0; m < M; ++m)
+          {
+            expected += ws[m * N + n];
+          }
+          success *= isEqual(f[n], expected);
+        }
+
+        return success.report(__func__);
+      }
+
 #ifdef GRIDKIT_ENABLE_ENZYME
       TestOutcome enzymeJacobian()
       {
@@ -214,6 +274,76 @@ namespace GridKit
 
         return success.report(__func__);
       }
+
+      TestOutcome signalSumEnzymeJacobian()
+      {
+        TestStatus success = true;
+
+        SignalSumModel<ScalarT, IdxT, N, M> model;
+        std::vector<ScalarT>                y(1, 0.0);
+        std::vector<ScalarT>                yp(1, 0.0);
+        std::vector<ScalarT>                wb(1, 0.0);
+        std::vector<ScalarT>                ws(M * N);
+
+        for (std::size_t m = 0; m < M; ++m)
+        {
+          for (std::size_t n = 0; n < N; ++n)
+          {
+            ws[m * N + n] = static_cast<ScalarT>((m + 1) * (n + 2));
+          }
+        }
+
+        std::vector<IdxT> residual_indices(N);
+        std::vector<IdxT> ws_indices(M * N);
+
+        for (std::size_t n = 0; n < N; ++n)
+        {
+          residual_indices[n] = static_cast<IdxT>(n);
+        }
+
+        for (std::size_t m = 0; m < M; ++m)
+        {
+          for (std::size_t n = 0; n < N; ++n)
+          {
+            ws_indices[m * N + n] = static_cast<IdxT>(N + m * N + n);
+          }
+        }
+
+        const std::size_t max_nnz = residual_indices.size() * ws_indices.size();
+
+        std::vector<IdxT>  rows(max_nnz);
+        std::vector<IdxT>  cols(max_nnz);
+        std::vector<RealT> vals(max_nnz);
+
+        GridKit::LinearAlgebra::COO_Matrix<RealT, IdxT> J;
+
+        GridKit::Enzyme::Sparse::DfDws<SignalSumModel<ScalarT, IdxT, N, M>,
+                                       GridKit::Enzyme::Sparse::MemberFunctions::InternalResidualWithSignal,
+                                       ScalarT,
+                                       IdxT>::eval(&model,
+                                                   residual_indices.size(),
+                                                   ws_indices.size(),
+                                                   residual_indices.data(),
+                                                   ws_indices.data(),
+                                                   y.data(),
+                                                   yp.data(),
+                                                   wb.data(),
+                                                   ws.data(),
+                                                   rows.data(),
+                                                   cols.data(),
+                                                   vals.data(),
+                                                   J);
+
+        auto actual   = GridKit::Testing::MapFromCOO(J);
+        auto expected = expectedSignalSumJacobian();
+
+        for (std::size_t row = 0; row < expected.size(); ++row)
+        {
+          success *= isEqual(actual[row], expected[row]);
+        }
+
+        return success.report(__func__);
+      }
 #endif
 
     private:
@@ -231,6 +361,21 @@ namespace GridKit
           {
             expected[row][2 * N + col]     = -Y(row, col);
             expected[N + row][2 * N + col] = -Y(row, col);
+          }
+        }
+
+        return expected;
+      }
+
+      std::vector<GridKit::DependencyTracking::Variable::DependencyMap> expectedSignalSumJacobian()
+      {
+        std::vector<GridKit::DependencyTracking::Variable::DependencyMap> expected(N);
+
+        for (std::size_t n = 0; n < N; ++n)
+        {
+          for (std::size_t m = 0; m < M; ++m)
+          {
+            expected[n][static_cast<IdxT>(N + m * N + n)] = 1.0;
           }
         }
 
