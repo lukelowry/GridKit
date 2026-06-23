@@ -134,6 +134,13 @@ add_executable(test_phasor_vectorized_equations runVectorizedEquationsTests.cpp)
 target_link_libraries(
   test_phasor_vectorized_equations GridKit::phasor_dynamics_core GridKit::testing)
 
+add_executable(test_phasor_component_signals runComponentSignalsTests.cpp)
+target_link_libraries(
+  test_phasor_component_signals
+  GridKit::phasor_dynamics_core
+  GridKit::phasor_dynamics_signal
+  GridKit::testing)
+
 if(GRIDKIT_ENABLE_ENZYME)
   target_link_libraries(test_phasor_vectorized_equations ClangEnzymeFlags)
   target_compile_options(test_phasor_vectorized_equations PRIVATE -mllvm -enzyme-auto-sparsity=1
@@ -158,6 +165,7 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 add_test(NAME PhasorDynamicsSystemSingleComponentTest COMMAND test_phasor_system_single_component)
 add_test(NAME PhasorDynamicsVectorizedEquationsTest COMMAND test_phasor_vectorized_equations)
+add_test(NAME PhasorDynamicsComponentSignalsTest COMMAND test_phasor_component_signals)
 
 install(
   TARGETS test_phasor_bus
@@ -175,4 +183,5 @@ install(
           test_phasor_system
           test_phasor_system_single_component
           test_phasor_vectorized_equations
+          test_phasor_component_signals
   RUNTIME DESTINATION bin)

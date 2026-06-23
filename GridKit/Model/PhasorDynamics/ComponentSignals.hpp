@@ -1,9 +1,11 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
+#include <vector>
 
 #include <GridKit/Model/PhasorDynamics/SignalNode/SignalNode.hpp>
 
@@ -53,6 +55,25 @@ namespace GridKit
       using ScalarT = scalar_type;
       /// Index type
       using IdxT    = index_type;
+      /// Signal node type
+      using SignalT = SignalNode<ScalarT, IdxT>;
+
+      explicit ComponentSignals(std::size_t port_size = 1)
+        : port_size_(port_size)
+      {
+        if (port_size_ == 0)
+        {
+          throw std::logic_error("Signal port size must be positive");
+        }
+
+        resizeSlots(internal_variable_signals_);
+        resizeSlots(external_variable_signals_);
+      }
+
+      std::size_t portSize() const
+      {
+        return port_size_;
+      }
 
       /// Attaches a signal node to an external variable on this component
       ///
@@ -63,7 +84,22 @@ namespace GridKit
       /// @post The provided signal node is attached to the indicated
       ///       external variable
       template <ExternalVariables variable>
-      auto attachSignalNode(SignalNode<ScalarT, IdxT>* node)
+      auto attachSignalNode(SignalT* node)
+      {
+        attachSignalNode<variable>(0, node);
+      }
+
+      /// Attaches a signal node to one element of an external variable port
+      ///
+      /// @tparam variable The external variable to attach the provided
+      ///         signal to
+      /// @param[in] n Port element index
+      /// @param[in] node The signal node to attach
+      /// @pre The provided pointer to a signal node is not `nullptr`
+      /// @post The provided signal node is attached to the indicated
+      ///       external variable element
+      template <ExternalVariables variable>
+      auto attachSignalNode(std::size_t n, SignalT* node)
       {
 #ifndef NDEBUG
         if (node == nullptr)
@@ -73,7 +109,25 @@ namespace GridKit
 #endif
 
         static_assert(variable < ExternalVariables::MAXIMUM);
-        external_variable_signals_[static_cast<size_t>(variable)] = node;
+        checkIndex(n);
+        external_variable_signals_[static_cast<std::size_t>(variable)][n] = node;
+      }
+
+      /// Attaches signal nodes to all elements of an external variable port
+      ///
+      /// @tparam variable The external variable to attach the provided
+      ///         signals to
+      /// @param[in] nodes Signal nodes to attach
+      /// @pre `nodes.size()` equals `portSize()`
+      /// @post Each signal node is attached to the corresponding port element
+      template <ExternalVariables variable>
+      auto attachSignalNodes(const std::vector<SignalT*>& nodes)
+      {
+        checkPortSize(nodes.size());
+        for (std::size_t n = 0; n < port_size_; ++n)
+        {
+          attachSignalNode<variable>(n, nodes[n]);
+        }
       }
 
       /// Check if a signal node has been attached to an external variable
@@ -82,8 +136,20 @@ namespace GridKit
       template <ExternalVariables variable>
       auto isAttached() const -> bool
       {
+        return isAttached<variable>(0);
+      }
+
+      /// Check if a signal node has been attached to one element of an
+      /// external variable port
+      ///
+      /// @tparam variable The external variable to check
+      /// @param[in] n Port element index
+      template <ExternalVariables variable>
+      auto isAttached(std::size_t n) const -> bool
+      {
         static_assert(variable < ExternalVariables::MAXIMUM);
-        return static_cast<bool>(external_variable_signals_[static_cast<size_t>(variable)]);
+        checkIndex(n);
+        return static_cast<bool>(external_variable_signals_[static_cast<std::size_t>(variable)][n]);
       }
 
       /// Check if a signal node has been assigned to an internal variable
@@ -92,8 +158,20 @@ namespace GridKit
       template <InternalVariables variable>
       auto isAssigned() const -> bool
       {
+        return isAssigned<variable>(0);
+      }
+
+      /// Check if a signal node has been assigned to one element of an
+      /// internal variable port
+      ///
+      /// @tparam variable The internal variable to check
+      /// @param[in] n Port element index
+      template <InternalVariables variable>
+      auto isAssigned(std::size_t n) const -> bool
+      {
         static_assert(variable < InternalVariables::MAXIMUM);
-        return static_cast<bool>(internal_variable_signals_[static_cast<size_t>(variable)]);
+        checkIndex(n);
+        return static_cast<bool>(internal_variable_signals_[static_cast<std::size_t>(variable)][n]);
       }
 
       /// Check if a signal node has been "set"
@@ -102,8 +180,18 @@ namespace GridKit
       template <ExternalVariables variable>
       auto isLinked() const -> bool
       {
+        return isLinked<variable>(0);
+      }
+
+      /// Check if one element of a signal port has been "set"
+      ///
+      /// @tparam variable The external variable to check
+      /// @param[in] n Port element index
+      template <ExternalVariables variable>
+      auto isLinked(std::size_t n) const -> bool
+      {
         static_assert(variable < ExternalVariables::MAXIMUM);
-        return external_variable_signals_[static_cast<size_t>(variable)].value()->linked();
+        return getExternalSignalNode<variable>(n)->linked();
       }
 
       /// Returns a signal node for an internal signal variable to be
@@ -114,15 +202,31 @@ namespace GridKit
       /// @pre A signal node has been assigned to the requested internal
       ///      variable
       template <InternalVariables variable>
-      auto getSignalNode() -> SignalNode<ScalarT, IdxT>*
+      auto getSignalNode() -> SignalT*
+      {
+        return getSignalNode<variable>(0);
+      }
+
+      /// Returns a signal node for one element of an internal signal
+      /// variable port to be attached to an external variable on another
+      /// component
+      ///
+      /// @tparam variable The internal variable to get the assigned
+      ///         signal node of
+      /// @param[in] n Port element index
+      /// @pre A signal node has been assigned to the requested internal
+      ///      variable element
+      template <InternalVariables variable>
+      auto getSignalNode(std::size_t n) -> SignalT*
       {
         static_assert(variable < InternalVariables::MAXIMUM);
-        if (!internal_variable_signals_[static_cast<size_t>(variable)])
+        checkIndex(n);
+        if (!internal_variable_signals_[static_cast<std::size_t>(variable)][n])
         {
           throw std::logic_error("A signal node has not been assigned to this internal variable");
         }
 
-        return *internal_variable_signals_[static_cast<size_t>(variable)];
+        return *internal_variable_signals_[static_cast<std::size_t>(variable)][n];
       }
 
       /// Returns the value of the specified external variable
@@ -133,13 +237,35 @@ namespace GridKit
       template <ExternalVariables variable>
       auto readExternalVariable() const -> ScalarT
       {
-        static_assert(variable < ExternalVariables::MAXIMUM);
-        if (!external_variable_signals_[static_cast<size_t>(variable)])
-        {
-          throw std::logic_error("A signal node has not been assigned to this external variable");
-        }
+        return readExternalVariable<variable>(0);
+      }
 
-        return (*external_variable_signals_[static_cast<size_t>(variable)])->read();
+      /// Returns the value of one element of the specified external variable
+      /// port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[in] n Port element index
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable element
+      template <ExternalVariables variable>
+      auto readExternalVariable(std::size_t n) const -> ScalarT
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        return getExternalSignalNode<variable>(n)->read();
+      }
+
+      /// Returns the values of all elements of the specified external
+      /// variable port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[out] values Values read from the port elements
+      template <ExternalVariables variable>
+      auto readExternalVariables(ScalarT* values) const
+      {
+        for (std::size_t n = 0; n < port_size_; ++n)
+        {
+          values[n] = readExternalVariable<variable>(n);
+        }
       }
 
       /// Returns true if the specified external variable is differential
@@ -150,13 +276,21 @@ namespace GridKit
       template <ExternalVariables variable>
       auto isExternalVariableDifferential() const -> bool
       {
-        static_assert(variable < ExternalVariables::MAXIMUM);
-        if (!external_variable_signals_[static_cast<size_t>(variable)])
-        {
-          throw std::logic_error("A signal node has not been assigned to this external variable");
-        }
+        return isExternalVariableDifferential<variable>(0);
+      }
 
-        return (*external_variable_signals_[static_cast<size_t>(variable)])->isDifferential();
+      /// Returns true if one element of the specified external variable port
+      /// is differential
+      ///
+      /// @tparam variable The external variable to check
+      /// @param[in] n Port element index
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable element
+      template <ExternalVariables variable>
+      auto isExternalVariableDifferential(std::size_t n) const -> bool
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        return getExternalSignalNode<variable>(n)->isDifferential();
       }
 
       /// Returns the derivative of the specified external variable
@@ -167,13 +301,35 @@ namespace GridKit
       template <ExternalVariables variable>
       auto readExternalVariableDerivative() const -> ScalarT
       {
-        static_assert(variable < ExternalVariables::MAXIMUM);
-        if (!external_variable_signals_[static_cast<size_t>(variable)])
-        {
-          throw std::logic_error("A signal node has not been assigned to this external variable");
-        }
+        return readExternalVariableDerivative<variable>(0);
+      }
 
-        return (*external_variable_signals_[static_cast<size_t>(variable)])->readDerivative();
+      /// Returns the derivative of one element of the specified external
+      /// variable port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[in] n Port element index
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable element and it is differential
+      template <ExternalVariables variable>
+      auto readExternalVariableDerivative(std::size_t n) const -> ScalarT
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        return getExternalSignalNode<variable>(n)->readDerivative();
+      }
+
+      /// Returns the derivatives of all elements of the specified external
+      /// variable port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[out] derivatives Derivatives read from the port elements
+      template <ExternalVariables variable>
+      auto readExternalVariableDerivatives(ScalarT* derivatives) const
+      {
+        for (std::size_t n = 0; n < port_size_; ++n)
+        {
+          derivatives[n] = readExternalVariableDerivative<variable>(n);
+        }
       }
 
       /// Returns the global index of the specified external variable
@@ -184,13 +340,35 @@ namespace GridKit
       template <ExternalVariables variable>
       auto readExternalVariableIndex() const -> IdxT
       {
-        static_assert(variable < ExternalVariables::MAXIMUM);
-        if (!external_variable_signals_[static_cast<size_t>(variable)])
-        {
-          throw std::logic_error("A signal node has not been assigned to this external variable");
-        }
+        return readExternalVariableIndex<variable>(0);
+      }
 
-        return (*external_variable_signals_[static_cast<size_t>(variable)])->getVariableIndex();
+      /// Returns the global index of one element of the specified external
+      /// variable port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[in] n Port element index
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable element
+      template <ExternalVariables variable>
+      auto readExternalVariableIndex(std::size_t n) const -> IdxT
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        return getExternalSignalNode<variable>(n)->getVariableIndex();
+      }
+
+      /// Returns the global indices of all elements of the specified external
+      /// variable port
+      ///
+      /// @tparam variable The external variable to read from
+      /// @param[out] indices Global indices read from the port elements
+      template <ExternalVariables variable>
+      auto readExternalVariableIndices(IdxT* indices) const
+      {
+        for (std::size_t n = 0; n < port_size_; ++n)
+        {
+          indices[n] = readExternalVariableIndex<variable>(n);
+        }
       }
 
       /// Writes a value to the specified external variable
@@ -207,13 +385,26 @@ namespace GridKit
       template <ExternalVariables variable>
       auto writeExternalVariable(ScalarT value)
       {
-        static_assert(variable < ExternalVariables::MAXIMUM);
-        if (!external_variable_signals_[static_cast<size_t>(variable)])
-        {
-          throw std::logic_error("A signal node has not been assigned to this external variable");
-        }
+        writeExternalVariable<variable>(0, value);
+      }
 
-        (*external_variable_signals_[static_cast<size_t>(variable)])->init(value);
+      /// Writes a value to one element of the specified external variable port
+      ///
+      /// @warning This method should be used only in component initialization
+      /// methods. Use only if you know what you are doing.
+      ///
+      /// @tparam variable The external variable to write to
+      /// @param[in] n Port element index
+      /// @param[in] value The value to write to the signal node
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable element
+      /// @post The signal node of the corresponding external variable element
+      ///       has the given value written to it
+      template <ExternalVariables variable>
+      auto writeExternalVariable(std::size_t n, ScalarT value)
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        getExternalSignalNode<variable>(n)->init(value);
       }
 
       /// Assigns a signal node to an internal variable on this component
@@ -224,7 +415,22 @@ namespace GridKit
       /// @post The provided signal node is assigned to the indicated
       ///       internal variable
       template <InternalVariables variable>
-      auto assignSignalNode(SignalNode<ScalarT, IdxT>* node)
+      auto assignSignalNode(SignalT* node)
+      {
+        assignSignalNode<variable>(0, node);
+      }
+
+      /// Assigns a signal node to one element of an internal variable port on
+      /// this component
+      ///
+      /// @tparam variable The internal variable to assign the signal node to
+      /// @param[in] n Port element index
+      /// @param[in] node The signal node to assign
+      /// @pre The provided pointer to a signal node is not `nullptr`
+      /// @post The provided signal node is assigned to the indicated internal
+      ///       variable element
+      template <InternalVariables variable>
+      auto assignSignalNode(std::size_t n, SignalT* node)
       {
 #ifndef NDEBUG
         if (node == nullptr)
@@ -234,21 +440,80 @@ namespace GridKit
 #endif
 
         static_assert(variable < InternalVariables::MAXIMUM);
-        internal_variable_signals_[static_cast<size_t>(variable)] = node;
+        checkIndex(n);
+        internal_variable_signals_[static_cast<std::size_t>(variable)][n] = node;
+      }
+
+      /// Assigns signal nodes to all elements of an internal variable port on
+      /// this component
+      ///
+      /// @tparam variable The internal variable to assign the signal nodes to
+      /// @param[in] nodes Signal nodes to assign
+      /// @pre `nodes.size()` equals `portSize()`
+      /// @post Each signal node is assigned to the corresponding port element
+      template <InternalVariables variable>
+      auto assignSignalNodes(const std::vector<SignalT*>& nodes)
+      {
+        checkPortSize(nodes.size());
+        for (std::size_t n = 0; n < port_size_; ++n)
+        {
+          assignSignalNode<variable>(n, nodes[n]);
+        }
       }
 
     private:
+      template <typename Variables>
+      using SignalSlots =
+          std::array<std::vector<std::optional<SignalT*>>,
+                     static_cast<std::size_t>(Variables::MAXIMUM)>;
+
+      template <typename Slots>
+      void resizeSlots(Slots& slots)
+      {
+        for (auto& slot : slots)
+        {
+          slot.resize(port_size_);
+        }
+      }
+
+      void checkIndex(std::size_t n) const
+      {
+        if (n >= port_size_)
+        {
+          throw std::logic_error("Signal port index out of range");
+        }
+      }
+
+      void checkPortSize(std::size_t size) const
+      {
+        if (size != port_size_)
+        {
+          throw std::logic_error("Signal port width mismatch");
+        }
+      }
+
+      template <ExternalVariables variable>
+      auto getExternalSignalNode(std::size_t n) const -> SignalT*
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        checkIndex(n);
+        if (!external_variable_signals_[static_cast<std::size_t>(variable)][n])
+        {
+          throw std::logic_error("A signal node has not been assigned to this external variable");
+        }
+
+        return *external_variable_signals_[static_cast<std::size_t>(variable)][n];
+      }
+
+      std::size_t port_size_{1};
+
       /// Internal variables which may have a signal associated with them for
       /// use elsewhere
-      std::array<std::optional<SignalNode<ScalarT, IdxT>*>,
-                 static_cast<size_t>(InternalVariables::MAXIMUM)>
-          internal_variable_signals_{};
+      SignalSlots<InternalVariables> internal_variable_signals_{};
 
       /// External variables which may have a signal associated with them for
       /// use internally
-      std::array<std::optional<SignalNode<ScalarT, IdxT>*>,
-                 static_cast<size_t>(ExternalVariables::MAXIMUM)>
-          external_variable_signals_{};
+      SignalSlots<ExternalVariables> external_variable_signals_{};
     };
   } // namespace PhasorDynamics
 } // namespace GridKit
