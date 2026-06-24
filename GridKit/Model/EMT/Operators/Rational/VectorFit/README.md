@@ -34,29 +34,24 @@ Symbol | Units | JSON | Description | Note
 ------ | ----- | ---- | ----------- | ----
 $\mathbf{D}$ | [-] | `D` | Constant coefficient | $\mathbf{D}\in\mathbb{R}^{N\times K}$
 $\mathbf{E}$ | [s] | `E` | Linear coefficient | $\mathbf{E}\in\mathbb{R}^{N\times K}$
-$\mathbf{p}$ | [1/s] | `poles` | Poles | $\mathbf{p}\in\mathbb{C}^Q$
-$\mathbf{R}$ | [1/s] | `residues` | Residues | $\mathbf{R}\in\mathbb{C}^{N\times K\times Q}$
+$\mathbf{p}$ | [1/s] | `poles` | Poles | $p_q=a_q+j\omega_q$, stored as `[a_q, omega_q]`
+$\mathbf{A}$ | [1/s] | `A` | Real residue coefficients | $\mathbf{A}\in\mathbb{R}^{N\times K\times Q}$
+$\mathbf{B}$ | [1/s] | `B` | Imaginary residue coefficients | $\mathbf{B}\in\mathbb{R}^{N\times K\times Q}$
 
 ### Parameter Validation
 
-Complex-valued poles and residues must be ordered as adjacent conjugate pairs.
-For each pair, with $q$ the first index:
+Each pole entry must satisfy:
 
 ```math
-\begin{aligned}
-p_q &= (p_{q+1})^* &
-\mathbf{R}_q &= (\mathbf{R}_{q+1})^*
-\end{aligned}
+a_q^2 + \omega_q^2 \ne 0
 ```
 
 ### Model Derived Parameters
 
 ```math
 \begin{aligned}
-\mathbf{a} &= \text{Re}(\mathbf{p}) \\
-\boldsymbol{\omega} &= \text{Im}(\mathbf{p}) \\
-\mathbf{A} &= \text{Re}(\mathbf{R}) \\
-\mathbf{B} &= \text{Im}(\mathbf{R})
+a_q &= \text{Re}(p_q) \\
+\omega_q &= \text{Im}(p_q)
 \end{aligned}
 ```
 
@@ -73,7 +68,9 @@ $\mathbf{v}_q$ | [-] | Imaginary memory states | $\mathbf{v}_q\in\mathbb{R}^K$
 
 #### Algebraic
 
-None.
+Symbol | Units | Description | Note
+------ | ----- | ----------- | ----
+$\mathbf{y}_\text{out}$ | [-] | Output variables | $\mathbf{y}_\text{out}\in\mathbb{R}^N$
 
 ### External Variables
 
@@ -92,7 +89,7 @@ None.
 Symbol | Port | Type | Units | Description | Note
 ------ | ---- | ---- | ----- | ----------- | ----
 $\mathbf{u}$ | `input` | Input | [-] | Input vector port | $\mathbf{u} \in \mathbb{R}^K$
-$\mathbf{y}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y} \in \mathbb{R}^N$
+$\mathbf{y}_\text{out}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y}_\text{out} \in \mathbb{R}^N$
 
 ## Model Equations
 
@@ -112,17 +109,20 @@ $\mathbf{y}$ | `out` | Output | [-] | Output contribution port | $\mathbf{y} \in
 
 ### Algebraic Equations
 
-None.
-
-### Wiring
-
 ```math
-\mathbf{y} = \mathbf{D}\mathbf{u} + \mathbf{E}\dot{\mathbf{u}}
-  + \sum_{q=1}^{Q}
-    \left(
-      \mathbf{A}_q\mathbf{w}_q
-      - \mathbf{B}_q\mathbf{v}_q
-    \right)
+0 =
+\mathbf{y}_\text{out}
+-
+\mathbf{D}\mathbf{u}
+-
+\mathbf{E}\dot{\mathbf{u}}
+-
+\sum_{q=1}^{Q}
+\left(
+  \mathbf{A}_q\mathbf{w}_q
+  -
+  \mathbf{B}_q\mathbf{v}_q
+\right)
 ```
 
 ## Initialization
@@ -133,7 +133,7 @@ For an affine initial input trajectory, let subscript $0$ denote initial values:
 \begin{aligned}
 \mathbf{w}_{q,0} &= -\frac{a_q}{a_q^2 + \omega_q^2}\mathbf{u}_0 - \frac{a_q^2 - \omega_q^2}{(a_q^2 + \omega_q^2)^2}\dot{\mathbf{u}}_0 \\
 \mathbf{v}_{q,0} &= \frac{\omega_q}{a_q^2 + \omega_q^2}\mathbf{u}_0 + \frac{2a_q\omega_q}{(a_q^2 + \omega_q^2)^2}\dot{\mathbf{u}}_0 \\
-\mathbf{y}_0 &= \mathbf{D}\mathbf{u}_0 + \mathbf{E}\dot{\mathbf{u}}_0 + \sum_{q=1}^{Q}\left(\mathbf{A}_q\mathbf{w}_{q,0} - \mathbf{B}_q\mathbf{v}_{q,0}\right)
+\mathbf{y}_{\text{out},0} &= \mathbf{D}\mathbf{u}_0 + \mathbf{E}\dot{\mathbf{u}}_0 + \sum_{q=1}^{Q}\left(\mathbf{A}_q\mathbf{w}_{q,0} - \mathbf{B}_q\mathbf{v}_{q,0}\right)
 \end{aligned}
 ```
 

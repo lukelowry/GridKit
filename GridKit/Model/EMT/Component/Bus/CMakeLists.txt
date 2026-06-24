@@ -21,3 +21,7 @@ gridkit_add_library(
   SOURCES BusDependencyTracking.cpp
   INCLUDE_DIRECTORIES PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include
   LINK_LIBRARIES PUBLIC GridKit::phasor_dynamics_bus_dependency_tracking)
+
+target_link_libraries(
+  emt_components
+  INTERFACE GridKit::emt_bus)
