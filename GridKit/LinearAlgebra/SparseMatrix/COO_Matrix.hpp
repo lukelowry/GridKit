@@ -456,7 +456,7 @@ namespace GridKit
      *
      * Need to deduplicate bus entries right away to get around the new mappings introduced by bus faults.
      *
-     * Only use for buses, which are 2x2, so the cost of loops is not uncontrolled. Don't allow resizing.
+     * Only use for bus-owned blocks with an existing sparsity pattern. This does not resize the matrix.
      *
      * @tparam RealT - Real type for Jacobian entries
      * @tparam IdxT - Integer data type for matrix indices
@@ -470,25 +470,20 @@ namespace GridKit
     template <typename RealT, typename IdxT>
     inline void COO_Matrix<RealT, IdxT>::axpy(RealT alpha, IdxT* r, IdxT* c, RealT* v, IdxT nnz)
     {
-      if (this->row_indices_.size() == 0) // Do nothing for infinite bus
+      if (this->row_indices_.empty()) // Do nothing for infinite bus
       {
+        return;
       }
-      else if (this->row_indices_.size() == 4)
+
+      for (size_t i = 0; i < this->row_indices_.size(); i++)
       {
-        for (size_t i = 0; i < this->row_indices_.size(); i++)
+        for (size_t j = 0; j < static_cast<size_t>(nnz); j++)
         {
-          for (size_t j = 0; j < static_cast<size_t>(nnz); j++)
+          if (this->row_indices_[i] == r[j] && this->column_indices_[i] == c[j])
           {
-            if (this->row_indices_[i] == r[j] && this->column_indices_[i] == c[j])
-            {
-              this->values_[i] += alpha * v[j];
-            }
+            this->values_[i] += alpha * v[j];
           }
         }
-      }
-      else
-      {
-        std::cout << "Warning: Unexpected size in axpy\n";
       }
 
       this->sorted_ = false;
