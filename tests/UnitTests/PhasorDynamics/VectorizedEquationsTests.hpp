@@ -7,13 +7,13 @@
 
 #include <GridKit/AutomaticDifferentiation/DependencyTracking/Variable.hpp>
 #include <GridKit/Definitions.hpp>
+#include <GridKit/LinearAlgebra/SparseMatrix/COO_Matrix.hpp>
 #include <GridKit/Model/PhasorDynamics/VectorizedEquations.hpp>
 #include <GridKit/ScalarTraits.hpp>
 #include <GridKit/Testing/Testing.hpp>
 
 #ifdef GRIDKIT_ENABLE_ENZYME
 #include <GridKit/AutomaticDifferentiation/Enzyme/SparseJacobians.hpp>
-#include <GridKit/LinearAlgebra/SparseMatrix/COO_Matrix.hpp>
 #include <GridKit/Utilities/MapFromCOO.hpp>
 #endif
 
@@ -91,6 +91,97 @@ namespace GridKit
 
         return 0;
       }
+    };
+
+    template <class ScalarT, typename IdxT>
+    class BusDerivativeModel
+    {
+    public:
+      using RealT                    = typename GridKit::ScalarTraits<ScalarT>::RealT;
+      static constexpr std::size_t N = 3;
+
+      BusDerivativeModel()
+      {
+        A_(0, 0) = 2.0;
+        A_(0, 1) = 3.0;
+        A_(0, 2) = 5.0;
+        A_(1, 0) = 7.0;
+        A_(1, 1) = 11.0;
+        A_(1, 2) = 13.0;
+        A_(2, 0) = 17.0;
+        A_(2, 1) = 19.0;
+        A_(2, 2) = 23.0;
+
+        B_(0, 0) = 1.0;
+        B_(0, 1) = 4.0;
+        B_(0, 2) = 6.0;
+        B_(1, 0) = 8.0;
+        B_(1, 1) = 9.0;
+        B_(1, 2) = 10.0;
+        B_(2, 0) = 12.0;
+        B_(2, 1) = 14.0;
+        B_(2, 2) = 15.0;
+      }
+
+      __attribute__((always_inline)) int evaluateInternalResidual(
+          [[maybe_unused]] ScalarT* y,
+          [[maybe_unused]] ScalarT* yp,
+          ScalarT*                  wb,
+          ScalarT*                  wbp,
+          ScalarT*                  f)
+      {
+        namespace Eq = GridKit::PhasorDynamics::Equation;
+
+        auto v     = Eq::block<N>(wb, 0);
+        auto v_dot = Eq::block<N>(wbp, 0);
+        auto r     = Eq::block<N>(f, 0);
+
+        r = A_ * v + B_ * v_dot;
+
+        return 0;
+      }
+
+      __attribute__((always_inline)) int evaluateBusResidual(
+          [[maybe_unused]] ScalarT* y,
+          [[maybe_unused]] ScalarT* yp,
+          ScalarT*                  wb,
+          ScalarT*                  wbp,
+          ScalarT*                  h)
+      {
+        namespace Eq = GridKit::PhasorDynamics::Equation;
+
+        auto v     = Eq::block<N>(wb, 0);
+        auto v_dot = Eq::block<N>(wbp, 0);
+        auto i     = Eq::block<N>(h, 0);
+
+        i = A_ * v + B_ * v_dot;
+
+        return 0;
+      }
+
+      __attribute__((always_inline)) int evaluateBusResidual12(
+          ScalarT* y,
+          ScalarT* yp,
+          ScalarT* wb,
+          ScalarT* wbp,
+          ScalarT* h)
+      {
+        return evaluateBusResidual(y, yp, wb, wbp, h);
+      }
+
+      const GridKit::PhasorDynamics::Equation::Mat<RealT, N, N>& valueMatrix() const
+      {
+        return A_;
+      }
+
+      const GridKit::PhasorDynamics::Equation::Mat<RealT, N, N>& derivativeMatrix() const
+      {
+        return B_;
+      }
+
+    private:
+      GridKit::PhasorDynamics::Equation::Mat<RealT, N, N> A_{};
+      GridKit::PhasorDynamics::Equation::Mat<RealT, N, N> B_{};
     };
 
     template <class ScalarT, typename IdxT>
@@ -275,6 +366,163 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome busDerivativeInternalJacobian()
+      {
+        TestStatus success = true;
+
+        BusDerivativeModel<ScalarT, IdxT> model;
+        std::vector<ScalarT>              y(1, 0.0);
+        std::vector<ScalarT>              yp(1, 0.0);
+        std::vector<ScalarT>              wb{1.0, 2.0, 3.0};
+        std::vector<ScalarT>              wbp{4.0, 5.0, 6.0};
+
+        std::vector<IdxT> residual_indices{0, 1, 2};
+        std::vector<IdxT> wb_indices{10, 11, 12};
+
+        const RealT       alpha   = 4.0;
+        const std::size_t max_nnz = residual_indices.size() * wb_indices.size();
+
+        std::vector<IdxT>  rows(max_nnz);
+        std::vector<IdxT>  cols(max_nnz);
+        std::vector<RealT> vals(max_nnz);
+
+        GridKit::LinearAlgebra::COO_Matrix<RealT, IdxT> J;
+
+        GridKit::Enzyme::Sparse::DfDwb<BusDerivativeModel<ScalarT, IdxT>,
+                                       GridKit::Enzyme::Sparse::MemberFunctions::InternalResidualWithBusDerivative,
+                                       ScalarT,
+                                       IdxT>::eval(&model,
+                                                   residual_indices.size(),
+                                                   wb_indices.size(),
+                                                   residual_indices.data(),
+                                                   wb_indices.data(),
+                                                   y.data(),
+                                                   yp.data(),
+                                                   wb.data(),
+                                                   wbp.data(),
+                                                   alpha,
+                                                   rows.data(),
+                                                   cols.data(),
+                                                   vals.data(),
+                                                   J);
+
+        J.deduplicate();
+        auto actual = GridKit::Testing::MapFromCOO(J);
+
+        for (std::size_t row = 0; row < N; ++row)
+        {
+          success *= isEqual(actual[residual_indices[row]],
+                             expectedBusDerivativeRow(model, alpha, row, wb_indices[0]));
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome busDerivativeBusJacobian()
+      {
+        TestStatus success = true;
+
+        BusDerivativeModel<ScalarT, IdxT> model;
+        std::vector<ScalarT>              y(1, 0.0);
+        std::vector<ScalarT>              yp(1, 0.0);
+        std::vector<ScalarT>              wb{1.0, 2.0, 3.0};
+        std::vector<ScalarT>              wbp{4.0, 5.0, 6.0};
+
+        std::vector<IdxT> residual_indices{20, 21, 22};
+        std::vector<IdxT> wb_indices{10, 11, 12};
+
+        const RealT       alpha   = 4.0;
+        const std::size_t max_nnz = residual_indices.size() * wb_indices.size();
+
+        std::vector<IdxT>  rows(max_nnz);
+        std::vector<IdxT>  cols(max_nnz);
+        std::vector<RealT> vals(max_nnz);
+
+        GridKit::LinearAlgebra::COO_Matrix<RealT, IdxT> J;
+        setDensePattern(J, residual_indices, wb_indices);
+
+        GridKit::Enzyme::Sparse::DhDwb<BusDerivativeModel<ScalarT, IdxT>,
+                                       GridKit::Enzyme::Sparse::MemberFunctions::BusResidualWithBusDerivative,
+                                       ScalarT,
+                                       IdxT>::eval(&model,
+                                                   residual_indices.size(),
+                                                   wb_indices.size(),
+                                                   residual_indices.data(),
+                                                   wb_indices.data(),
+                                                   y.data(),
+                                                   yp.data(),
+                                                   wb.data(),
+                                                   wbp.data(),
+                                                   alpha,
+                                                   rows.data(),
+                                                   cols.data(),
+                                                   vals.data(),
+                                                   J);
+
+        auto actual = GridKit::Testing::MapFromCOO(J);
+
+        for (std::size_t row = 0; row < N; ++row)
+        {
+          success *= isEqual(actual[residual_indices[row]],
+                             expectedBusDerivativeRow(model, alpha, row, wb_indices[0]));
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome busDerivativeOffDiagonalJacobian()
+      {
+        TestStatus success = true;
+
+        BusDerivativeModel<ScalarT, IdxT> model;
+        std::vector<ScalarT>              y(1, 0.0);
+        std::vector<ScalarT>              yp(1, 0.0);
+        std::vector<ScalarT>              wb{1.0, 2.0, 3.0};
+        std::vector<ScalarT>              wbp{4.0, 5.0, 6.0};
+
+        std::vector<IdxT> residual_indices{30, 31, 32};
+        std::vector<IdxT> wb_indices{40, 41, 42};
+
+        const RealT       alpha   = 4.0;
+        const std::size_t max_nnz = residual_indices.size() * wb_indices.size();
+
+        std::vector<IdxT>  rows(max_nnz);
+        std::vector<IdxT>  cols(max_nnz);
+        std::vector<RealT> vals(max_nnz);
+
+        GridKit::LinearAlgebra::COO_Matrix<RealT, IdxT> J;
+
+        GridKit::Enzyme::Sparse::DhDwb<BusDerivativeModel<ScalarT, IdxT>,
+                                       GridKit::Enzyme::Sparse::MemberFunctions::BusResidual12WithBusDerivative,
+                                       ScalarT,
+                                       IdxT>::eval(&model,
+                                                   residual_indices.size(),
+                                                   wb_indices.size(),
+                                                   residual_indices.data(),
+                                                   wb_indices.data(),
+                                                   y.data(),
+                                                   yp.data(),
+                                                   wb.data(),
+                                                   wbp.data(),
+                                                   alpha,
+                                                   rows.data(),
+                                                   cols.data(),
+                                                   vals.data(),
+                                                   J,
+                                                   true);
+
+        J.deduplicate();
+        auto actual = GridKit::Testing::MapFromCOO(J);
+
+        for (std::size_t row = 0; row < N; ++row)
+        {
+          success *= isEqual(actual[residual_indices[row]],
+                             expectedBusDerivativeRow(model, alpha, row, wb_indices[0]));
+        }
+
+        return success.report(__func__);
+      }
+
       TestOutcome signalSumEnzymeJacobian()
       {
         TestStatus success = true;
@@ -347,6 +595,48 @@ namespace GridKit
 #endif
 
     private:
+      GridKit::DependencyTracking::Variable::DependencyMap expectedBusDerivativeRow(
+          const BusDerivativeModel<ScalarT, IdxT>& model,
+          RealT                                    alpha,
+          std::size_t                              row,
+          IdxT                                     col_offset)
+      {
+        GridKit::DependencyTracking::Variable::DependencyMap expected;
+
+        for (std::size_t col = 0; col < N; ++col)
+        {
+          expected[static_cast<IdxT>(col_offset + col)] =
+              model.valueMatrix()(row, col) + alpha * model.derivativeMatrix()(row, col);
+        }
+
+        return expected;
+      }
+
+      void setDensePattern(GridKit::LinearAlgebra::COO_Matrix<RealT, IdxT>& J,
+                           const std::vector<IdxT>&                         row_indices,
+                           const std::vector<IdxT>&                         col_indices)
+      {
+        std::vector<IdxT>  rows;
+        std::vector<IdxT>  cols;
+        std::vector<RealT> vals;
+
+        rows.reserve(row_indices.size() * col_indices.size());
+        cols.reserve(rows.capacity());
+        vals.reserve(rows.capacity());
+
+        for (const auto row : row_indices)
+        {
+          for (const auto col : col_indices)
+          {
+            rows.push_back(row);
+            cols.push_back(col);
+            vals.push_back(0.0);
+          }
+        }
+
+        J.setValues(rows, cols, vals);
+      }
+
       std::vector<GridKit::DependencyTracking::Variable::DependencyMap> expectedJacobian(
           const GridKit::PhasorDynamics::Equation::Mat<RealT, N, N>& Y)
       {

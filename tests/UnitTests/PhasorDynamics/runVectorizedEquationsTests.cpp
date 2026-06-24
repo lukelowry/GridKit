@@ -12,6 +12,9 @@ int main()
 
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.enzymeJacobian();
+  result += test.busDerivativeInternalJacobian();
+  result += test.busDerivativeBusJacobian();
+  result += test.busDerivativeOffDiagonalJacobian();
   result += test.signalSumEnzymeJacobian();
 #endif
 

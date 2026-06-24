@@ -23,11 +23,17 @@ namespace GridKit
         InternalResidual,
         InternalResidualWithSignal,
         InternalResidualWithSignalDerivative,
+        InternalResidualWithBusDerivative,
         BusResidual,
-        BusResidual11, //< Special case for branches that are connected to two buses
-        BusResidual12, //< Special case for branches that are connected to two buses
-        BusResidual21, //< Special case for branches that are connected to two buses
-        BusResidual22  //< Special case for branches that are connected to two buses
+        BusResidualWithBusDerivative,
+        BusResidual11,                  //< Special case for branches that are connected to two buses
+        BusResidual12,                  //< Special case for branches that are connected to two buses
+        BusResidual21,                  //< Special case for branches that are connected to two buses
+        BusResidual22,                  //< Special case for branches that are connected to two buses
+        BusResidual11WithBusDerivative, //< Special case for branches that are connected to two buses
+        BusResidual12WithBusDerivative, //< Special case for branches that are connected to two buses
+        BusResidual21WithBusDerivative, //< Special case for branches that are connected to two buses
+        BusResidual22WithBusDerivative  //< Special case for branches that are connected to two buses
       };
 
       /**
@@ -107,6 +113,27 @@ namespace GridKit
       };
 
       /**
+       * @brief Residual wrapper partial template specialization for InternalResidualWithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::InternalResidualWithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] f - Internal residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* f)
+        {
+          model->evaluateInternalResidual(y, yp, wb, wbp, f);
+        }
+      };
+
+      /**
        * @brief Residual wrapper partial template specialization for BusResidual
        *
        */
@@ -123,6 +150,27 @@ namespace GridKit
         static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* h)
         {
           model->evaluateBusResidual(y, yp, wb, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidualWithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidualWithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* h)
+        {
+          model->evaluateBusResidual(y, yp, wb, wbp, h);
         }
       };
 
@@ -204,6 +252,90 @@ namespace GridKit
         static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* h)
         {
           model->evaluateBusResidual22(y, yp, wb, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidual11WithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidual11WithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* h)
+        {
+          model->evaluateBusResidual11(y, yp, wb, wbp, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidual12WithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidual12WithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* h)
+        {
+          model->evaluateBusResidual12(y, yp, wb, wbp, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidual21WithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidual21WithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* h)
+        {
+          model->evaluateBusResidual21(y, yp, wb, wbp, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidual22WithBusDerivative
+       *
+       */
+      template <typename ModelT, typename ScalarT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidual22WithBusDerivative, ScalarT>
+      {
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus variable derivatives
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT* model, ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* wbp, ScalarT* h)
+        {
+          model->evaluateBusResidual22(y, yp, wb, wbp, h);
         }
       };
     } // namespace Sparse
