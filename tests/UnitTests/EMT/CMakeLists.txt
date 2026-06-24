@@ -1,6 +1,7 @@
 add_executable(test_emt_bus runBusTests.cpp)
 target_link_libraries(
   test_emt_bus
+  GridKit::emt_component
   GridKit::emt_bus
   GridKit::emt_bus_dependency_tracking
   GridKit::phasor_dynamics_systemmodel

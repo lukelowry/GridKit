@@ -11,6 +11,7 @@ int main()
   result += test.defaultConstruction();
   result += test.vectorConstruction();
   result += test.residual();
+  result += test.currentInjection();
   result += test.unsupportedPhasorAliases();
   result += test.systemModel();
   result += test.cooPointerAxpyThreePhase();

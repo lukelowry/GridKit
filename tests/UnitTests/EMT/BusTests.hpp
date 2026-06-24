@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <GridKit/LinearAlgebra/SparseMatrix/COO_Matrix.hpp>
+#include <GridKit/Model/EMT/Component.hpp>
 #include <GridKit/Model/EMT/Component/Bus/Bus.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
 #include <GridKit/Testing/Testing.hpp>
@@ -14,6 +15,60 @@ namespace GridKit
 {
   namespace Testing
   {
+    template <class ScalarT, typename IdxT>
+    class CurrentInjectionComponent final : public EMT::Component<ScalarT, IdxT>
+    {
+    public:
+      using BaseT = EMT::Component<ScalarT, IdxT>;
+      using RealT = typename BaseT::RealT;
+
+      void apply(EMT::Bus<ScalarT, IdxT>& bus, const ScalarT* i_inj)
+      {
+        this->addCurrentInjection(bus, i_inj);
+      }
+
+      int verify() const override
+      {
+        return 0;
+      }
+
+      int allocate() override
+      {
+        return 0;
+      }
+
+      int initialize() override
+      {
+        return 0;
+      }
+
+      int tagDifferentiable() override
+      {
+        return 0;
+      }
+
+      int setAbsoluteTolerance(RealT) override
+      {
+        return 0;
+      }
+
+      int evaluateResidual() override
+      {
+        return 0;
+      }
+
+      int evaluateJacobian() override
+      {
+        return 0;
+      }
+
+      int setGridKitComponentID(IdxT gridkit_component_id) override
+      {
+        this->gridkit_component_id_ = gridkit_component_id;
+        return 0;
+      }
+    };
+
     template <class ScalarT, typename IdxT>
     class BusTests
     {
@@ -89,6 +144,28 @@ namespace GridKit
         for (IdxT n = 0; n < bus.phaseCount(); ++n)
         {
           success *= isEqual(bus.I(n), ScalarT{0.0});
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome currentInjection()
+      {
+        TestStatus success = true;
+
+        EMT::Bus<ScalarT, IdxT> bus(std::vector<RealT>{1.0, 2.0, 3.0});
+        success *= bus.allocate() == 0;
+        success *= bus.initialize() == 0;
+
+        CurrentInjectionComponent<ScalarT, IdxT> component;
+        std::array<ScalarT, 3>                   i_inj{1.0, -2.0, 3.0};
+
+        component.apply(bus, i_inj.data());
+        component.apply(bus, i_inj.data());
+
+        for (IdxT n = 0; n < bus.phaseCount(); ++n)
+        {
+          success *= isEqual(bus.I(n), static_cast<ScalarT>(2.0) * i_inj[static_cast<std::size_t>(n)]);
         }
 
         return success.report(__func__);
