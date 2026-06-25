@@ -23,4 +23,18 @@ endif()
 
 add_test(NAME EMTVectorFitTest COMMAND test_emt_vectorfit)
 
-install(TARGETS test_emt_bus test_emt_vectorfit RUNTIME DESTINATION bin)
+add_executable(test_emt_linelumped runLineLumpedTests.cpp)
+target_link_libraries(
+  test_emt_linelumped
+  GridKit::emt_line_lumped
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::testing)
+
+if(GRIDKIT_ENABLE_ENZYME)
+  target_link_libraries(test_emt_linelumped ClangEnzymeFlags)
+  target_compile_options(test_emt_linelumped PRIVATE -mllvm -enzyme-auto-sparsity=1 -fno-math-errno)
+endif()
+
+add_test(NAME EMTLineLumpedTest COMMAND test_emt_linelumped)
+
+install(TARGETS test_emt_bus test_emt_vectorfit test_emt_linelumped RUNTIME DESTINATION bin)

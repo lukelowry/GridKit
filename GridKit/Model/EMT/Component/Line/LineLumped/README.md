@@ -22,10 +22,22 @@ Symbol           | Units        | JSON | Description                        | No
 $\mathbf{Z}'$    | [$\Omega$/m] | `Zp` | Series impedance per unit length   | $\mathbf{Z}'\in\mathbb{C}^{N \times N}$
 $\mathbf{Y}'$    | [S/m]        | `Yp` | Shunt admittance per unit length   | $\mathbf{Y}'\in\mathbb{C}^{N \times N}$
 $\Delta x$       | [m]          | `dx` | Line segment length                | $\mathbb{R}$
+$\mathbf{i}_0$   | [A]          | `i0` | Initial series-current vector      | Optional, defaults to zero
 
 ### Parameter Validation
 
-None.
+```math
+\begin{aligned}
+\Delta x &> 0 \\
+\mathbf{i}_0 &\in \mathbb{R}^N
+\end{aligned}
+```
+
+The line parameters are supplied in one of two forms:
+- fitted operators `Zp` and `Yp`, supplied together
+- constant matrices `Rp`, `Lp`, `Gp`, and `Cp`, supplied together
+
+The two forms cannot be mixed.
 
 ### Model Derived Parameters
 
@@ -116,7 +128,15 @@ None.
 
 ## Initialization
 
-Since this component is a member of the network, the power flow solution must initialize this model.
+The series current is initialized from `i0`:
+
+```math
+\mathbf{i}(0)=\mathbf{i}_0
+```
+
+The fitted operator states are initialized from the terminal voltages and
+series current. A power-flow solution should provide a consistent `i0` for
+network initialization.
 
 ## Monitors
 
