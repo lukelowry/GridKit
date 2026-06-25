@@ -13,6 +13,7 @@
 #include <GridKit/Model/PhasorDynamics/Stabilizer/IEEEST/Ieeest.hpp>
 #include <GridKit/Model/PhasorDynamics/Stabilizer/IEEEST/IeeestData.hpp>
 #include <GridKit/Model/VariableMonitorImpl.hpp>
+#include <GridKit/Testing/Testing.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
 
 namespace GridKit
@@ -22,6 +23,7 @@ namespace GridKit
     namespace Stabilizer
     {
       using Log = ::GridKit::Utilities::Logger;
+      using Testing::isEqual;
 
       template <typename scalar_type, typename index_type>
       Ieeest<scalar_type, index_type>::Ieeest()
@@ -191,7 +193,7 @@ namespace GridKit
           ret += 1;
         }
 
-        if (a2_ == ZERO<RealT> && a3_ == ZERO<RealT> && a4_ == ZERO<RealT> && a1_ != ZERO<RealT>)
+        if (isEqual(a2_, ZERO<RealT>) && isEqual(a3_, ZERO<RealT>) && isEqual(a4_, ZERO<RealT>) && !isEqual(a1_, ZERO<RealT>))
         {
           Log::error() << "Ieeest: a2, a3, and a4 are all zero - no valid notch filter\n";
           ret += 1;
@@ -228,7 +230,7 @@ namespace GridKit
         const ScalarT x6 = v5;
         const ScalarT v6 = v5;
         const ScalarT x7 = v6;
-        const ScalarT v7 = (T6_ == ZERO<RealT>) ? Ks_ * v6 : zero;
+        const ScalarT v7 = isEqual(T6_, ZERO<RealT>) ? Ks_ * v6 : zero;
 
         y_[0]  = x1;
         y_[1]  = x2;
@@ -249,13 +251,13 @@ namespace GridKit
       template <typename scalar_type, typename index_type>
       int Ieeest<scalar_type, index_type>::tagDifferentiable()
       {
-        tag_[0]  = (a2_ != ZERO<RealT> || a3_ != ZERO<RealT> || a4_ != ZERO<RealT>);
+        tag_[0]  = (!isEqual(a2_, ZERO<RealT>) || !isEqual(a3_, ZERO<RealT>) || !isEqual(a4_, ZERO<RealT>));
         tag_[1]  = tag_[0];
-        tag_[2]  = (a3_ != ZERO<RealT> || a4_ != ZERO<RealT>);
-        tag_[3]  = (a4_ != ZERO<RealT>);
-        tag_[4]  = (T2_ != ZERO<RealT>);
-        tag_[5]  = (T4_ != ZERO<RealT>);
-        tag_[6]  = (T6_ != ZERO<RealT>);
+        tag_[2]  = (!isEqual(a3_, ZERO<RealT>) || !isEqual(a4_, ZERO<RealT>));
+        tag_[3]  = (!isEqual(a4_, ZERO<RealT>));
+        tag_[4]  = (!isEqual(T2_, ZERO<RealT>));
+        tag_[5]  = (!isEqual(T4_, ZERO<RealT>));
+        tag_[6]  = (!isEqual(T6_, ZERO<RealT>));
         tag_[7]  = false;
         tag_[8]  = false;
         tag_[9]  = false;
@@ -315,17 +317,26 @@ namespace GridKit
 
         ScalarT u = ws[0];
 
-        f[0]  = -tag_[0] * x1_dot + x2;
-        f[1]  = -tag_[1] * x2_dot + x3;
-        f[2]  = -tag_[2] * x3_dot + x4;
+        const ScalarT zero{ZERO<RealT>};
+        const ScalarT one{ONE<RealT>};
+        const ScalarT dx1 = tag_[0] ? one : zero;
+        const ScalarT dx2 = tag_[1] ? one : zero;
+        const ScalarT dx3 = tag_[2] ? one : zero;
+        const ScalarT t2  = tag_[4] ? one : zero;
+        const ScalarT t4  = tag_[5] ? one : zero;
+        const ScalarT t6  = tag_[6] ? one : zero;
+
+        f[0]  = -dx1 * x1_dot + x2;
+        f[1]  = -dx2 * x2_dot + x3;
+        f[2]  = -dx3 * x3_dot + x4;
         f[3]  = -a4_ * x4_dot - x1 - a1_ * x2 - a2_ * x3 - a3_ * x4 + u;
         f[4]  = -T2_ * x5_dot - x5 + v4;
         f[5]  = -T4_ * x6_dot - x6 + v5;
         f[6]  = -T6_ * x7_dot - x7 + v6;
         f[7]  = -v4 + x1 + A5_ * x2 + A6_ * x3;
-        f[8]  = tag_[4] * (-T2_ * (v5 - x5) + T1_ * (v4 - x5)) + (1 - tag_[4]) * (v4 - v5);
-        f[9]  = tag_[5] * (-T4_ * (v6 - x6) + T3_ * (v5 - x6)) + (1 - tag_[5]) * (v5 - v6);
-        f[10] = tag_[6] * (-T6_ * v7 + Ks_ * T5_ * (v6 - x7)) + (1 - tag_[6]) * (Ks_ * v6 - v7);
+        f[8]  = t2 * (-T2_ * (v5 - x5) + T1_ * (v4 - x5)) + (one - t2) * (v4 - v5);
+        f[9]  = t4 * (-T4_ * (v6 - x6) + T3_ * (v5 - x6)) + (one - t4) * (v5 - v6);
+        f[10] = t6 * (-T6_ * v7 + Ks_ * T5_ * (v6 - x7)) + (one - t6) * (Ks_ * v6 - v7);
         f[11] = -vss + Math::clamp(v7, Lsmin_, Lsmax_);
 
         return 0;
