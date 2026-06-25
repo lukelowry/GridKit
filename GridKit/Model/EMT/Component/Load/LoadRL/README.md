@@ -14,13 +14,16 @@ $R_c$   | [$\Omega$] | `Rc` | Load resistance, phase c |
 $L_a$   | [H]        | `La` | Load inductance, phase a |
 $L_b$   | [H]        | `Lb` | Load inductance, phase b |
 $L_c$   | [H]        | `Lc` | Load inductance, phase c |
+$|I^{\mathrm{inj}}|$ | [A] | `Iinj` | Initial RMS current-injection magnitude | Optional, defaults to zero
+$\theta$ | [rad] | `theta` | Initial current-injection phase angle | Optional, defaults to zero
 
 ### Parameter Validation
 
 ```math
 \begin{aligned}
 R_a, R_b, R_c &\ge 0 \\
-L_a, L_b, L_c &> 0
+L_a, L_b, L_c &> 0 \\
+|I^{\mathrm{inj}}| &\ge 0
 \end{aligned}
 ```
 

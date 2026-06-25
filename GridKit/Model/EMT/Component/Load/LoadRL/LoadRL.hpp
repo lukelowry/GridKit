@@ -1,0 +1,88 @@
+#pragma once
+
+#include <cstddef>
+#include <vector>
+
+#include <GridKit/Model/EMT/Component.hpp>
+#include <GridKit/Model/EMT/Component/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/Component/Load/LoadRL/LoadRLData.hpp>
+
+namespace GridKit
+{
+  namespace EMT
+  {
+    template <typename scalar_type, typename index_type>
+    class LoadRL final : public EMT::Component<scalar_type, index_type>
+    {
+      using EMT::Component<scalar_type, index_type>::gridkit_component_id_;
+      using EMT::Component<scalar_type, index_type>::size_;
+      using EMT::Component<scalar_type, index_type>::nnz_;
+      using EMT::Component<scalar_type, index_type>::y_;
+      using EMT::Component<scalar_type, index_type>::yp_;
+      using EMT::Component<scalar_type, index_type>::f_;
+      using EMT::Component<scalar_type, index_type>::tag_;
+      using EMT::Component<scalar_type, index_type>::abs_tol_;
+      using EMT::Component<scalar_type, index_type>::wb_;
+      using EMT::Component<scalar_type, index_type>::h_;
+      using EMT::Component<scalar_type, index_type>::J_;
+      using EMT::Component<scalar_type, index_type>::J_rows_buffer_;
+      using EMT::Component<scalar_type, index_type>::J_cols_buffer_;
+      using EMT::Component<scalar_type, index_type>::J_vals_buffer_;
+      using EMT::Component<scalar_type, index_type>::variable_indices_;
+      using EMT::Component<scalar_type, index_type>::residual_indices_;
+      using EMT::Component<scalar_type, index_type>::alpha_;
+      using EMT::Component<scalar_type, index_type>::time_;
+      using EMT::Component<scalar_type, index_type>::offset_;
+      using EMT::Component<scalar_type, index_type>::allocated_;
+      using EMT::Component<scalar_type, index_type>::allocateVectors;
+
+    public:
+      using ScalarT    = scalar_type;
+      using IdxT       = index_type;
+      using BaseT      = EMT::Component<ScalarT, IdxT>;
+      using RealT      = typename BaseT::RealT;
+      using BusT       = EMT::Bus<ScalarT, IdxT>;
+      using ModelDataT = LoadRLData<RealT, IdxT>;
+
+      explicit LoadRL(BusT* bus);
+      LoadRL(BusT* bus, const ModelDataT& data);
+      ~LoadRL() override = default;
+
+      int setGridKitComponentID(IdxT) override final;
+      int verify() const override final;
+      int allocate() override final;
+      int initialize() override final;
+      int tagDifferentiable() override final;
+      int setAbsoluteTolerance(RealT rel_tol) override final;
+      int evaluateResidual() override final;
+      int evaluateJacobian() override final;
+
+      ScalarT& I(IdxT n)
+      {
+        return y_[static_cast<std::size_t>(n)];
+      }
+
+      const ScalarT& I(IdxT n) const
+      {
+        return y_[static_cast<std::size_t>(n)];
+      }
+
+      __attribute__((always_inline)) int evaluateInternalResidual(
+          ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* f);
+
+      __attribute__((always_inline)) int evaluateBusResidual(
+          ScalarT* y, ScalarT* yp, ScalarT* wb, ScalarT* h);
+
+    private:
+      void readBusVoltage();
+
+      BusT*      bus_{nullptr};
+      ModelDataT data_{};
+    };
+  } // namespace EMT
+} // namespace GridKit
+
+#include <GridKit/Model/EMT/Component/Load/LoadRL/LoadRLImpl.hpp>
+#ifdef GRIDKIT_ENABLE_ENZYME
+#include <GridKit/Model/EMT/Component/Load/LoadRL/LoadRLEnzyme.hpp>
+#endif

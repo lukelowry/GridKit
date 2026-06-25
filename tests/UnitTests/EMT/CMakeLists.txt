@@ -37,4 +37,40 @@ endif()
 
 add_test(NAME EMTLineLumpedTest COMMAND test_emt_linelumped)
 
-install(TARGETS test_emt_bus test_emt_vectorfit test_emt_linelumped RUNTIME DESTINATION bin)
+add_executable(test_emt_voltage_source runVoltageSourceTests.cpp)
+target_link_libraries(
+  test_emt_voltage_source
+  GridKit::emt_voltage_source
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::testing)
+
+if(GRIDKIT_ENABLE_ENZYME)
+  target_link_libraries(test_emt_voltage_source ClangEnzymeFlags)
+  target_compile_options(test_emt_voltage_source PRIVATE -mllvm -enzyme-auto-sparsity=1
+                                                         -fno-math-errno)
+endif()
+
+add_test(NAME EMTVoltageSourceTest COMMAND test_emt_voltage_source)
+
+add_executable(test_emt_loadrl runLoadRLTests.cpp)
+target_link_libraries(
+  test_emt_loadrl
+  GridKit::emt_load_rl
+  GridKit::emt_voltage_source
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::testing)
+
+if(GRIDKIT_ENABLE_ENZYME)
+  target_link_libraries(test_emt_loadrl ClangEnzymeFlags)
+  target_compile_options(test_emt_loadrl PRIVATE -mllvm -enzyme-auto-sparsity=1 -fno-math-errno)
+endif()
+
+add_test(NAME EMTLoadRLTest COMMAND test_emt_loadrl)
+
+install(
+  TARGETS test_emt_bus
+          test_emt_vectorfit
+          test_emt_linelumped
+          test_emt_voltage_source
+          test_emt_loadrl
+  RUNTIME DESTINATION bin)
