@@ -1,0 +1,68 @@
+{
+  "header": {
+    "format_version": 0,
+    "format_revision": 1,
+    "case_name": "simple",
+    "case_description": "One EMT voltage source supplying one three-phase RL load through a lumped line",
+    "case_comments": ""
+  },
+  "buses": [
+    {
+      "number": 1,
+      "class": "bus",
+      "name": "bus1",
+      "init": {
+        "v0": [169.7056274848, -84.8528137424, -84.8528137424]
+      }
+    },
+    {
+      "number": 2,
+      "class": "bus",
+      "name": "bus2",
+      "init": {
+        "v0": [169.7056274848, -84.8528137424, -84.8528137424]
+      }
+    }
+  ],
+  "devices": [
+    {
+      "class": "VoltageSource",
+      "ports": { "bus": 1 },
+      "id": "src1",
+      "params": {
+        "E": [120.0, 120.0, 120.0],
+        "phi": [0.0, -2.0943951024, 2.0943951024],
+        "omega": 376.9911184308,
+        "G": [10.0, 10.0, 10.0]
+      }
+    },
+    {
+      "class": "LoadRL",
+      "ports": { "bus": 2 },
+      "id": "load1",
+      "params": {
+        "Ra": 10.0,
+        "Rb": 10.0,
+        "Rc": 10.0,
+        "La": 0.02,
+        "Lb": 0.02,
+        "Lc": 0.02,
+        "Iinj": 0.0,
+        "theta": 0.0
+      }
+    },
+    {
+      "class": "LineLumped",
+      "ports": { "bus1": 1, "bus2": 2 },
+      "id": "line1",
+      "params": {
+        "dx": 1.0,
+        "i0": [0.0, 0.0, 0.0],
+        "Rp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        "Lp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        "Gp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
+        "Cp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
+      }
+    }
+  ]
+}

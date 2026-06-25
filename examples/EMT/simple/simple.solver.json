@@ -1,0 +1,7 @@
+{
+  "system_model_file": "simple.case.json",
+  "dt": 0.0001,
+  "tmax": 0.02,
+  "output_file": "simple.csv",
+  "find_consistent": true
+}
