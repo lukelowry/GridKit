@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <map>
 #include <memory>
@@ -25,16 +26,17 @@ namespace GridKit
     class SystemModel final : public PhasorDynamics::SystemModel<scalar_type, index_type>
     {
     public:
-      using ScalarT    = scalar_type;
-      using IdxT       = index_type;
-      using BaseT      = PhasorDynamics::SystemModel<ScalarT, IdxT>;
-      using RealT      = typename BaseT::RealT;
-      using ModelDataT = EMT::SystemModelData<RealT, IdxT, N>;
-      using BusT       = EMT::Bus<ScalarT, IdxT>;
-      using ComponentT = PhasorDynamics::Component<ScalarT, IdxT>;
-      using SourceT    = EMT::VoltageSource<ScalarT, IdxT, N>;
-      using LoadT      = EMT::LoadRL<ScalarT, IdxT>;
-      using LineT      = EMT::LineLumped<ScalarT, IdxT, N>;
+      using ScalarT           = scalar_type;
+      using IdxT              = index_type;
+      using BaseT             = PhasorDynamics::SystemModel<ScalarT, IdxT>;
+      using RealT             = typename BaseT::RealT;
+      using ModelDataT        = EMT::SystemModelData<RealT, IdxT, N>;
+      using BusT              = EMT::Bus<ScalarT, IdxT>;
+      using ComponentT        = PhasorDynamics::Component<ScalarT, IdxT>;
+      using SourceT           = EMT::VoltageSource<ScalarT, IdxT, N>;
+      using LoadT             = EMT::LoadRL<ScalarT, IdxT>;
+      using LineT             = EMT::LineLumped<ScalarT, IdxT, N>;
+      using FaultConductanceT = std::array<std::array<RealT, N>, N>;
 
       SystemModel() = default;
 
@@ -43,7 +45,33 @@ namespace GridKit
         build(data);
       }
 
+      void applyBusFault(IdxT bus_id, const FaultConductanceT& G)
+      {
+        bus(bus_id)->applyFaultConductance(flattenConductance(G));
+      }
+
+      void clearBusFault(IdxT bus_id, const FaultConductanceT& G)
+      {
+        bus(bus_id)->clearFaultConductance(flattenConductance(G));
+      }
+
     private:
+      static std::vector<RealT> flattenConductance(const FaultConductanceT& G)
+      {
+        std::vector<RealT> flat;
+        flat.reserve(N * N);
+
+        for (std::size_t r = 0; r < N; ++r)
+        {
+          for (std::size_t c = 0; c < N; ++c)
+          {
+            flat.push_back(G[r][c]);
+          }
+        }
+
+        return flat;
+      }
+
       void build(const ModelDataT& data)
       {
         for (const auto& bus_data : data.bus)

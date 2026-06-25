@@ -171,6 +171,34 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome faultConductanceResidual()
+      {
+        TestStatus success = true;
+
+        EMT::Bus<ScalarT, IdxT> bus(std::vector<RealT>{10.0, 20.0, -3.0});
+        success *= bus.allocate() == 0;
+        success *= bus.initialize() == 0;
+
+        const std::vector<RealT> G{
+            2.0, -1.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 4.0};
+
+        bus.applyFaultConductance(G);
+
+        success *= bus.evaluateResidual() == 0;
+        success *= isEqual(bus.I(0), ScalarT{0.0});
+        success *= isEqual(bus.I(1), ScalarT{-10.0});
+        success *= isEqual(bus.I(2), ScalarT{12.0});
+
+        bus.clearFaultConductance(G);
+
+        success *= bus.evaluateResidual() == 0;
+        success *= isEqual(bus.I(0), ScalarT{0.0});
+        success *= isEqual(bus.I(1), ScalarT{0.0});
+        success *= isEqual(bus.I(2), ScalarT{0.0});
+
+        return success.report(__func__);
+      }
+
       TestOutcome unsupportedPhasorAliases()
       {
         TestStatus success = true;
@@ -315,6 +343,44 @@ namespace GridKit
           success *= cols[k] >= 10;
           success *= cols[k] < 10 + bus.phaseCount();
           success *= isEqual(vals[k], RealT{0.0});
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome faultJacobian()
+      {
+        TestStatus success = true;
+
+        EMT::Bus<ScalarT, IdxT>  bus(std::vector<RealT>{1.0, 2.0, 3.0});
+        const std::vector<RealT> G{
+            2.0, -1.0, 0.0, -1.0, 1.0, 0.0, 0.0, 0.0, 4.0};
+
+        success *= bus.allocate() == 0;
+        bus.applyFaultConductance(G);
+        for (IdxT n = 0; n < bus.phaseCount(); ++n)
+        {
+          bus.setVariableIndex(n, n + 10);
+          bus.setResidualIndex(n, n + 20);
+        }
+
+        success *= bus.evaluateJacobian() == 0;
+
+        auto  entries = bus.getJacobian().getEntries(false);
+        auto& rows    = std::get<0>(entries);
+        auto& cols    = std::get<1>(entries);
+        auto& vals    = std::get<2>(entries);
+
+        const auto expected_nnz  = static_cast<std::size_t>(bus.phaseCount() * bus.phaseCount());
+        success                 *= rows.size() == expected_nnz;
+        success                 *= cols.size() == expected_nnz;
+        success                 *= vals.size() == expected_nnz;
+
+        for (std::size_t k = 0; k < vals.size(); ++k)
+        {
+          const auto row  = static_cast<std::size_t>(rows[k] - 20);
+          const auto col  = static_cast<std::size_t>(cols[k] - 10);
+          success        *= isEqual(vals[k], static_cast<RealT>(-G[row * 3 + col]));
         }
 
         return success.report(__func__);

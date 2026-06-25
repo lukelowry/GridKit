@@ -11,6 +11,8 @@ int main()
   result += test.parser();
   result += test.construction();
   result += test.connectivityErrors();
+  result += test.busFaultApi();
+  result += test.studyFaultParser();
 
   return result.summary();
 }

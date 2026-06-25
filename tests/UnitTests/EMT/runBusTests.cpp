@@ -12,11 +12,13 @@ int main()
   result += test.vectorConstruction();
   result += test.residual();
   result += test.currentInjection();
+  result += test.faultConductanceResidual();
   result += test.unsupportedPhasorAliases();
   result += test.systemModel();
   result += test.cooPointerAxpyThreePhase();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
+  result += test.faultJacobian();
 #endif
 
   return result.summary();

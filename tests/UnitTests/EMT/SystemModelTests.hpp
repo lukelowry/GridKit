@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <sstream>
 #include <stdexcept>
@@ -8,6 +9,8 @@
 #include <GridKit/Model/EMT/SystemModel.hpp>
 #include <GridKit/Model/EMT/SystemModelDataJSONParser.hpp>
 #include <GridKit/Testing/Testing.hpp>
+
+#include "AnalysisUtilities.hpp"
 
 namespace GridKit
 {
@@ -99,11 +102,117 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome busFaultApi()
+      {
+        TestStatus success = true;
+
+        ModelDataT data;
+        data.bus.push_back(makeBusData(1, RealT{10.0}, RealT{20.0}, RealT{-3.0}));
+
+        ModelT system(data);
+        success *= system.allocate() == 0;
+        success *= system.initialize() == 0;
+
+        typename ModelT::FaultConductanceT G{
+            std::array<RealT, 3>{2.0, -1.0, 0.0},
+            std::array<RealT, 3>{-1.0, 1.0, 0.0},
+            std::array<RealT, 3>{0.0, 0.0, 4.0}};
+
+        system.applyBusFault(1, G);
+        system.applyBusFault(1, G);
+
+        success *= system.evaluateResidual() == 0;
+
+        auto* bus1  = static_cast<BusT*>(system.getBus(1));
+        success    *= isEqual(bus1->I(0), ScalarT{0.0});
+        success    *= isEqual(bus1->I(1), ScalarT{-20.0});
+        success    *= isEqual(bus1->I(2), ScalarT{24.0});
+
+        system.clearBusFault(1, G);
+
+        success *= system.evaluateResidual() == 0;
+        success *= isEqual(bus1->I(0), ScalarT{0.0});
+        success *= isEqual(bus1->I(1), ScalarT{-10.0});
+        success *= isEqual(bus1->I(2), ScalarT{12.0});
+
+        system.clearBusFault(1, G);
+
+        success *= system.evaluateResidual() == 0;
+        success *= isEqual(bus1->I(0), ScalarT{0.0});
+        success *= isEqual(bus1->I(1), ScalarT{0.0});
+        success *= isEqual(bus1->I(2), ScalarT{0.0});
+
+        return success.report(__func__);
+      }
+
+      TestOutcome studyFaultParser()
+      {
+        TestStatus success = true;
+
+        auto valid = parseStudy(validStudyJSON());
+        valid.model_data.bus.push_back(makeBusData(2, RealT{1.0}, RealT{2.0}, RealT{3.0}));
+
+        success *= valid.faults.size() == 1;
+        success *= valid.faults[0].bus == 2;
+        success *= isEqual(valid.faults[0].G[0][0], 1.0);
+        success *= isEqual(valid.faults[0].G[1][1], 1.0);
+        success *= isEqual(valid.faults[0].G[0][1], -1.0);
+        success *= valid.faults[0].clear_time.has_value();
+        success *= valid.faults[0].clear_time.value() == 0.002;
+        success *= !throws<void>(
+            [&valid]()
+            { EMT::validateStudyData(valid); });
+
+        const auto events  = EMT::busFaultEvents(valid);
+        success           *= events.size() == 2;
+        success           *= events[0].apply;
+        success           *= !events[1].apply;
+
+        auto uncleared = parseStudy(unclearedStudyJSON());
+        uncleared.model_data.bus.push_back(makeBusData(2, RealT{1.0}, RealT{2.0}, RealT{3.0}));
+
+        success *= uncleared.faults.size() == 1;
+        success *= !uncleared.faults[0].clear_time.has_value();
+        success *= !throws<void>(
+            [&uncleared]()
+            { EMT::validateStudyData(uncleared); });
+        success *= EMT::busFaultEvents(uncleared).size() == 1;
+
+        success *= throws<std::invalid_argument>(
+            []()
+            { parseStudy(badMatrixStudyJSON()); });
+
+        auto unknown_bus = parseStudy(validStudyJSON());
+        unknown_bus.model_data.bus.push_back(makeBusData(1, RealT{1.0}, RealT{2.0}, RealT{3.0}));
+        success *= throws<std::invalid_argument>(
+            [&unknown_bus]()
+            { EMT::validateStudyData(unknown_bus); });
+
+        auto unaligned = parseStudy(unalignedTimeStudyJSON());
+        unaligned.model_data.bus.push_back(makeBusData(2, RealT{1.0}, RealT{2.0}, RealT{3.0}));
+        success *= throws<std::invalid_argument>(
+            [&unaligned]()
+            { EMT::validateStudyData(unaligned); });
+
+        auto bad_clear = parseStudy(badClearTimeStudyJSON());
+        bad_clear.model_data.bus.push_back(makeBusData(2, RealT{1.0}, RealT{2.0}, RealT{3.0}));
+        success *= throws<std::invalid_argument>(
+            [&bad_clear]()
+            { EMT::validateStudyData(bad_clear); });
+
+        return success.report(__func__);
+      }
+
     private:
       static ModelDataT parseCase()
       {
         auto stream = std::istringstream(caseJSON());
         return EMT::parseSystemModelData(stream);
+      }
+
+      static EMT::StudyData parseStudy(const std::string& text)
+      {
+        return nlohmann::json::parse(text).get<EMT::StudyData>();
       }
 
       static BusDataT makeBusData(IdxT bus_id, RealT va, RealT vb, RealT vc)
@@ -177,6 +286,104 @@ namespace GridKit
                 "Gp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]],
                 "Cp": [[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]
               }
+            }
+          ]
+        })";
+      }
+
+      static std::string validStudyJSON()
+      {
+        return R"({
+          "system_model_file": "simple.case.json",
+          "dt": 0.001,
+          "tmax": 0.01,
+          "faults": [
+            {
+              "bus": 2,
+              "start_time": 0.001,
+              "clear_time": 0.002,
+              "G": [
+                [1.0, -1.0, 0.0],
+                [-1.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0]
+              ]
+            }
+          ]
+        })";
+      }
+
+      static std::string unclearedStudyJSON()
+      {
+        return R"({
+          "system_model_file": "simple.case.json",
+          "dt": 0.001,
+          "tmax": 0.01,
+          "faults": [
+            {
+              "bus": 2,
+              "start_time": 0.001,
+              "G": [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0]
+              ]
+            }
+          ]
+        })";
+      }
+
+      static std::string badMatrixStudyJSON()
+      {
+        return R"({
+          "system_model_file": "simple.case.json",
+          "dt": 0.001,
+          "tmax": 0.01,
+          "faults": [
+            {
+              "bus": 2,
+              "start_time": 0.001,
+              "G": [[1.0, 0.0], [0.0, 1.0]]
+            }
+          ]
+        })";
+      }
+
+      static std::string unalignedTimeStudyJSON()
+      {
+        return R"({
+          "system_model_file": "simple.case.json",
+          "dt": 0.001,
+          "tmax": 0.01,
+          "faults": [
+            {
+              "bus": 2,
+              "start_time": 0.0015,
+              "G": [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0]
+              ]
+            }
+          ]
+        })";
+      }
+
+      static std::string badClearTimeStudyJSON()
+      {
+        return R"({
+          "system_model_file": "simple.case.json",
+          "dt": 0.001,
+          "tmax": 0.01,
+          "faults": [
+            {
+              "bus": 2,
+              "start_time": 0.002,
+              "clear_time": 0.001,
+              "G": [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0]
+              ]
             }
           ]
         })";

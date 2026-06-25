@@ -49,6 +49,14 @@ namespace GridKit
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
 
+      void applyFaultConductance(const std::vector<RealT>& G);
+      void clearFaultConductance(const std::vector<RealT>& G);
+
+      const std::vector<RealT>& activeFaultConductance() const
+      {
+        return active_fault_G_;
+      }
+
       IdxT phaseCount() const
       {
         return size_;
@@ -126,6 +134,7 @@ namespace GridKit
 
     private:
       std::vector<RealT> v0_;
+      std::vector<RealT> active_fault_G_;
     };
   } // namespace EMT
 } // namespace GridKit

@@ -12,24 +12,33 @@ with open(input_file, newline="") as stream:
     rows = list(csv.DictReader(stream))
 
 time = [float(row["time"]) for row in rows]
-buses = sorted(
-    {
-        field[:-4]
-        for field in rows[0].keys()
-        if field.endswith(".v_a") and f"{field[:-4]}.v_b" in rows[0] and f"{field[:-4]}.v_c" in rows[0]
-    }
+fields = rows[0].keys()
+lines = sorted(
+    field[:-4]
+    for field in fields
+    if field.endswith(".i_a") and f"{field[:-4]}.i_b" in fields and f"{field[:-4]}.i_c" in fields
 )
 
-fig, axes = plt.subplots(len(buses), 1, figsize=(8, 3.2 * len(buses)), sharex=True)
-if len(buses) == 1:
-    axes = [axes]
+if not lines:
+    raise RuntimeError("No three-phase line current columns found")
 
-for axis, bus in zip(axes, buses):
-    for phase in ["a", "b", "c"]:
-        key = f"{bus}.v_{phase}"
-        axis.plot(time, [float(row[key]) for row in rows], label=key)
+line = lines[0]
+bus = "bus2"
 
-    axis.set_ylabel("voltage [V]")
+fig, axes = plt.subplots(2, 1, figsize=(8, 6.4), sharex=True)
+
+for phase in ["a", "b", "c"]:
+    key = f"{line}.i_{phase}"
+    axes[0].plot(time, [float(row[key]) for row in rows], label=key)
+
+for phase in ["a", "b", "c"]:
+    key = f"{bus}.v_{phase}"
+    axes[1].plot(time, [float(row[key]) for row in rows], label=key)
+
+axes[0].set_ylabel("current [A]")
+axes[1].set_ylabel("voltage [V]")
+
+for axis in axes:
     axis.grid(True, alpha=0.35)
     axis.legend()
 

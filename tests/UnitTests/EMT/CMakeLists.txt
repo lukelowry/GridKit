@@ -7,6 +7,12 @@ target_link_libraries(
   GridKit::phasor_dynamics_systemmodel
   GridKit::testing)
 
+if(GRIDKIT_ENABLE_ENZYME)
+  target_link_libraries(test_emt_bus ClangEnzymeFlags)
+  target_compile_definitions(test_emt_bus PRIVATE GRIDKIT_ENABLE_ENZYME)
+  target_compile_options(test_emt_bus PRIVATE -mllvm -enzyme-auto-sparsity=1 -fno-math-errno)
+endif()
+
 add_test(NAME EMTBusTest COMMAND test_emt_bus)
 
 add_executable(test_emt_vectorfit runVectorFitTests.cpp)
@@ -70,6 +76,9 @@ add_test(NAME EMTLoadRLTest COMMAND test_emt_loadrl)
 add_executable(test_emt_systemmodel runSystemModelTests.cpp)
 target_link_libraries(
   test_emt_systemmodel GridKit::emt_systemmodel GridKit::testing)
+target_include_directories(
+  test_emt_systemmodel
+  PRIVATE ${CMAKE_SOURCE_DIR}/application/EMT)
 
 if(GRIDKIT_ENABLE_ENZYME)
   target_link_libraries(test_emt_systemmodel ClangEnzymeFlags)

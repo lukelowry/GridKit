@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <sstream>
+#include <stdexcept>
 #include <utility>
 
 #include <GridKit/Model/EMT/Component/Bus/Bus.hpp>
@@ -74,6 +76,7 @@ namespace GridKit
 
       variable_indices_.resize(n);
       residual_indices_.resize(n);
+      active_fault_G_.assign(n * n, RealT{0.0});
 
       for (IdxT j = 0; j < size_; ++j)
       {
@@ -124,7 +127,62 @@ namespace GridKit
       {
         f_[n] = ScalarT{0.0};
       }
+
+      for (IdxT r = 0; r < size_; ++r)
+      {
+        for (IdxT c = 0; c < size_; ++c)
+        {
+          const auto k                     = static_cast<std::size_t>(r * size_ + c);
+          f_[static_cast<std::size_t>(r)] -= active_fault_G_[k] * V(c);
+        }
+      }
       return 0;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::applyFaultConductance(const std::vector<RealT>& G)
+    {
+      const auto expected = static_cast<std::size_t>(size_) * static_cast<std::size_t>(size_);
+      if (G.size() != expected)
+      {
+        std::stringstream ss;
+        ss << "Bus: fault conductance matrix has length " << G.size()
+           << ", expected " << expected;
+        throw std::invalid_argument(ss.str());
+      }
+
+      if (active_fault_G_.size() != expected)
+      {
+        active_fault_G_.assign(expected, RealT{0.0});
+      }
+
+      for (std::size_t k = 0; k < expected; ++k)
+      {
+        active_fault_G_[k] += G[k];
+      }
+    }
+
+    template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::clearFaultConductance(const std::vector<RealT>& G)
+    {
+      const auto expected = static_cast<std::size_t>(size_) * static_cast<std::size_t>(size_);
+      if (G.size() != expected)
+      {
+        std::stringstream ss;
+        ss << "Bus: fault conductance matrix has length " << G.size()
+           << ", expected " << expected;
+        throw std::invalid_argument(ss.str());
+      }
+
+      if (active_fault_G_.size() != expected)
+      {
+        active_fault_G_.assign(expected, RealT{0.0});
+      }
+
+      for (std::size_t k = 0; k < expected; ++k)
+      {
+        active_fault_G_[k] -= G[k];
+      }
     }
 
   } // namespace EMT
