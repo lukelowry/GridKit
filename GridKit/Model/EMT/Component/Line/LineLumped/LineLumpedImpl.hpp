@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
 #include <GridKit/Model/EMT/Component/Line/LineLumped/LineLumped.hpp>
@@ -162,99 +163,35 @@ namespace GridKit
     }
 
     template <typename scalar_type, typename index_type, std::size_t N>
+    void LineLumped<scalar_type, index_type, N>::bindSubmodels()
+    {
+      series_z_.bind(y_, yp_, f_, tag_, abs_tol_, static_cast<IdxT>(series_z_first_));
+      shunt_y1_.bind(y_, yp_, f_, tag_, abs_tol_, static_cast<IdxT>(shunt_y1_first_));
+      shunt_y2_.bind(y_, yp_, f_, tag_, abs_tol_, static_cast<IdxT>(shunt_y2_first_));
+    }
+
+    template <typename scalar_type, typename index_type, std::size_t N>
     void LineLumped<scalar_type, index_type, N>::copyParentIndicesToSubmodels()
     {
       for (IdxT j = 0; j < series_z_.size(); ++j)
       {
-        const auto local = static_cast<std::size_t>(j);
-        series_z_.setVariableIndex(j, variable_indices_[series_z_first_ + local]);
-        series_z_.setResidualIndex(j, residual_indices_[series_z_first_ + local]);
+        const auto parent = series_z_first_ + static_cast<std::size_t>(j);
+        series_z_.setVariableIndex(j, variable_indices_[parent]);
+        series_z_.setResidualIndex(j, residual_indices_[parent]);
       }
 
       for (IdxT j = 0; j < shunt_y1_.size(); ++j)
       {
-        const auto local = static_cast<std::size_t>(j);
-        shunt_y1_.setVariableIndex(j, variable_indices_[shunt_y1_first_ + local]);
-        shunt_y1_.setResidualIndex(j, residual_indices_[shunt_y1_first_ + local]);
+        const auto parent = shunt_y1_first_ + static_cast<std::size_t>(j);
+        shunt_y1_.setVariableIndex(j, variable_indices_[parent]);
+        shunt_y1_.setResidualIndex(j, residual_indices_[parent]);
       }
 
       for (IdxT j = 0; j < shunt_y2_.size(); ++j)
       {
-        const auto local = static_cast<std::size_t>(j);
-        shunt_y2_.setVariableIndex(j, variable_indices_[shunt_y2_first_ + local]);
-        shunt_y2_.setResidualIndex(j, residual_indices_[shunt_y2_first_ + local]);
-      }
-    }
-
-    template <typename scalar_type, typename index_type, std::size_t N>
-    void LineLumped<scalar_type, index_type, N>::copyParentStateToSubmodels()
-    {
-      for (IdxT j = 0; j < series_z_.size(); ++j)
-      {
-        const auto local      = static_cast<std::size_t>(j);
-        series_z_.y()[local]  = y_[series_z_first_ + local];
-        series_z_.yp()[local] = yp_[series_z_first_ + local];
-      }
-
-      for (IdxT j = 0; j < shunt_y1_.size(); ++j)
-      {
-        const auto local      = static_cast<std::size_t>(j);
-        shunt_y1_.y()[local]  = y_[shunt_y1_first_ + local];
-        shunt_y1_.yp()[local] = yp_[shunt_y1_first_ + local];
-      }
-
-      for (IdxT j = 0; j < shunt_y2_.size(); ++j)
-      {
-        const auto local      = static_cast<std::size_t>(j);
-        shunt_y2_.y()[local]  = y_[shunt_y2_first_ + local];
-        shunt_y2_.yp()[local] = yp_[shunt_y2_first_ + local];
-      }
-    }
-
-    template <typename scalar_type, typename index_type, std::size_t N>
-    void LineLumped<scalar_type, index_type, N>::copySubmodelStateToParent()
-    {
-      for (IdxT j = 0; j < series_z_.size(); ++j)
-      {
-        const auto local             = static_cast<std::size_t>(j);
-        y_[series_z_first_ + local]  = series_z_.y()[local];
-        yp_[series_z_first_ + local] = series_z_.yp()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y1_.size(); ++j)
-      {
-        const auto local             = static_cast<std::size_t>(j);
-        y_[shunt_y1_first_ + local]  = shunt_y1_.y()[local];
-        yp_[shunt_y1_first_ + local] = shunt_y1_.yp()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y2_.size(); ++j)
-      {
-        const auto local             = static_cast<std::size_t>(j);
-        y_[shunt_y2_first_ + local]  = shunt_y2_.y()[local];
-        yp_[shunt_y2_first_ + local] = shunt_y2_.yp()[local];
-      }
-    }
-
-    template <typename scalar_type, typename index_type, std::size_t N>
-    void LineLumped<scalar_type, index_type, N>::copySubmodelResiduals()
-    {
-      for (IdxT j = 0; j < series_z_.size(); ++j)
-      {
-        const auto local            = static_cast<std::size_t>(j);
-        f_[series_z_first_ + local] = series_z_.getResidual()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y1_.size(); ++j)
-      {
-        const auto local            = static_cast<std::size_t>(j);
-        f_[shunt_y1_first_ + local] = shunt_y1_.getResidual()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y2_.size(); ++j)
-      {
-        const auto local            = static_cast<std::size_t>(j);
-        f_[shunt_y2_first_ + local] = shunt_y2_.getResidual()[local];
+        const auto parent = shunt_y2_first_ + static_cast<std::size_t>(j);
+        shunt_y2_.setVariableIndex(j, variable_indices_[parent]);
+        shunt_y2_.setResidualIndex(j, residual_indices_[parent]);
       }
     }
 
@@ -270,21 +207,28 @@ namespace GridKit
 
       const auto size = static_cast<std::size_t>(size_);
 
-      y_.assign(size, ScalarT{0.0});
-      yp_.assign(size, ScalarT{0.0});
-      f_.assign(size, ScalarT{0.0});
-      tag_.assign(size, false);
-      abs_tol_.assign(size, ScalarT{0.0});
+      if (!allocated_)
+      {
+        allocateVectors(size_);
+      }
+
+      assert(y_.size() == size);
+      assert(yp_.size() == size);
+      assert(f_.size() == size);
+      assert(tag_.size() == size);
+      assert(abs_tol_.size() == size);
+
       variable_indices_.resize(size);
       residual_indices_.resize(size);
 
       for (IdxT j = 0; j < size_; ++j)
       {
-        this->setVariableIndex(j, j);
-        this->setResidualIndex(j, j);
+        variable_indices_[static_cast<std::size_t>(j)] = offset_ + j;
+        residual_indices_[static_cast<std::size_t>(j)] = offset_ + j;
       }
 
       wireSubmodelSignals();
+      bindSubmodels();
 
       int ret  = 0;
       ret     += series_z_.allocate();
@@ -311,7 +255,6 @@ namespace GridKit
       ret     += shunt_y1_.initialize();
       ret     += shunt_y2_.initialize();
 
-      copySubmodelStateToParent();
       evaluateTerminalCurrents();
       return ret;
     }
@@ -319,11 +262,14 @@ namespace GridKit
     template <typename scalar_type, typename index_type, std::size_t N>
     int LineLumped<scalar_type, index_type, N>::tagDifferentiable()
     {
-      std::fill(tag_.begin(), tag_.end(), false);
+      for (std::size_t j = 0; j < tag_.size(); ++j)
+      {
+        tag_[j] = ScalarT{0.0};
+      }
 
       for (std::size_t n = 0; n < N; ++n)
       {
-        tag_[n] = true;
+        tag_[n] = ScalarT{1.0};
       }
 
       int ret  = 0;
@@ -331,54 +277,21 @@ namespace GridKit
       ret     += shunt_y1_.tagDifferentiable();
       ret     += shunt_y2_.tagDifferentiable();
 
-      for (IdxT j = 0; j < series_z_.size(); ++j)
-      {
-        const auto local              = static_cast<std::size_t>(j);
-        tag_[series_z_first_ + local] = series_z_.tag()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y1_.size(); ++j)
-      {
-        const auto local              = static_cast<std::size_t>(j);
-        tag_[shunt_y1_first_ + local] = shunt_y1_.tag()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y2_.size(); ++j)
-      {
-        const auto local              = static_cast<std::size_t>(j);
-        tag_[shunt_y2_first_ + local] = shunt_y2_.tag()[local];
-      }
-
       return ret;
     }
 
     template <typename scalar_type, typename index_type, std::size_t N>
     int LineLumped<scalar_type, index_type, N>::setAbsoluteTolerance(RealT rel_tol)
     {
-      std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+      for (std::size_t j = 0; j < abs_tol_.size(); ++j)
+      {
+        abs_tol_[j] = rel_tol;
+      }
 
       int ret  = 0;
       ret     += series_z_.setAbsoluteTolerance(rel_tol);
       ret     += shunt_y1_.setAbsoluteTolerance(rel_tol);
       ret     += shunt_y2_.setAbsoluteTolerance(rel_tol);
-
-      for (IdxT j = 0; j < series_z_.size(); ++j)
-      {
-        const auto local                  = static_cast<std::size_t>(j);
-        abs_tol_[series_z_first_ + local] = series_z_.absoluteTolerance()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y1_.size(); ++j)
-      {
-        const auto local                  = static_cast<std::size_t>(j);
-        abs_tol_[shunt_y1_first_ + local] = shunt_y1_.absoluteTolerance()[local];
-      }
-
-      for (IdxT j = 0; j < shunt_y2_.size(); ++j)
-      {
-        const auto local                  = static_cast<std::size_t>(j);
-        abs_tol_[shunt_y2_first_ + local] = shunt_y2_.absoluteTolerance()[local];
-      }
 
       return ret;
     }
@@ -386,14 +299,10 @@ namespace GridKit
     template <typename scalar_type, typename index_type, std::size_t N>
     int LineLumped<scalar_type, index_type, N>::evaluateSubmodelResiduals()
     {
-      copyParentStateToSubmodels();
-
       int ret  = 0;
       ret     += series_z_.evaluateResidual();
       ret     += shunt_y1_.evaluateResidual();
       ret     += shunt_y2_.evaluateResidual();
-
-      copySubmodelResiduals();
       return ret;
     }
 

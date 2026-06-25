@@ -45,6 +45,9 @@ namespace GridKit
       using EMT::Component<scalar_type, index_type>::variable_indices_;
       using EMT::Component<scalar_type, index_type>::residual_indices_;
       using EMT::Component<scalar_type, index_type>::alpha_;
+      using EMT::Component<scalar_type, index_type>::offset_;
+      using EMT::Component<scalar_type, index_type>::allocated_;
+      using EMT::Component<scalar_type, index_type>::allocateVectors;
 
     public:
       using ScalarT    = scalar_type;

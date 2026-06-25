@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <stdexcept>
 #include <vector>
@@ -37,6 +38,9 @@ namespace GridKit
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
       using PhasorDynamics::Component<scalar_type, index_type>::variable_indices_;
       using PhasorDynamics::Component<scalar_type, index_type>::residual_indices_;
+      using PhasorDynamics::Component<scalar_type, index_type>::offset_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocateVectors;
 
     public:
       using ScalarT = scalar_type;
@@ -73,11 +77,17 @@ namespace GridKit
 
       int allocate() override final
       {
-        y_.resize(N_);
-        yp_.resize(N_);
-        f_.resize(N_);
-        tag_.resize(N_);
-        abs_tol_.resize(N_);
+        if (!allocated_)
+        {
+          allocateVectors(size_);
+        }
+
+        assert(y_.size() == N_);
+        assert(yp_.size() == N_);
+        assert(f_.size() == N_);
+        assert(tag_.size() == N_);
+        assert(abs_tol_.size() == N_);
+
         variable_indices_.resize(N_);
         residual_indices_.resize(N_);
         ws_.resize(N_);
@@ -85,8 +95,8 @@ namespace GridKit
 
         for (std::size_t n = 0; n < N_; ++n)
         {
-          this->setVariableIndex(static_cast<IdxT>(n), static_cast<IdxT>(n));
-          this->setResidualIndex(static_cast<IdxT>(n), static_cast<IdxT>(n));
+          variable_indices_[n] = offset_ + static_cast<IdxT>(n);
+          residual_indices_[n] = offset_ + static_cast<IdxT>(n);
 
           if (signals_.template isAssigned<ComponentSignalsTestInternalVariables::V>(n))
           {
@@ -103,20 +113,29 @@ namespace GridKit
 
       int initialize() override final
       {
-        std::fill(y_.begin(), y_.end(), ScalarT{0.0});
-        std::fill(yp_.begin(), yp_.end(), ScalarT{0.0});
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          y_[n]  = ScalarT{0.0};
+          yp_[n] = ScalarT{0.0};
+        }
         return 0;
       }
 
       int tagDifferentiable() override final
       {
-        std::fill(tag_.begin(), tag_.end(), true);
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          tag_[n] = ScalarT{1.0};
+        }
         return 0;
       }
 
       int setAbsoluteTolerance(RealT rel_tol) override final
       {
-        std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          abs_tol_[n] = rel_tol;
+        }
         return 0;
       }
 
@@ -168,6 +187,9 @@ namespace GridKit
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
       using PhasorDynamics::Component<scalar_type, index_type>::variable_indices_;
       using PhasorDynamics::Component<scalar_type, index_type>::residual_indices_;
+      using PhasorDynamics::Component<scalar_type, index_type>::offset_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
+      using PhasorDynamics::Component<scalar_type, index_type>::allocateVectors;
 
     public:
       using ScalarT = scalar_type;
@@ -207,11 +229,17 @@ namespace GridKit
 
       int allocate() override final
       {
-        y_.resize(N_);
-        yp_.resize(N_);
-        f_.resize(N_);
-        tag_.resize(N_);
-        abs_tol_.resize(N_);
+        if (!allocated_)
+        {
+          allocateVectors(size_);
+        }
+
+        assert(y_.size() == N_);
+        assert(yp_.size() == N_);
+        assert(f_.size() == N_);
+        assert(tag_.size() == N_);
+        assert(abs_tol_.size() == N_);
+
         variable_indices_.resize(N_);
         residual_indices_.resize(N_);
         ws_.resize(input_count_ * N_);
@@ -219,8 +247,8 @@ namespace GridKit
 
         for (std::size_t n = 0; n < N_; ++n)
         {
-          this->setVariableIndex(static_cast<IdxT>(n), static_cast<IdxT>(n));
-          this->setResidualIndex(static_cast<IdxT>(n), static_cast<IdxT>(n));
+          variable_indices_[n] = offset_ + static_cast<IdxT>(n);
+          residual_indices_[n] = offset_ + static_cast<IdxT>(n);
 
           if (signals_.template isAssigned<ComponentSignalsTestInternalVariables::V>(n))
           {
@@ -237,20 +265,29 @@ namespace GridKit
 
       int initialize() override final
       {
-        std::fill(y_.begin(), y_.end(), ScalarT{0.0});
-        std::fill(yp_.begin(), yp_.end(), ScalarT{0.0});
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          y_[n]  = ScalarT{0.0};
+          yp_[n] = ScalarT{0.0};
+        }
         return 0;
       }
 
       int tagDifferentiable() override final
       {
-        std::fill(tag_.begin(), tag_.end(), true);
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          tag_[n] = ScalarT{1.0};
+        }
         return 0;
       }
 
       int setAbsoluteTolerance(RealT rel_tol) override final
       {
-        std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+        for (std::size_t n = 0; n < N_; ++n)
+        {
+          abs_tol_[n] = rel_tol;
+        }
         return 0;
       }
 

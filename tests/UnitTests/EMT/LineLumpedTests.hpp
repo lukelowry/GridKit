@@ -45,14 +45,14 @@ namespace GridKit
         success *= line.size() == 20;
         success *= line.tagDifferentiable() == 0;
 
-        success *= line.tag()[0];
-        success *= line.tag()[1];
+        success *= isEqual(line.tag()[0], ScalarT{1.0});
+        success *= isEqual(line.tag()[1], ScalarT{1.0});
 
         const std::array<std::size_t, 3> output_offsets{6, 12, 18};
         for (auto output : output_offsets)
         {
-          success *= !line.tag()[output];
-          success *= !line.tag()[output + 1];
+          success *= isEqual(line.tag()[output], ScalarT{0.0});
+          success *= isEqual(line.tag()[output + 1], ScalarT{0.0});
         }
 
         return success.report(__func__);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
 #include <GridKit/Constants.hpp>
@@ -146,11 +147,17 @@ namespace GridKit
     {
       const auto size = static_cast<std::size_t>(size_);
 
-      y_.assign(size, ScalarT{0.0});
-      yp_.assign(size, ScalarT{0.0});
-      f_.assign(size, ScalarT{0.0});
-      tag_.assign(size, false);
-      abs_tol_.assign(size, ScalarT{0.0});
+      if (!allocated_)
+      {
+        allocateVectors(size_);
+      }
+
+      assert(y_.size() == size);
+      assert(yp_.size() == size);
+      assert(f_.size() == size);
+      assert(tag_.size() == size);
+      assert(abs_tol_.size() == size);
+
       variable_indices_.resize(size);
       residual_indices_.resize(size);
 
@@ -161,8 +168,8 @@ namespace GridKit
 
       for (IdxT j = 0; j < size_; ++j)
       {
-        this->setVariableIndex(j, j);
-        this->setResidualIndex(j, j);
+        variable_indices_[static_cast<std::size_t>(j)] = offset_ + j;
+        residual_indices_[static_cast<std::size_t>(j)] = offset_ + j;
       }
 
       const auto y_out = yOutOffset();
@@ -264,7 +271,10 @@ namespace GridKit
     template <typename scalar_type, typename index_type, std::size_t N, std::size_t K>
     int VectorFit<scalar_type, index_type, N, K>::setAbsoluteTolerance(RealT rel_tol)
     {
-      std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+      for (std::size_t j = 0; j < abs_tol_.size(); ++j)
+      {
+        abs_tol_[j] = rel_tol;
+      }
       return 0;
     }
 

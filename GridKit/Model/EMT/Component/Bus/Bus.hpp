@@ -25,6 +25,9 @@ namespace GridKit
       using PhasorDynamics::BusBase<scalar_type, index_type>::J_;
       using PhasorDynamics::BusBase<scalar_type, index_type>::variable_indices_;
       using PhasorDynamics::BusBase<scalar_type, index_type>::residual_indices_;
+      using PhasorDynamics::BusBase<scalar_type, index_type>::offset_;
+      using PhasorDynamics::BusBase<scalar_type, index_type>::allocated_;
+      using PhasorDynamics::BusBase<scalar_type, index_type>::allocateVectors;
 
     public:
       using ScalarT = scalar_type;

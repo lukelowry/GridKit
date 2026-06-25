@@ -118,7 +118,7 @@ namespace GridKit
         {
           success *= isEqual(bus.V(static_cast<IdxT>(n)), static_cast<ScalarT>(v0[n]));
           success *= isEqual(bus.Vp(static_cast<IdxT>(n)), ScalarT{0.0});
-          success *= bus.tag()[n];
+          success *= isEqual(bus.tag()[n], ScalarT{1.0});
           success *= isEqual(bus.absoluteTolerance()[n], ScalarT{1.0e-6});
           success *= bus.getVariableIndex(static_cast<IdxT>(n)) == static_cast<IdxT>(n);
           success *= bus.getResidualIndex(static_cast<IdxT>(n)) == static_cast<IdxT>(n);

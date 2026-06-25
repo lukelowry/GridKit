@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <utility>
 
 #include <GridKit/Model/EMT/Component/Bus/Bus.hpp>
@@ -60,18 +61,24 @@ namespace GridKit
       size_        = static_cast<IdxT>(v0_.size());
       const auto n = static_cast<std::size_t>(size_);
 
-      y_.assign(n, ScalarT{0.0});
-      yp_.assign(n, ScalarT{0.0});
-      f_.assign(n, ScalarT{0.0});
-      tag_.assign(n, false);
-      abs_tol_.assign(n, ScalarT{0.0});
+      if (!allocated_)
+      {
+        allocateVectors(size_);
+      }
+
+      assert(y_.size() == n);
+      assert(yp_.size() == n);
+      assert(f_.size() == n);
+      assert(tag_.size() == n);
+      assert(abs_tol_.size() == n);
+
       variable_indices_.resize(n);
       residual_indices_.resize(n);
 
       for (IdxT j = 0; j < size_; ++j)
       {
-        this->setVariableIndex(j, j);
-        this->setResidualIndex(j, j);
+        variable_indices_[static_cast<std::size_t>(j)] = offset_ + j;
+        residual_indices_[static_cast<std::size_t>(j)] = offset_ + j;
       }
 
       nnz_ = 0;
@@ -84,30 +91,39 @@ namespace GridKit
     {
       for (std::size_t n = 0; n < v0_.size(); ++n)
       {
-        y_[n] = v0_[n];
+        y_[n]  = v0_[n];
+        yp_[n] = ScalarT{0.0};
       }
-      std::fill(yp_.begin(), yp_.end(), ScalarT{0.0});
       return 0;
     }
 
     template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::tagDifferentiable()
     {
-      std::fill(tag_.begin(), tag_.end(), true);
+      for (std::size_t n = 0; n < tag_.size(); ++n)
+      {
+        tag_[n] = ScalarT{1.0};
+      }
       return 0;
     }
 
     template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::setAbsoluteTolerance(RealT rel_tol)
     {
-      std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+      for (std::size_t n = 0; n < abs_tol_.size(); ++n)
+      {
+        abs_tol_[n] = rel_tol;
+      }
       return 0;
     }
 
     template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::evaluateResidual()
     {
-      std::fill(f_.begin(), f_.end(), ScalarT{0.0});
+      for (std::size_t n = 0; n < f_.size(); ++n)
+      {
+        f_[n] = ScalarT{0.0};
+      }
       return 0;
     }
 

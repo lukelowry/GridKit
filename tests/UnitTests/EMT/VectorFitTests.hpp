@@ -227,12 +227,12 @@ namespace GridKit
 
         for (std::size_t j = 0; j < Y_OUT; ++j)
         {
-          success *= model.tag()[j];
+          success *= isEqual(model.tag()[j], ScalarT{1.0});
         }
 
         for (std::size_t n = 0; n < N; ++n)
         {
-          success *= !model.tag()[Y_OUT + n];
+          success *= isEqual(model.tag()[Y_OUT + n], ScalarT{0.0});
         }
 
         return success.report(__func__);

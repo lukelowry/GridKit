@@ -12,7 +12,6 @@ namespace GridKit
     template <typename scalar_type, typename index_type, std::size_t N>
     int LineLumped<scalar_type, index_type, N>::evaluateJacobian()
     {
-      copyParentStateToSubmodels();
       copyParentIndicesToSubmodels();
 
       int ret  = 0;
