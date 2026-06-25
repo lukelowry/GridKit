@@ -67,10 +67,23 @@ endif()
 
 add_test(NAME EMTLoadRLTest COMMAND test_emt_loadrl)
 
+add_executable(test_emt_systemmodel runSystemModelTests.cpp)
+target_link_libraries(
+  test_emt_systemmodel GridKit::emt_systemmodel GridKit::testing)
+
+if(GRIDKIT_ENABLE_ENZYME)
+  target_link_libraries(test_emt_systemmodel ClangEnzymeFlags)
+  target_compile_options(test_emt_systemmodel PRIVATE -mllvm -enzyme-auto-sparsity=1
+                                                      -fno-math-errno)
+endif()
+
+add_test(NAME EMTSystemModelTest COMMAND test_emt_systemmodel)
+
 install(
   TARGETS test_emt_bus
           test_emt_vectorfit
           test_emt_linelumped
           test_emt_voltage_source
           test_emt_loadrl
+          test_emt_systemmodel
   RUNTIME DESTINATION bin)

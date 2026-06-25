@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <GridKit/Model/EMT/Component/Source/VoltageSource/VoltageSourceData.hpp>
+#include <GridKit/Model/EMT/ComponentDataJSONParser.hpp>
 
 namespace GridKit
 {
@@ -17,8 +18,7 @@ namespace GridKit
     template <typename RealT, typename IdxT, std::size_t N>
     void from_json(const json& j, VoltageSourceData<RealT, IdxT, N>& data)
     {
-      j.at("class").get_to(data.device_class);
-      j.at("id").get_to(data.disambiguation_string);
+      readComponentData(j, data, "VoltageSource");
 
       const auto& params = j.at("params");
 

@@ -6,7 +6,11 @@ gridkit_add_library(
           LineLumpedEnzyme.hpp
           LineLumpedData.hpp
           LineLumpedDataJSONParser.hpp
-  LINK_LIBRARIES INTERFACE GridKit::emt_bus GridKit::emt_vectorfit
+  LINK_LIBRARIES
+    INTERFACE
+    GridKit::emt_component
+    GridKit::emt_bus
+    GridKit::emt_vectorfit
   INCLUDE_DIRECTORIES INTERFACE $<BUILD_INTERFACE:${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include>)
 
 target_link_libraries(

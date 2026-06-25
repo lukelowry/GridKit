@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 
 #include <GridKit/Model/EMT/Component/Load/LoadRL/LoadRLData.hpp>
+#include <GridKit/Model/EMT/ComponentDataJSONParser.hpp>
 
 namespace GridKit
 {
@@ -16,8 +17,7 @@ namespace GridKit
     template <typename RealT, typename IdxT>
     void from_json(const json& j, LoadRLData<RealT, IdxT>& data)
     {
-      j.at("class").get_to(data.device_class);
-      j.at("id").get_to(data.disambiguation_string);
+      readComponentData(j, data, "LoadRL");
 
       const auto& params = j.at("params");
 

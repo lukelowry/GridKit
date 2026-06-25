@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 
 #include <GridKit/Model/EMT/Component/Line/LineLumped/LineLumpedData.hpp>
+#include <GridKit/Model/EMT/ComponentDataJSONParser.hpp>
 #include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitDataJSONParser.hpp>
 
 namespace GridKit
@@ -18,8 +19,7 @@ namespace GridKit
     template <typename RealT, typename IdxT, std::size_t N>
     void from_json(const json& j, LineLumpedData<RealT, IdxT, N>& data)
     {
-      j.at("class").get_to(data.device_class);
-      j.at("id").get_to(data.disambiguation_string);
+      readComponentData(j, data, "LineLumped");
 
       const auto& params = j.at("params");
       params.at("dx").get_to(data.dx);
