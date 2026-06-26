@@ -69,6 +69,7 @@
 - Added `REGCA` converter model implementation for PhasorDynamics.
 - Added `REECA` converter model implementation for PhasorDynamics.
 - Added `REECB` converter model for PhasorDynamics.
+- Added `HYGOV` governor model implementation for PhasorDynamics.
 
 ## v0.1
 
