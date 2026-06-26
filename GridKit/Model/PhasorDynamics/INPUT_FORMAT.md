@@ -146,6 +146,7 @@ are specified:
   `GenClassical`       | the classical machine model                          | `bus`, `pmech`\*, `speed`\*, `efd`\*  | `p0`, `q0`, `H`, `D`, `Ra`, `Xdp`, `mva` | `ir`, `ii`, `p`, `q`, `delta`, `omega`
   `Tgov1 `             | the TGOV1 governor model                             | `pmech`, `speed`                 | `Trate`, `R`, `T1`, `T2`, `T3`, `Pvmax`, `Pvmin`, `Dt` | `none`
   `Ieeet1`             | the IEEET1 exciter model                             | `bus`, `speed`, `efd`, `vs`\*    | `Tr`, `Ka`, `Ta`, `Ke`, `Te`, `Kf`, `Tf`, `Vrmin`, `Vrmax`, `E1`, `E2`, `Se1`, `Se2`, `Ispdlim` | `efd`, `ksat`
+  `Esdc1a`             | the ESDC1A exciter model                             | `bus`, `efd`, `speed`\*, `vs`\*, `vuel`\* | `Tr`, `Ka`, `Ta`, `Tb`, `Tc`, `Vrmax`, `Vrmin`, `Ke`, `Te`, `Kf`, `Tf1`, `Spdmlt`, `E1`, `Se1`, `E2`, `Se2`, `UEL`, `exclim` | `efd`, `vc`, `vr`, `vf`, `se`, `vfe`
   `SexsPti`            | the SEXS-PTI simplified exciter model                | `bus`, `efd`, `vs`\*             | `Ta`, `Tb`, `Te`, `K`, `Efdmax`, `Efdmin` | `efd`
   `Ieeest`      | the IEEEST stabilizer model                          | `input`, `output`                | `A1`, `A2`, `A3`, `A4`, `A5`, `A6`, `T1`, `T2`, `T3`, `T4`, `T5`, `T6`, `Ks`, `Lsmin`, `Lsmax`, `Vcl`, `Vcu`, `Tdelay` | `vss`
   `BusFault`           | simple impedance-based fault at a bus                | `bus`, `status`\*                | `state0`, `R`, `X` | `state`, `ir`, `ii`
