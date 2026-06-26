@@ -733,11 +733,11 @@ namespace GridKit
       template <typename scalar_type, typename index_type>
       __attribute__((always_inline)) inline int
       Reeca<scalar_type, index_type>::evaluateInternalResidual(
-          ScalarT* y,
-          ScalarT* yp,
-          ScalarT* wb,
-          ScalarT* ws,
-          ScalarT* f)
+          const ScalarT* y,
+          const ScalarT* yp,
+          const ScalarT* wb,
+          const ScalarT* ws,
+          ScalarT*       f)
       {
         const auto VMEAS     = static_cast<size_t>(ReecaInternalVariables::VMEAS);
         const auto PMEAS     = static_cast<size_t>(ReecaInternalVariables::PMEAS);

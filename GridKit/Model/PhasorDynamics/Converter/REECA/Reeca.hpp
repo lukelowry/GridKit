@@ -76,10 +76,10 @@ namespace GridKit
         using Component<scalar_type, index_type>::alpha_;
         using Component<scalar_type, index_type>::f_;
         using Component<scalar_type, index_type>::gridkit_component_id_;
-        using Component<scalar_type, index_type>::J_;
         using Component<scalar_type, index_type>::J_cols_buffer_;
         using Component<scalar_type, index_type>::J_rows_buffer_;
         using Component<scalar_type, index_type>::J_vals_buffer_;
+        using Component<scalar_type, index_type>::nnz_;
         using Component<scalar_type, index_type>::residual_indices_;
         using Component<scalar_type, index_type>::size_;
         using Component<scalar_type, index_type>::tag_;
@@ -122,7 +122,7 @@ namespace GridKit
         const Model::VariableMonitorBase* getMonitor() const override;
 
         __attribute__((always_inline)) inline int evaluateInternalResidual(
-            ScalarT*, ScalarT*, ScalarT*, ScalarT*, ScalarT*);
+            const ScalarT*, const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
 
       private:
         void initModelParams(const ModelDataT& data);

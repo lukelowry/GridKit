@@ -854,13 +854,13 @@ namespace GridKit
       "class": "Tgov1",
       "ports": { "pmech": 10 },
       "id": "GP",
-      "params": { "R": 0.05, "T1": 0.5, "T2": 2.5, "T3": 7.5, "Pvmax": 1.0, "Pvmin": 0.0, "Dt": 0.0 }
+      "params": { "Trate": 100.0, "R": 0.05, "T1": 0.5, "T2": 2.5, "T3": 7.5, "Pvmax": 1.0, "Pvmin": 0.0, "Dt": 0.0 }
     },
     {
       "class": "Tgov1",
       "ports": { "pmech": 11 },
       "id": "GQ",
-      "params": { "R": 0.05, "T1": 0.5, "T2": 2.5, "T3": 7.5, "Pvmax": 1.0, "Pvmin": 0.0, "Dt": 0.0 }
+      "params": { "Trate": 100.0, "R": 0.05, "T1": 0.5, "T2": 2.5, "T3": 7.5, "Pvmax": 1.0, "Pvmin": 0.0, "Dt": 0.0 }
     },
     {
       "class": "Reeca",
