@@ -5,3 +5,4 @@
 
 add_subdirectory(REGCA)
 add_subdirectory(REECA)
+add_subdirectory(REECB)

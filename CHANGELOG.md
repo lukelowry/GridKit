@@ -68,6 +68,7 @@
 - Removed `COO_Matrix` class.
 - Added `REGCA` converter model implementation for PhasorDynamics.
 - Added `REECA` converter model implementation for PhasorDynamics.
+- Added `REECB` converter model for PhasorDynamics.
 
 ## v0.1
 
