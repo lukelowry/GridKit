@@ -8,6 +8,7 @@ int main()
 
   result += test.init();
   result += test.residual();
+  result += test.tags();
   result += test.verify();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
