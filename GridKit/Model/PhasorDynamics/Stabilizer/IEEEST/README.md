@@ -6,8 +6,6 @@ blocks, washout, and output limiter.
 Notes:
 - $V_{\mathrm{cl}}$, $V_{\mathrm{cu}}$, and $T_{\mathrm{delay}}$ are accepted for input-format
   compatibility but are not modeled.
-- A zero denominator time constant bypasses its corresponding lead–lag or
-  washout block.
 
 ## Block Diagram
 
@@ -40,42 +38,34 @@ $T_{\mathrm{delay}}$    | [sec]    | `Tdelay` | Input delay                     
 
 ### Parameter Validation
 
-The fixed realization rejects a first-order-only notch denominator:
+IEEEST denominator time constants are conditioned and unsupported notch forms are rejected by the following checks. Let $\epsilon_T=10^{-3}$.
 
 ```math
 \begin{aligned}
-  a_2 \ne 0 \lor a_3 \ne 0 \lor a_4 \ne 0 \lor a_1 = 0
+  T &\leftarrow \max\!\left(T, \epsilon_T\right)
+    \quad T\in\{T_2,T_4,T_6\} \\
+  A_6 &= 0
+    \quad\text{when}\quad
+    n = 1
 \end{aligned}
 ```
 
 ### Model Derived Parameters
 
-The notch-filter denominator expands to:
-
 ```math
 \begin{aligned}
-a_1 &= A_1 + A_3 \\
-a_2 &= A_2 + A_4 + A_1 A_3 \\
-a_3 &= A_1 A_4 + A_2 A_3 \\
-a_4 &= A_2 A_4
-\end{aligned}
-```
-
-The binary DAE selectors choose the active notch-filter order:
-
-```math
-\begin{aligned}
-\delta_1 &= \delta_2 =
-\begin{cases}
-1 & a_2 \ne 0 \lor a_3 \ne 0 \lor a_4 \ne 0 \\
-0 & \text{otherwise}
-\end{cases}
-\\
-\delta_3 &=
-\begin{cases}
-1 & a_3 \ne 0 \lor a_4 \ne 0 \\
-0 & \text{otherwise}
-\end{cases}
+  a_1 &= A_1 + A_3 \\
+  a_2 &= A_2 + A_4 + A_1 A_3 \\
+  a_3 &= A_1 A_4 + A_2 A_3 \\
+  a_4 &= A_2 A_4 \\
+  n &=
+    \begin{cases}
+      4 & a_4 \ne 0 \\
+      3 & a_4 = 0,\ a_3 \ne 0 \\
+      2 & a_4 = a_3 = 0,\ a_2 \ne 0 \\
+      1 & a_4 = a_3 = a_2 = 0,\ a_1 \ne 0 \\
+      0 & a_4 = a_3 = a_2 = a_1 = 0
+    \end{cases}
 \end{aligned}
 ```
 
@@ -91,9 +81,6 @@ $x_1, x_2, x_3, x_4$  | [-]    | Notch filter states   | States 1–4 in Fig. 1
 $x_5$                 | [-]    | Lead–lag 1 state      | State 5 in Fig. 1
 $x_6$                 | [-]    | Lead–lag 2 state      | State 6 in Fig. 1
 $x_7$                 | [-]    | Washout state         | State 7 in Fig. 1
-
-For reduced-order notch filters, unused notch states remain in the fixed
-component state vector and are pinned by algebraic residuals.
 
 #### Algebraic
 
@@ -113,9 +100,9 @@ None.
 
 #### Algebraic
 
-Symbol | Units  | Description             | Note
--------|--------|-------------------------|------
-$u$    | [p.u.] | Stabilizer input signal |
+Symbol | Units  | Type  | Description             | Note
+-------|--------|-------|-------------------------|------
+$u$    | [p.u.] | Known | Stabilizer input signal |
 
 ## Model Equations
 
@@ -123,13 +110,50 @@ $u$    | [p.u.] | Stabilizer input signal |
 
 ```math
 \begin{aligned}
-0 &= -\delta_1\dot{x}_1 + x_2 \\
-0 &= -\delta_2\dot{x}_2 + x_3 \\
-0 &= -\delta_3\dot{x}_3 + x_4 \\
-0 &= -a_4\dot{x}_4 - x_1 - a_1x_2 - a_2x_3 - a_3x_4 + u \\
-0 &= -T_2 \dot{x}_5 - x_5 + v_4 \\
-0 &= -T_4 \dot{x}_6 - x_6 + v_5 \\
-0 &= -T_6 \dot{x}_7 - x_7 + v_6
+  0 &=
+    -\dot{x}_1
+    + \begin{cases}
+      0, & n = 0 \\
+      \dfrac{1}{a_1}\left(-x_1 + u\right), & n = 1 \\
+      x_2, & n = 2,3,4
+    \end{cases} \\
+  0 &=
+    -\dot{x}_2
+    + \begin{cases}
+      0,
+        & n = 0,1 \\
+      \dfrac{1}{a_2}\left(-x_1 - a_1x_2 + u\right),
+        & n = 2 \\
+      x_3,
+        & n = 3,4
+    \end{cases} \\
+  0 &=
+    -\dot{x}_3
+    + \begin{cases}
+      0,
+        & n = 0,1,2 \\
+      \dfrac{1}{a_3}\left(-x_1 - a_1x_2 - a_2x_3 + u\right),
+        & n = 3 \\
+      x_4,
+        & n = 4
+    \end{cases} \\
+  0 &=
+    -\dot{x}_4
+    + \begin{cases}
+      0,
+        & n = 0,1,2,3 \\
+      \dfrac{1}{a_4}\left(-x_1 - a_1x_2 - a_2x_3 - a_3x_4 + u\right),
+        & n = 4
+    \end{cases} \\
+  0 &=
+    -\dot{x}_5
+    + \dfrac{1}{T_2}\left(v_4 - x_5\right) \\
+  0 &=
+    -\dot{x}_6
+    + \dfrac{1}{T_4}\left(v_5 - x_6\right) \\
+  0 &=
+    -\dot{x}_7
+    + \dfrac{1}{T_6}\left(v_6 - x_7\right)
 \end{aligned}
 ```
 
@@ -137,23 +161,25 @@ $u$    | [p.u.] | Stabilizer input signal |
 
 ```math
 \begin{aligned}
-0 &= -v_4 + x_1 + A_5x_2 + A_6x_3 \\
-0 &=
-\begin{cases}
--T_2(v_5 - x_5) + T_1(v_4 - x_5) & T_2 \ne 0 \\
-v_4 - v_5 & T_2 = 0
-\end{cases} \\
-0 &=
-\begin{cases}
--T_4(v_6 - x_6) + T_3(v_5 - x_6) & T_4 \ne 0 \\
-v_5 - v_6 & T_4 = 0
-\end{cases} \\
-0 &=
-\begin{cases}
--T_6 v_7 + K_s T_5(v_6 - x_7) & T_6 \ne 0 \\
-K_s v_6 - v_7 & T_6 = 0
-\end{cases} \\
-0 &= -V_{\mathrm{ss}} + \text{clamp}(v_7, L_s^{\min}, L_s^{\max})
+  0 &=
+    -v_4
+    + \begin{cases}
+      u,
+        & n = 0 \\
+      x_1 + \dfrac{A_5}{a_1}\left(-x_1 + u\right),
+        & n = 1 \\
+      x_1 + A_5x_2
+        + \dfrac{A_6}{a_2}\left(-x_1 - a_1x_2 + u\right),
+        & n = 2 \\
+      x_1 + A_5x_2 + A_6x_3,
+        & n = 3,4
+    \end{cases} \\
+  0 &= -v_5 + x_5 + \dfrac{T_1}{T_2}\left(v_4 - x_5\right) \\
+  0 &= -v_6 + x_6 + \dfrac{T_3}{T_4}\left(v_5 - x_6\right) \\
+  0 &= -v_7 + K_s\dfrac{T_5}{T_6}\left(v_6 - x_7\right) \\
+  0 &=
+    -V_{\mathrm{ss}}
+    + \text{clamp}(v_7, L_s^{\min}, L_s^{\max})
 \end{aligned}
 ```
 
@@ -162,28 +188,31 @@ The output limiter uses GridKit's smooth
 
 ## Initialization
 
-Initialization is performed by evaluating the steady-state residuals in
-dependency order. Let subscript $0$ denote initial values and set all internal
-derivatives to zero. States and derivatives initialize to the steady state
-implied by the attached input $u$:
+### External Priors
 
 ```math
 \begin{aligned}
-x_1 &= v_4 = x_5 = v_5 = x_6 = v_6 = x_7 = u \\
-x_2 &= x_3 = x_4 = 0 \\
-v_7 &=
-\begin{cases}
-K_su & T_6 = 0 \\
-0 & \text{otherwise}
-\end{cases}
-&
-V_{\mathrm{ss}} &= \text{clamp}(v_7, L_s^{\min}, L_s^{\max})
+  u_0 &\leftarrow \text{stabilizer input signal}
 \end{aligned}
 ```
 
-All internal derivatives initialize to zero.
+### Internal Initialization
 
-## Model Outputs
+```math
+\begin{aligned}
+  x_{1,0} &= v_{4,0} = x_{5,0} = v_{5,0} = x_{6,0} = v_{6,0} = x_{7,0} = u_0 \\
+  x_{2,0} &= x_{3,0} = x_{4,0} = 0 \\
+  v_{7,0} &= 0 \\
+  V_{\mathrm{ss},0} &= \text{clamp}(v_{7,0}, L_s^{\min}, L_s^{\max}) \\
+  \dot{x}_{i,0} &= 0 \quad i\in\{1,\ldots,7\}
+\end{aligned}
+```
+
+### External Solved
+
+None.
+
+## Monitorable Outputs
 
 Output | Units  | Description               | Note
 -------|--------|---------------------------|------

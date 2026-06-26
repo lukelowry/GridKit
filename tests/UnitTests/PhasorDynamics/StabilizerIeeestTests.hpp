@@ -42,17 +42,15 @@ namespace GridKit
           ScalarT u;
           RealT   Lsmin;
           RealT   Lsmax;
-          ScalarT raw_v7;
+          ScalarT expected_v7;
           ScalarT expected_vss;
         };
 
         const auto                  loose_tol = static_cast<RealT>(1.0e-4);
         const std::vector<InitCase> cases     = {
             {0.0, 0.0, 0.25, -1.0, 1.0, 0.0, 0.0},
-            {0.0, 1.0, 0.25, -1.0, 1.0, 0.25, 0.25},
-            {0.0, 2.0, 0.25, -1.0, 1.0, 0.50, 0.50},
-            {0.0, 4.0, 0.25, -1.0, 0.6, 1.00, 0.60},
-            {5.0, 3.0, 0.25, -1.0, 1.0, 0.00, 0.00},
+            {0.0, 4.0, 0.25, 0.2, 0.6, 0.0, 0.2},
+            {5.0, 3.0, 0.25, -1.0, 1.0, 0.0, 0.0},
         };
 
         for (const auto& test : cases)
@@ -83,7 +81,7 @@ namespace GridKit
 
           success *= vss_node.linked();
           success *= (vss_node.getVariableIndex() == 11);
-          success *= isEqual(model.y()[10], test.raw_v7, tol_);
+          success *= isEqual(model.y()[10], test.expected_v7, tol_);
           success *= isEqual(model.y()[11], test.expected_vss, loose_tol);
           success *= isEqual(vss_node.read(), test.expected_vss, loose_tol);
         }
@@ -107,31 +105,44 @@ namespace GridKit
         const std::vector<ResidualCase> cases = {
             {"baseline",
              [](DataT&) {},
-             {0.19, 0.28, 0.37, 0.0878, 0.25, 0.24, -0.05, -0.42, -0.25, -0.31, 5.75, 0.0}},
+             {0.19, 0.28, 0.37, 1.0975, 0.25, 0.24, -0.01, -0.42, -0.25, -0.31, 1.15, 0.0}},
             {"a4_zero",
              [](DataT& data)
              {
                data.parameters[Params::A4] = static_cast<RealT>(0.0);
              },
-             {0.19, 0.28, 0.37, 0.227, 0.25, 0.24, -0.05, -0.42, -0.25, -0.31, 5.75, 0.0}},
+             {0.19, 0.28, 4.153333333333333, -0.04, 0.25, 0.24, -0.01, -0.42, -0.25, -0.31, 1.15, 0.0}},
             {"a3_a4_zero",
              [](DataT& data)
              {
                data.parameters[Params::A3] = static_cast<RealT>(0.0);
                data.parameters[Params::A4] = static_cast<RealT>(0.0);
              },
-             {0.19, 0.28, 0.40, 0.32, 0.25, 0.24, -0.05, -0.42, -0.25, -0.31, 5.75, 0.0}},
-            {"time_zero",
+             {0.19, 1.88, -0.03, -0.04, 0.25, 0.24, -0.01, 0.54, -0.25, -0.31, 1.15, 0.0}},
+            {"notch_bypass",
              [](DataT& data)
              {
-               data.parameters[Params::T2] = static_cast<RealT>(0.0);
-               data.parameters[Params::T4] = static_cast<RealT>(0.0);
-               data.parameters[Params::T6] = static_cast<RealT>(0.0);
+               data.parameters[Params::A1] = static_cast<RealT>(0.0);
+               data.parameters[Params::A2] = static_cast<RealT>(0.0);
+               data.parameters[Params::A3] = static_cast<RealT>(0.0);
+               data.parameters[Params::A4] = static_cast<RealT>(0.0);
+               data.parameters[Params::A5] = static_cast<RealT>(0.0);
+               data.parameters[Params::A6] = static_cast<RealT>(0.0);
              },
-             {0.19, 0.28, 0.37, 0.0878, 0.30, 0.30, 0.30, -0.42, -0.10, -0.10, 9.95, 0.0}},
+             {-0.01, -0.02, -0.03, -0.04, 0.25, 0.24, -0.01, -0.3, -0.25, -0.31, 1.15, 0.0}},
+            {"first_order",
+             [](DataT& data)
+             {
+               data.parameters[Params::A2] = static_cast<RealT>(0.0);
+               data.parameters[Params::A3] = static_cast<RealT>(0.0);
+               data.parameters[Params::A4] = static_cast<RealT>(0.0);
+               data.parameters[Params::A6] = static_cast<RealT>(0.0);
+             },
+             {3.99, -0.02, -0.03, -0.04, 0.25, 0.24, -0.01, 1.3, -0.25, -0.31, 1.15, 0.0}},
         };
 
         const auto loose_tol = static_cast<RealT>(1.0e-4);
+
         for (const auto& test : cases)
         {
           PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
@@ -191,6 +202,81 @@ namespace GridKit
           }
         }
 
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+          ScalarT                                   u_value{0.5};
+          IdxT                                      u_index{12};
+          ScalarT                                   vss_value{0.0};
+          IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+          u_node.set(&u_value, &u_index);
+          vss_node.set(&vss_value, &vss_index);
+
+          auto data                   = makeData();
+          data.parameters[Params::A2] = static_cast<RealT>(0.0);
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+          data.parameters[Params::T2] = static_cast<RealT>(0.0);
+          data.parameters[Params::T4] = static_cast<RealT>(0.0);
+          data.parameters[Params::T6] = static_cast<RealT>(0.0);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.getSignals().template assignSignalNode<PhasorDynamics::Stabilizer::IeeestInternalVariables::VSS>(&vss_node);
+
+          model.allocate();
+          success *= (model.verify() == 0);
+          success *= (model.initialize() == 0);
+          success *= (model.evaluateResidual() == 0);
+
+          const auto loose_tol = static_cast<RealT>(1.0e-4);
+          for (size_t i = 0; i < model.getResidual().size(); ++i)
+          {
+            if (!isEqual(model.getResidual()[i], static_cast<ScalarT>(0.0), loose_tol))
+            {
+              std::cout << "Conditioned-constant residual row " << i << " is "
+                        << std::setprecision(15) << model.getResidual()[i] << "\n";
+              success = false;
+            }
+          }
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome tags()
+      {
+        TestStatus success = true;
+
+        using Params = PhasorDynamics::Stabilizer::IeeestParameters;
+
+        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+        ScalarT                                   u_value{0.0};
+        IdxT                                      u_index{12};
+        u_node.set(&u_value, &u_index);
+
+        auto data                   = makeData();
+        data.parameters[Params::A2] = static_cast<RealT>(0.0);
+        data.parameters[Params::A4] = static_cast<RealT>(0.0);
+        data.parameters[Params::T2] = static_cast<RealT>(0.0);
+        data.parameters[Params::T4] = static_cast<RealT>(0.0);
+        data.parameters[Params::T6] = static_cast<RealT>(0.0);
+
+        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> model(data);
+        model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+
+        model.allocate();
+
+        for (size_t i = 0; i < model.tag().size(); ++i)
+        {
+          const bool expected = (i <= static_cast<size_t>(PhasorDynamics::Stabilizer::IeeestInternalVariables::X7));
+          if (model.tag()[i] != expected)
+          {
+            std::cout << "Incorrect differential tag at row " << i << "\n";
+            success = false;
+          }
+        }
+
         return success.report(__func__);
       }
 
@@ -229,6 +315,25 @@ namespace GridKit
           model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
           model.allocate();
           success *= (model.verify() != 0);
+        }
+
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          auto data                   = makeData();
+          data.parameters[Params::A1] = static_cast<RealT>(1.0);
+          data.parameters[Params::A2] = static_cast<RealT>(0.0);
+          data.parameters[Params::A3] = static_cast<RealT>(0.0);
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+          data.parameters[Params::A6] = static_cast<RealT>(0.0);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() == 0);
         }
 
         return success.report(__func__);
