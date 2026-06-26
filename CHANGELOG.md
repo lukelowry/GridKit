@@ -67,6 +67,7 @@
 - Added IDA option to suppress algebraic variables in local error tests.
 - Removed `COO_Matrix` class.
 - Added `REGCA` converter model implementation for PhasorDynamics.
+- Added `REECA` converter model implementation for PhasorDynamics.
 
 ## v0.1
 
