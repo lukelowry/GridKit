@@ -276,22 +276,32 @@ derivatives to zero:
     &= V_{\mathrm{FE},0} \\
   V_{\mathrm{HV},0}
     &= \dfrac{V_{R,0}}{K_A} \\
+  g_0
+    &=
+      \begin{cases}
+        V_{\mathrm{HV},0},
+          & s_{\mathrm{UEL}}=1 \\
+        V_{\mathrm{UEL},0}
+          + \rho^{-1}
+            \left(V_{\mathrm{HV},0}-V_{\mathrm{UEL},0}\right),
+          & s_{\mathrm{UEL}}=0
+      \end{cases} \\
   V_{C,0}
     &= E_{C,0} \\
   V_{F,0}
     &= 0 \\
   e_{V,0}
-    &= V_{\mathrm{HV},0} \\
+    &= g_0 \\
   x_{\mathrm{LL},0}
-    &= e_{V,0} \\
+    &= g_0 \\
   V_{\mathrm{LL},0}
-    &= e_{V,0}
+    &= g_0
 \end{aligned}
 ```
 
 Initialization rejects $d_0=0$, $V_{R,0}$ outside
 $[V_R^{\min},V_R^{\max}]$, and high-value-gate active starts with
-$s_{\mathrm{UEL}}=0$ and $V_{\mathrm{HV},0}<V_{\mathrm{UEL},0}$.
+$s_{\mathrm{UEL}}=0$ and $V_{\mathrm{HV},0}\le V_{\mathrm{UEL},0}$.
 
 ### External Solved
 

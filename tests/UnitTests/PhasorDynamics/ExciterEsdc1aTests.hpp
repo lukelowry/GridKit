@@ -89,6 +89,7 @@ namespace GridKit
         success *= (fixture.efd_node.getVariableIndex()
                     == static_cast<IdxT>(idx(Esdc1aInternalVariables::EFD)));
         success *= isEqual(fixture.efd_node.read(), static_cast<ScalarT>(1.2), kTol);
+        success *= smoothHighValueGateInitialResidual();
 
         return success.report(__func__);
       }
@@ -369,6 +370,46 @@ namespace GridKit
         active.exciter.y()[idx(Internal::VLL)] += 0.1;
         active.exciter.evaluateResidual();
         success = success && active.exciter.getResidual()[idx(Internal::VLL)] < static_cast<ScalarT>(0.0);
+
+        return success;
+      }
+
+      bool smoothHighValueGateInitialResidual()
+      {
+        auto data = makeDefaultData();
+
+        PhasorDynamics::Bus<ScalarT, IdxT>        bus(3.0, 4.0);
+        PhasorDynamics::SignalNode<ScalarT, IdxT> efd_node;
+        PhasorDynamics::SignalNode<ScalarT, IdxT> omega_node;
+        PhasorDynamics::SignalNode<ScalarT, IdxT> vs_node;
+
+        ScalarT efd_value{0.0};
+        ScalarT omega_value{0.0};
+        ScalarT vs_value{0.0};
+
+        IdxT efd_index{INVALID_INDEX<IdxT>};
+        IdxT omega_index{20};
+        IdxT vs_index{21};
+
+        efd_node.set(&efd_value, &efd_index);
+        omega_node.set(&omega_value, &omega_index);
+        vs_node.set(&vs_value, &vs_index);
+
+        PhasorDynamics::Exciter::Esdc1a<ScalarT, IdxT> exciter(&bus, data);
+        exciter.getSignals().template assignSignalNode<Internal::EFD>(&efd_node);
+        exciter.getSignals().template attachSignalNode<External::OMEGA>(&omega_node);
+        exciter.getSignals().template attachSignalNode<External::VS>(&vs_node);
+
+        bus.allocate();
+        bus.initialize();
+        exciter.allocate();
+        efd_node.init(1.2);
+
+        TestStatus success  = true;
+        success            *= (exciter.verify() == 0);
+        success            *= (exciter.initialize() == 0);
+        success            *= (exciter.evaluateResidual() == 0);
+        success            *= isEqual(exciter.getResidual()[idx(Internal::VHV)], static_cast<ScalarT>(0.0), kTol);
 
         return success;
       }

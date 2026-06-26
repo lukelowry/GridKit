@@ -397,22 +397,39 @@ namespace GridKit
         const ScalarT se0   = SB_ * Math::qramp(efdp0 - SA_);
         const ScalarT vfe0  = slim_off_ * (Ke_ + se0) * efdp0
                              + slim_ * Math::ramp((Ke_ + se0) * efdp0);
-        const ScalarT vr0  = vfe0;
-        const ScalarT vhv0 = vr0 / Ka_;
+        const ScalarT vr0          = vfe0;
+        const ScalarT vhv0         = vr0 / Ka_;
+        auto          inverse_ramp = [](RealT y)
+        {
+          const RealT scaled_y = Math::MU<RealT> * y;
+          if (scaled_y > static_cast<RealT>(50.0))
+          {
+            return y;
+          }
+          return std::log(std::expm1(scaled_y)) / Math::MU<RealT>;
+        };
+
+        ScalarT gate_input0 = vhv0;
+        if (sUEL_ == ZERO<RealT>)
+        {
+          const RealT ramp_target = static_cast<RealT>(vhv0 - vuel0);
+          if (ramp_target <= ZERO<RealT>)
+          {
+            Log::error() << "Esdc1a: smooth high-value gate is active at initialization\n";
+            return 1;
+          }
+          gate_input0 = vuel0 + inverse_ramp(ramp_target);
+        }
+
         const ScalarT vc0  = Ec0;
         const ScalarT vf0  = ScalarT{ZERO<RealT>};
-        const ScalarT ev0  = vhv0;
-        const ScalarT xll0 = ev0;
-        const ScalarT vll0 = ev0;
+        const ScalarT ev0  = gate_input0;
+        const ScalarT xll0 = gate_input0;
+        const ScalarT vll0 = gate_input0;
 
         if (vr0 < Vrmin_ || vr0 > Vrmax_)
         {
           Log::error() << "Esdc1a: initialized VR is outside limits\n";
-          return 1;
-        }
-        if (sUEL_ == ZERO<RealT> && vhv0 < vuel0)
-        {
-          Log::error() << "Esdc1a: high-value gate active at initialization\n";
           return 1;
         }
 
