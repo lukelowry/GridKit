@@ -1,15 +1,15 @@
 {
     "system_model_file": "wecc.case.json",
-    "dt": 0.00416666666666,
-    "tmax": 5.0,
+    "dt": 0.02,
+    "tmax": 6.0,
     "events": [
         {
-            "time": 1.0,
+            "time": 0.1,
             "type": "fault_on",
             "element_id": 0
         },
         {
-            "time": 1.1,
+            "time": 0.2,
             "type": "fault_off",
             "element_id": 0
         }
