@@ -6,6 +6,10 @@
 
 #pragma once
 
+#include <cstddef>
+#include <memory>
+#include <vector>
+
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
@@ -119,6 +123,8 @@ namespace GridKit
             ScalarT*);
 
       private:
+        static constexpr RealT TIME_CONSTANT_MINIMUM = static_cast<RealT>(1.0e-3);
+
         RealT A1_{0};
         RealT A2_{0};
         RealT A3_{0};
@@ -131,6 +137,9 @@ namespace GridKit
         RealT T4_{1};
         RealT T5_{0};
         RealT T6_{1};
+        RealT T2_inv_{1};
+        RealT T4_inv_{1};
+        RealT T6_inv_{1};
         RealT Ks_{1};
         RealT Lsmin_{-0.1};
         RealT Lsmax_{0.1};
@@ -138,27 +147,23 @@ namespace GridKit
         RealT Vcu_{0};
         RealT Tdelay_{0};
 
-        RealT a0_{1};
         RealT a1_{0};
         RealT a2_{0};
         RealT a3_{0};
         RealT a4_{0};
 
-        // Precomputed masks and safe inverse coefficients for branch-free degenerate paths.
-        RealT use_notch_{0};
-        RealT bypass_notch_{1};
-        RealT use_4th_order_{0};
-        RealT use_3rd_order_{0};
-        RealT use_2nd_order_{0};
-        RealT safe_inv_a4_{0};
-        RealT safe_inv_a3_{0};
-        RealT safe_inv_a2_{0};
-        RealT use_T2_block_{1};
-        RealT bypass_T2_block_{0};
-        RealT use_T4_block_{1};
-        RealT bypass_T4_block_{0};
-        RealT use_T6_block_{1};
-        RealT bypass_T6_block_{0};
+        IdxT  order_{0};
+        RealT s0_{1};
+        RealT s1_{0};
+        RealT s2_{0};
+        RealT s3_{0};
+        RealT s4_{0};
+        RealT a1_inv_{0};
+        RealT a2_inv_{0};
+        RealT a3_inv_{0};
+        RealT a4_inv_{0};
+
+        IdxT parameter_error_count_{0};
 
         ComponentSignals<ScalarT, IdxT, IeeestInternalVariables, IeeestExternalVariables> signals_;
 
@@ -166,6 +171,7 @@ namespace GridKit
 
         void initializeParameters(const ModelDataT& data);
         void initializeMonitor();
+        void setDerivedParameters();
 
         std::vector<ScalarT> ws_;
         std::vector<IdxT>    ws_indices_;
