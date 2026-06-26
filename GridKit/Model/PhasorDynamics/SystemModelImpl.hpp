@@ -506,6 +506,47 @@ namespace GridKit
         addComponent(exciter);
       }
 
+      for (const auto& excitedata : data.esdc1a)
+      {
+        IdxT bus_index = 0;
+        if (excitedata.ports.contains(Esdc1aPorts::bus))
+        {
+          bus_index = excitedata.ports.at(Esdc1aPorts::bus);
+        }
+
+        auto* exciter = new Esdc1a<ScalarT, IdxT>(getBus(bus_index), excitedata);
+
+        if (excitedata.ports.contains(Esdc1aPorts::speed))
+        {
+          IdxT           speed = excitedata.ports.at(Esdc1aPorts::speed);
+          constexpr auto OMEGA = Esdc1aExternalVariables::OMEGA;
+          exciter->getSignals().template attachSignalNode<OMEGA>(getSignal(speed));
+        }
+
+        if (excitedata.ports.contains(Esdc1aPorts::efd))
+        {
+          IdxT           efd = excitedata.ports.at(Esdc1aPorts::efd);
+          constexpr auto EFD = Esdc1aInternalVariables::EFD;
+          exciter->getSignals().template assignSignalNode<EFD>(getSignal(efd));
+        }
+
+        if (excitedata.ports.contains(Esdc1aPorts::vs))
+        {
+          IdxT           vs = excitedata.ports.at(Esdc1aPorts::vs);
+          constexpr auto VS = Esdc1aExternalVariables::VS;
+          exciter->getSignals().template attachSignalNode<VS>(getSignal(vs));
+        }
+
+        if (excitedata.ports.contains(Esdc1aPorts::vuel))
+        {
+          IdxT           vuel = excitedata.ports.at(Esdc1aPorts::vuel);
+          constexpr auto VUEL = Esdc1aExternalVariables::VUEL;
+          exciter->getSignals().template attachSignalNode<VUEL>(getSignal(vuel));
+        }
+
+        addComponent(exciter);
+      }
+
       for (const auto& excitedata : data.sexspti)
       {
         IdxT bus_index = 0;
