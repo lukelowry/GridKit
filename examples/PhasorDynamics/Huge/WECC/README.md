@@ -9,7 +9,7 @@ Model | Count
 ---|---
 [Bus](../../../../GridKit/Model/PhasorDynamics/Bus/README.md) | 10,000
 [Branch](../../../../GridKit/Model/PhasorDynamics/Branch/README.md) | 12,706
-[BusFault](../../../../GridKit/Model/PhasorDynamics/BusFault/README.md) | 10,000
+[BusFault](../../../../GridKit/Model/PhasorDynamics/BusFault/README.md) | 1
 [LoadZIP](../../../../GridKit/Model/PhasorDynamics/Load/LoadZIP/README.md) | 4,722
 [GENROU](../../../../GridKit/Model/PhasorDynamics/SynchronousMachine/GENROUwS/README.md) | 926
 [GENSAL](../../../../GridKit/Model/PhasorDynamics/SynchronousMachine/GENSALwS/README.md) | 530
