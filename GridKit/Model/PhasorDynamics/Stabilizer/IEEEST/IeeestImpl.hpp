@@ -49,12 +49,9 @@ namespace GridKit
       template <typename scalar_type, typename index_type>
       void Ieeest<scalar_type, index_type>::setDerivedParameters()
       {
-        T2_     = std::max(T2_, TIME_CONSTANT_MINIMUM);
-        T4_     = std::max(T4_, TIME_CONSTANT_MINIMUM);
-        T6_     = std::max(T6_, TIME_CONSTANT_MINIMUM);
-        T2_inv_ = ONE<RealT> / T2_;
-        T4_inv_ = ONE<RealT> / T4_;
-        T6_inv_ = ONE<RealT> / T6_;
+        T2_ = std::max(T2_, TIME_CONSTANT_MINIMUM);
+        T4_ = std::max(T4_, TIME_CONSTANT_MINIMUM);
+        T6_ = std::max(T6_, TIME_CONSTANT_MINIMUM);
 
         a1_ = A1_ + A3_;
         a2_ = A2_ + A4_ + A1_ * A3_;
@@ -352,9 +349,9 @@ namespace GridKit
         const ScalarT x2_rhs = (-x1 - a1_ * x2 + u) * a2_inv_;
         const ScalarT x3_rhs = (-x1 - a1_ * x2 - a2_ * x3 + u) * a3_inv_;
         const ScalarT x4_rhs = (-x1 - a1_ * x2 - a2_ * x3 - a3_ * x4 + u) * a4_inv_;
-        const ScalarT x5_rhs = (v4 - x5) * T2_inv_;
-        const ScalarT x6_rhs = (v5 - x6) * T4_inv_;
-        const ScalarT x7_rhs = (v6 - x7) * T6_inv_;
+        const ScalarT x5_rhs = (v4 - x5) / T2_;
+        const ScalarT x6_rhs = (v5 - x6) / T4_;
+        const ScalarT x7_rhs = (v6 - x7) / T6_;
 
         f[X1] = -x1_dot + s1 * x1_rhs + (s2 + s3 + s4) * x2;
         f[X2] = -x2_dot + s2 * x2_rhs + (s3 + s4) * x3;

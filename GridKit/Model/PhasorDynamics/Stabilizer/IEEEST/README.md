@@ -3,7 +3,8 @@
 Standard IEEE power system stabilizer: 4th-order notch filter, two lead–lag
 blocks, washout, and output limiter.
 
-Notes:
+## Notes
+
 - $V_{\mathrm{cl}}$, $V_{\mathrm{cu}}$, and $T_{\mathrm{delay}}$ are accepted for input-format
   compatibility but are not modeled.
 
@@ -68,6 +69,13 @@ IEEEST denominator time constants are conditioned and unsupported notch forms ar
     \end{cases}
 \end{aligned}
 ```
+
+## Model Ports
+
+Name     | Port   | Init  | Description
+---------|--------|-------|------
+`input`  | Input  | Known | Stabilizer input signal
+`output` | Output | Known | Stabilizer output signal
 
 ## Model Variables
 
@@ -188,11 +196,11 @@ The output limiter uses GridKit's smooth
 
 ## Initialization
 
-### External Priors
+### Input Initialization
 
 ```math
 \begin{aligned}
-  u_0 &\leftarrow \text{stabilizer input signal}
+  u &\leftarrow \text{stabilizer input signal}
 \end{aligned}
 ```
 
@@ -208,7 +216,7 @@ The output limiter uses GridKit's smooth
 \end{aligned}
 ```
 
-### External Solved
+### Output Initialization
 
 None.
 

@@ -138,9 +138,6 @@ namespace GridKit
         RealT T4_{1};
         RealT T5_{0};
         RealT T6_{1};
-        RealT T2_inv_{1};
-        RealT T4_inv_{1};
-        RealT T6_inv_{1};
         RealT Ks_{1};
         RealT Lsmin_{-0.1};
         RealT Lsmax_{0.1};
