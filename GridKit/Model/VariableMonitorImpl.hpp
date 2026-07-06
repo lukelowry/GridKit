@@ -24,22 +24,23 @@ namespace GridKit
      * each monitored value without a line break. That way other monitors can
      * append likewise on the same line, and the line can be ended by the control
      * monitor.
+     *
+     * @tparam eval_type Monitored component type, expected to expose `ScalarT`
+     *         and `IdxT` type aliases
+     * @tparam model_data_type Data class template expected to have a
+     *         MonitorableVariables enum
      */
-    template <typename scalar_type,
-              typename index_type,
-              template <typename, typename> typename eval_type,
-              template <typename, typename> typename model_data_type>
-    class VariableMonitor<eval_type<scalar_type, index_type>, model_data_type>
-      : public VariableMonitorBase
+    template <typename eval_type, template <typename, typename> typename model_data_type>
+    class VariableMonitor : public VariableMonitorBase
     {
       template <typename>
       friend class VariableMonitorController;
 
     public:
       /// Underlying scalar value type
-      using ScalarT      = scalar_type;
+      using ScalarT      = typename eval_type::ScalarT;
       /// Index type
-      using IdxT         = index_type;
+      using IdxT         = typename eval_type::IdxT;
       /// Underlying real value type
       using RealT        = typename GridKit::ScalarTraits<ScalarT>::RealT;
       /// Type of (EvalT)Data class expected to have MonitorableVariables enum

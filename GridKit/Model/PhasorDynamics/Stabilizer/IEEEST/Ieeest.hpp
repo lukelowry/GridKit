@@ -6,10 +6,12 @@
 
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <vector>
 
+#include <GridKit/Definitions.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
@@ -36,23 +38,163 @@ namespace GridKit
   {
     namespace Stabilizer
     {
-      /// Internal variables of a `Ieeest`
-      enum class IeeestInternalVariables : size_t
+      /**
+       * @brief Combined denominator coefficients of the IEEEST notch filter.
+       *
+       * The two second-order denominator factors expand into a single quartic
+       * with coefficients a1..a4.
+       */
+      template <typename real_type>
+      inline std::array<real_type, 4> notchCoefficients(real_type A1,
+                                                        real_type A2,
+                                                        real_type A3,
+                                                        real_type A4)
       {
-        X1,  ///< Notch filter state 1
-        X2,  ///< Notch filter state 2
-        X3,  ///< Notch filter state 3
-        X4,  ///< Notch filter state 4
-        X5,  ///< Lead-lag 1 state
-        X6,  ///< Lead-lag 2 state
-        X7,  ///< Washout state
-        V4,  ///< Notch filter output
-        V5,  ///< Lead-lag 1 output
-        V6,  ///< Lead-lag 2 output
-        V7,  ///< Unlimited stabilizer signal
-        VSS, ///< Limited stabilizer signal (model output)
-        MAXIMUM,
+        return {A1 + A3,
+                A2 + A4 + A1 * A3,
+                A1 * A4 + A2 * A3,
+                A2 * A4};
+      }
+
+      /**
+       * @brief Notch-filter order implied by the combined denominator
+       *        coefficients.
+       *
+       * Structural coefficients are exact data-file literals, so the
+       * comparisons against zero are intentionally exact.
+       */
+      template <typename real_type>
+      inline size_t notchOrder(real_type a1, real_type a2, real_type a3, real_type a4)
+      {
+        size_t order = 0;
+
+        if (a1 != ZERO<real_type>)
+        {
+          order = 1;
+        }
+        if (a2 != ZERO<real_type>)
+        {
+          order = 2;
+        }
+        if (a3 != ZERO<real_type>)
+        {
+          order = 3;
+        }
+        if (a4 != ZERO<real_type>)
+        {
+          order = 4;
+        }
+
+        return order;
+      }
+
+      /// Internal variable layout of a `Ieeest` by notch-filter order
+      template <size_t order>
+      struct IeeestVariables;
+
+      template <>
+      struct IeeestVariables<0>
+      {
+        /// Internal variables of a zeroth-order `Ieeest`
+        enum class InternalVariables : size_t
+        {
+          X5,  ///< Lead-lag 1 state
+          X6,  ///< Lead-lag 2 state
+          X7,  ///< Washout state
+          V4,  ///< Notch filter output
+          V5,  ///< Lead-lag 1 output
+          V6,  ///< Lead-lag 2 output
+          V7,  ///< Unlimited stabilizer signal
+          VSS, ///< Limited stabilizer signal (model output)
+          MAXIMUM,
+        };
       };
+
+      template <>
+      struct IeeestVariables<1>
+      {
+        /// Internal variables of a first-order `Ieeest`
+        enum class InternalVariables : size_t
+        {
+          X1,  ///< Notch filter state 1
+          X5,  ///< Lead-lag 1 state
+          X6,  ///< Lead-lag 2 state
+          X7,  ///< Washout state
+          V4,  ///< Notch filter output
+          V5,  ///< Lead-lag 1 output
+          V6,  ///< Lead-lag 2 output
+          V7,  ///< Unlimited stabilizer signal
+          VSS, ///< Limited stabilizer signal (model output)
+          MAXIMUM,
+        };
+      };
+
+      template <>
+      struct IeeestVariables<2>
+      {
+        /// Internal variables of a second-order `Ieeest`
+        enum class InternalVariables : size_t
+        {
+          X1,  ///< Notch filter state 1
+          X2,  ///< Notch filter state 2
+          X5,  ///< Lead-lag 1 state
+          X6,  ///< Lead-lag 2 state
+          X7,  ///< Washout state
+          V4,  ///< Notch filter output
+          V5,  ///< Lead-lag 1 output
+          V6,  ///< Lead-lag 2 output
+          V7,  ///< Unlimited stabilizer signal
+          VSS, ///< Limited stabilizer signal (model output)
+          MAXIMUM,
+        };
+      };
+
+      template <>
+      struct IeeestVariables<3>
+      {
+        /// Internal variables of a third-order `Ieeest`
+        enum class InternalVariables : size_t
+        {
+          X1,  ///< Notch filter state 1
+          X2,  ///< Notch filter state 2
+          X3,  ///< Notch filter state 3
+          X5,  ///< Lead-lag 1 state
+          X6,  ///< Lead-lag 2 state
+          X7,  ///< Washout state
+          V4,  ///< Notch filter output
+          V5,  ///< Lead-lag 1 output
+          V6,  ///< Lead-lag 2 output
+          V7,  ///< Unlimited stabilizer signal
+          VSS, ///< Limited stabilizer signal (model output)
+          MAXIMUM,
+        };
+      };
+
+      template <>
+      struct IeeestVariables<4>
+      {
+        /// Internal variables of a fourth-order `Ieeest`
+        enum class InternalVariables : size_t
+        {
+          X1,  ///< Notch filter state 1
+          X2,  ///< Notch filter state 2
+          X3,  ///< Notch filter state 3
+          X4,  ///< Notch filter state 4
+          X5,  ///< Lead-lag 1 state
+          X6,  ///< Lead-lag 2 state
+          X7,  ///< Washout state
+          V4,  ///< Notch filter output
+          V5,  ///< Lead-lag 1 output
+          V6,  ///< Lead-lag 2 output
+          V7,  ///< Unlimited stabilizer signal
+          VSS, ///< Limited stabilizer signal (model output)
+          MAXIMUM,
+        };
+      };
+
+      /// Internal variables of a `Ieeest` of the given notch-filter order
+      template <size_t order>
+      using IeeestInternalVariables = typename IeeestVariables<order>::InternalVariables;
 
       /// External variables of a `Ieeest`
       enum class IeeestExternalVariables : size_t
@@ -61,9 +203,11 @@ namespace GridKit
         MAXIMUM,
       };
 
-      template <typename scalar_type, typename index_type>
+      template <typename scalar_type, typename index_type, size_t order>
       class Ieeest : public Component<scalar_type, index_type>
       {
+        static_assert(order <= 4, "Ieeest notch filter order must be in [0, 4]");
+
         using Component<scalar_type, index_type>::gridkit_component_id_;
         using Component<scalar_type, index_type>::alpha_;
         using Component<scalar_type, index_type>::f_;
@@ -75,7 +219,6 @@ namespace GridKit
         using Component<scalar_type, index_type>::y_;
         using Component<scalar_type, index_type>::yp_;
         using Component<scalar_type, index_type>::wb_;
-        using Component<scalar_type, index_type>::h_;
         using Component<scalar_type, index_type>::J_rows_buffer_;
         using Component<scalar_type, index_type>::J_cols_buffer_;
         using Component<scalar_type, index_type>::J_vals_buffer_;
@@ -108,7 +251,7 @@ namespace GridKit
         auto getSignals()
             -> ComponentSignals<ScalarT,
                                 IdxT,
-                                IeeestInternalVariables,
+                                IeeestInternalVariables<order>,
                                 IeeestExternalVariables>&
         {
           return signals_;
@@ -150,20 +293,9 @@ namespace GridKit
         RealT a3_{0};
         RealT a4_{0};
 
-        IdxT  order_{0};
-        RealT s0_{1};
-        RealT s1_{0};
-        RealT s2_{0};
-        RealT s3_{0};
-        RealT s4_{0};
-        RealT a1_inv_{0};
-        RealT a2_inv_{0};
-        RealT a3_inv_{0};
-        RealT a4_inv_{0};
-
         IdxT parameter_error_count_{0};
 
-        ComponentSignals<ScalarT, IdxT, IeeestInternalVariables, IeeestExternalVariables> signals_;
+        ComponentSignals<ScalarT, IdxT, IeeestInternalVariables<order>, IeeestExternalVariables> signals_;
 
         std::unique_ptr<MonitorT> monitor_;
 
