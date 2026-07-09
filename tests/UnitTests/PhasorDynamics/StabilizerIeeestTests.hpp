@@ -111,11 +111,12 @@ namespace GridKit
           success *= (model.verify() == 0);
           model.initialize();
 
-          success *= vss_node.linked();
-          success *= (vss_node.getVariableIndex() == static_cast<IdxT>(VSS));
-          success *= isEqual(model.y()[V7], test.expected_v7, tol_);
-          success *= isEqual(model.y()[VSS], test.expected_vss, loose_tol);
-          success *= isEqual(vss_node.read(), test.expected_vss, loose_tol);
+          success       *= vss_node.linked();
+          success       *= (vss_node.getVariableIndex() == static_cast<IdxT>(VSS));
+          const auto* y  = model.y().getData();
+          success       *= isEqual(y[V7], test.expected_v7, tol_);
+          success       *= isEqual(y[VSS], test.expected_vss, loose_tol);
+          success       *= isEqual(vss_node.read(), test.expected_vss, loose_tol);
         }
 
         const std::string name = orderedName(__func__, order);
@@ -162,13 +163,15 @@ namespace GridKit
           success *= (model.evaluateResidual() == 0);
 
           // The smooth clamp keeps the VSS row only approximately zero.
-          const auto loose_tol = static_cast<RealT>(1.0e-4);
-          for (size_t i = 0; i < model.getResidual().size(); ++i)
+          const auto  loose_tol = static_cast<RealT>(1.0e-4);
+          const auto& residual  = model.getResidual();
+          const auto* f         = residual.getData();
+          for (size_t i = 0; i < residual.getSize(); ++i)
           {
-            if (!isEqual(model.getResidual()[i], static_cast<ScalarT>(0.0), loose_tol))
+            if (!isEqual(f[i], static_cast<ScalarT>(0.0), loose_tol))
             {
               std::cout << "Nonzero initial residual at row " << i << ": "
-                        << std::setprecision(15) << model.getResidual()[i] << "\n";
+                        << std::setprecision(15) << f[i] << "\n";
               success = false;
             }
           }
@@ -202,13 +205,18 @@ namespace GridKit
 
         const auto y_values  = stateValues<order>();
         const auto yp_values = derivativeValues<order>();
+        auto*      y         = model.y().getData();
+        auto*      yp        = model.yp().getData();
         for (size_t i = 0; i < y_values.size(); ++i)
         {
-          model.y()[i]  = y_values[i];
-          model.yp()[i] = yp_values[i];
+          y[i]  = y_values[i];
+          yp[i] = yp_values[i];
         }
+        model.y().setDataUpdated();
+        model.yp().setDataUpdated();
 
         model.evaluateResidual();
+        const auto* f = model.getResidual().getData();
 
         // The smooth clamp on the VSS row carries approximation error, so
         // that row is compared with a looser tolerance.
@@ -218,11 +226,11 @@ namespace GridKit
         for (size_t i = 0; i < expected.size(); ++i)
         {
           const auto test_tol = (i == VSS) ? loose_tol : tol_;
-          if (!isEqual(model.getResidual()[i], expected[i], test_tol))
+          if (!isEqual(f[i], expected[i], test_tol))
           {
             std::cout << "Incorrect residual for order " << order
                       << " row " << i << ": "
-                      << std::setprecision(15) << model.getResidual()[i]
+                      << std::setprecision(15) << f[i]
                       << " != " << expected[i] << "\n";
             success = false;
           }
@@ -443,13 +451,18 @@ namespace GridKit
 
         const auto y_values  = stateValues<4>();
         const auto yp_values = derivativeValues<4>();
+        auto*      y         = stabilizer->y().getData();
+        auto*      yp        = stabilizer->yp().getData();
         for (size_t i = 0; i < y_values.size(); ++i)
         {
-          stabilizer->y()[i]  = y_values[i];
-          stabilizer->yp()[i] = yp_values[i];
+          y[i]  = y_values[i];
+          yp[i] = yp_values[i];
         }
+        stabilizer->y().setDataUpdated();
+        stabilizer->yp().setDataUpdated();
 
         stabilizer->evaluateResidual();
+        const auto* f = stabilizer->getResidual().getData();
 
         // Derived with the a1 and a3 residual terms dropped:
         // x4_rhs = (0.5 - 0.1 - 0.6 * 0.3) / 0.08 = 2.75
@@ -463,10 +476,10 @@ namespace GridKit
         for (size_t i = 0; i < expected.size(); ++i)
         {
           const auto test_tol = (i == VSS) ? loose_tol : tol_;
-          if (!isEqual(stabilizer->getResidual()[i], expected[i], test_tol))
+          if (!isEqual(f[i], expected[i], test_tol))
           {
             std::cout << "Incorrect symmetric-notch residual row " << i << ": "
-                      << std::setprecision(15) << stabilizer->getResidual()[i]
+                      << std::setprecision(15) << f[i]
                       << " != " << expected[i] << "\n";
             success = false;
           }
@@ -510,44 +523,54 @@ namespace GridKit
           model.allocate();
           model.initialize();
 
+          auto* y  = model.y().getData();
+          auto* yp = model.yp().getData();
           for (size_t i = 0; i < model.size(); ++i)
           {
-            model.y()[i].setVariableNumber(i);
+            y[i].setVariableNumber(i);
           }
           u_value.setVariableNumber(model.size());
           u_value.setValue(0.5);
 
           for (size_t i = 0; i < y_values.size(); ++i)
           {
-            model.y()[i].setValue(y_values[i]);
+            y[i].setValue(y_values[i]);
           }
           for (size_t i = 0; i < yp_values.size(); ++i)
           {
-            model.yp()[i].setValue(yp_values[i]);
+            yp[i].setValue(yp_values[i]);
           }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
 
           model.evaluateResidual();
-          std::vector<DepVar> residual_y = model.getResidual();
+          const auto&         residual_y_view = model.getResidual();
+          std::vector<DepVar> residual_y(residual_y_view.getData(),
+                                         residual_y_view.getData() + residual_y_view.getSize());
 
           model.initialize();
           for (size_t i = 0; i < model.size(); ++i)
           {
-            model.y()[i] = model.y()[i].getValue();
-            model.yp()[i].setVariableNumber(i);
+            y[i] = y[i].getValue();
+            yp[i].setVariableNumber(i);
           }
           u_value = 0.5;
 
           for (size_t i = 0; i < y_values.size(); ++i)
           {
-            model.y()[i].setValue(y_values[i]);
+            y[i].setValue(y_values[i]);
           }
           for (size_t i = 0; i < yp_values.size(); ++i)
           {
-            model.yp()[i].setValue(yp_values[i]);
+            yp[i].setValue(yp_values[i]);
           }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
 
           model.evaluateResidual();
-          std::vector<DepVar> residual_yp = model.getResidual();
+          const auto&         residual_yp_view = model.getResidual();
+          std::vector<DepVar> residual_yp(residual_yp_view.getData(),
+                                          residual_yp_view.getData() + residual_yp_view.getSize());
 
           dependency_tracking_jacobian.resize(residual_y.size());
           for (size_t i = 0; i < residual_y.size(); ++i)
@@ -598,11 +621,15 @@ namespace GridKit
           model.allocate();
           model.initialize();
 
+          auto* y  = model.y().getData();
+          auto* yp = model.yp().getData();
           for (size_t i = 0; i < y_values.size(); ++i)
           {
-            model.y()[i]  = y_values[i];
-            model.yp()[i] = yp_values[i];
+            y[i]  = y_values[i];
+            yp[i] = yp_values[i];
           }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
 
           model.updateTime(0.0, 1.0);
           model.evaluateResidual();

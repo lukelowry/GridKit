@@ -124,17 +124,18 @@ namespace GridKit
         size_     = static_cast<IdxT>(IeeestInternalVariables<order>::MAXIMUM);
         auto size = static_cast<size_t>(size_);
 
-        f_.assign(size, ScalarT{0});
-        y_.assign(size, ScalarT{0});
-        yp_.assign(size, ScalarT{0});
-        tag_.assign(size, false);
-        abs_tol_.assign(size, ScalarT{0});
+        if (!allocated_)
+        {
+          this->allocateVectors(size_);
+        }
+
+        tag_.resize(size);
         variable_indices_.resize(size);
         residual_indices_.resize(size);
 
         auto signal_size = static_cast<size_t>(IeeestExternalVariables::MAXIMUM);
-        ws_.assign(signal_size, ScalarT{0});
-        ws_indices_.assign(signal_size, INVALID_INDEX<IdxT>);
+        ws_.resize(signal_size);
+        ws_indices_.resize(signal_size);
 
         for (IdxT j = 0; j < size_; ++j)
         {
@@ -145,11 +146,13 @@ namespace GridKit
         constexpr auto VSS = IeeestInternalVariables<order>::VSS;
         if (signals_.template isAssigned<VSS>())
         {
+          auto* y = y_.getData();
           signals_.template getSignalNode<VSS>()->set(
-              &y_[static_cast<size_t>(VSS)],
+              &y[static_cast<size_t>(VSS)],
               &(this->getVariableIndex(static_cast<IdxT>(VSS))));
         }
 
+        allocated_ = true;
         return 0;
       }
 
@@ -220,8 +223,13 @@ namespace GridKit
         const auto VSS = static_cast<size_t>(IeeestInternalVariables<order>::VSS);
         const auto U   = static_cast<size_t>(IeeestExternalVariables::U);
 
-        std::fill(y_.begin(), y_.end(), ZERO<RealT>);
-        std::fill(yp_.begin(), yp_.end(), ZERO<RealT>);
+        auto* y  = y_.getData();
+        auto* yp = yp_.getData();
+        for (IdxT i = 0; i < size_; ++i)
+        {
+          y[i]  = ZERO<RealT>;
+          yp[i] = ZERO<RealT>;
+        }
 
         const ScalarT u = signals_.template readExternalVariable<IeeestExternalVariables::U>();
         ws_[U]          = u;
@@ -233,17 +241,20 @@ namespace GridKit
         {
           const auto X1 = static_cast<size_t>(IeeestInternalVariables<order>::X1);
 
-          y_[X1] = u;
+          y[X1] = u;
         }
 
-        y_[X5]  = u;
-        y_[X6]  = u;
-        y_[X7]  = u;
-        y_[V4]  = u;
-        y_[V5]  = u;
-        y_[V6]  = u;
-        y_[V7]  = ZERO<RealT>;
-        y_[VSS] = Math::clamp(y_[V7], Lsmin_, Lsmax_);
+        y[X5]  = u;
+        y[X6]  = u;
+        y[X7]  = u;
+        y[V4]  = u;
+        y[V5]  = u;
+        y[V6]  = u;
+        y[V7]  = ZERO<RealT>;
+        y[VSS] = Math::clamp(y[V7], Lsmin_, Lsmax_);
+
+        y_.setDataUpdated();
+        yp_.setDataUpdated();
 
         return 0;
       }
@@ -292,7 +303,7 @@ namespace GridKit
       template <typename scalar_type, typename index_type, size_t order>
       int Ieeest<scalar_type, index_type, order>::setAbsoluteTolerance(RealT rel_tol)
       {
-        std::fill(abs_tol_.begin(), abs_tol_.end(), rel_tol);
+        abs_tol_.setToConst(static_cast<ScalarT>(rel_tol));
         return 0;
       }
 
@@ -428,8 +439,8 @@ namespace GridKit
       {
         const auto U = static_cast<size_t>(IeeestExternalVariables::U);
 
-        std::fill(ws_.begin(), ws_.end(), ZERO<RealT>);
-        std::fill(ws_indices_.begin(), ws_indices_.end(), INVALID_INDEX<IdxT>);
+        ws_[U]         = ZERO<RealT>;
+        ws_indices_[U] = INVALID_INDEX<IdxT>;
 
         if (signals_.template isAttached<IeeestExternalVariables::U>())
         {
@@ -437,7 +448,12 @@ namespace GridKit
           ws_indices_[U] = signals_.template readExternalVariableIndex<IeeestExternalVariables::U>();
         }
 
-        evaluateInternalResidual(y_.data(), yp_.data(), wb_.data(), ws_.data(), f_.data());
+        const auto* y  = y_.getData();
+        const auto* yp = yp_.getData();
+        auto*       f  = f_.getData();
+        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+
+        f_.setDataUpdated();
 
         return 0;
       }
@@ -456,7 +472,7 @@ namespace GridKit
         constexpr auto VSS = static_cast<size_t>(IeeestInternalVariables<order>::VSS);
 
         monitor_->set(Variable::vss, [this]
-                      { return y_[VSS]; });
+                      { return y_.getData()[VSS]; });
       }
 
     } // namespace Stabilizer
