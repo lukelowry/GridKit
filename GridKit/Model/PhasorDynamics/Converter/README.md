@@ -9,6 +9,8 @@ models and the bus equations, typically through commanded active and reactive cu
 
 The GridKit converter documentation includes:
 
+- Renewable Energy Generator/Converter Model REGCA (See [REGCA](REGCA/README.md))
 - Renewable Energy Generator/Converter Model REGCB (See [REGCB](REGCB/README.md))
 - Renewable Energy Electrical Control Model REECA (See [REECA](REECA/README.md))
 - Renewable Energy Electrical Control Model REECB (See [REECB](REECB/README.md))
+- Renewable Energy Plant Control Model REPCA (See [REPCA](REPCA/README.md))

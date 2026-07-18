@@ -74,6 +74,7 @@
 - Added `dt_fixed`, `rel_tol`, and `abs_tol` options to phasor dynamics solver JSON files and renamed the `dt` option to `dt_monitor`.
 - Added `REGCA` converter model implementation for PhasorDynamics.
 - Added `REECB` converter model for PhasorDynamics.
+- Added `REPCA` converter model implementation for PhasorDynamics.
 
 ## v0.1
 
