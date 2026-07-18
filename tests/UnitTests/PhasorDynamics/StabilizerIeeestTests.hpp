@@ -1,14 +1,19 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <string>
+#include <vector>
 
 #include <GridKit/AutomaticDifferentiation/DependencyTracking/Variable.hpp>
 #include <GridKit/Definitions.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalNode/SignalNode.hpp>
 #include <GridKit/Model/PhasorDynamics/Stabilizer/IEEEST/Ieeest.hpp>
 #include <GridKit/Model/PhasorDynamics/Stabilizer/IEEEST/IeeestData.hpp>
+#include <GridKit/Model/PhasorDynamics/Stabilizer/StabilizerFactory.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Testing/Testing.hpp>
 #include <GridKit/Utilities/MapFromCsr.hpp>
@@ -22,6 +27,10 @@ namespace GridKit
     {
     public:
       using RealT = typename PhasorDynamics::Component<ScalarT, IdxT>::RealT;
+      using DataT = PhasorDynamics::Stabilizer::IeeestData<RealT, IdxT>;
+
+      template <size_t order>
+      using InternalVariables = PhasorDynamics::Stabilizer::IeeestInternalVariables<order>;
 
       StabilizerIeeestTests()  = default;
       ~StabilizerIeeestTests() = default;
@@ -30,75 +39,149 @@ namespace GridKit
       {
         TestStatus success = true;
 
-        auto  data = makeTestData();
-        auto* stab = new PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT>(data);
+        {
+          // Zeroth order: no notch states, only X5..X7 and V4..VSS.
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 0> model;
+          success *= (model.size() == 8);
+          success *= (model.getMonitor() == nullptr);
+        }
 
-        success *= (stab != nullptr);
-        success *= (stab->getMonitor() != nullptr);
-
-        delete stab;
+        success *= checkConstructedSize<0>();
+        success *= checkConstructedSize<1>();
+        success *= checkConstructedSize<2>();
+        success *= checkConstructedSize<3>();
+        success *= checkConstructedSize<4>();
 
         return success.report(__func__);
       }
 
-      /**
-       * @brief All states initialize to zero (stabilizer at rest).
-       * With u = 0, all residuals should be zero.
-       */
+      template <size_t order>
+      TestOutcome init()
+      {
+        TestStatus success = true;
+
+        using Params = PhasorDynamics::Stabilizer::IeeestParameters;
+
+        struct InitCase
+        {
+          RealT   T6;
+          RealT   Ks;
+          ScalarT u;
+          RealT   Lsmin;
+          RealT   Lsmax;
+          ScalarT expected_v7;
+          ScalarT expected_vss;
+        };
+
+        // The smooth clamp only approximates the hard limits, hence the
+        // looser tolerance on the limited output.
+        const auto                  loose_tol = static_cast<RealT>(1.0e-4);
+        const std::vector<InitCase> cases     = {
+            {0.0, 0.0, 0.25, -1.0, 1.0, 0.0, 0.0},
+            {0.0, 4.0, 0.25, 0.2, 0.6, 0.0, 0.2},
+            {5.0, 3.0, 0.25, -1.0, 1.0, 0.0, 0.0},
+        };
+
+        const auto V7  = static_cast<size_t>(InternalVariables<order>::V7);
+        const auto VSS = static_cast<size_t>(InternalVariables<order>::VSS);
+
+        for (const auto& test : cases)
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+          ScalarT                                   u_value{test.u};
+          IdxT                                      u_index{12};
+          ScalarT                                   vss_value{0.0};
+          IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+          u_node.set(&u_value, &u_index);
+          vss_node.set(&vss_value, &vss_index);
+
+          auto data                      = makeOrderData<order>();
+          data.parameters[Params::T6]    = test.T6;
+          data.parameters[Params::Ks]    = test.Ks;
+          data.parameters[Params::Lsmin] = test.Lsmin;
+          data.parameters[Params::Lsmax] = test.Lsmax;
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.getSignals().template assignSignalNode<InternalVariables<order>::VSS>(&vss_node);
+
+          model.allocate();
+          success *= (model.verify() == 0);
+          model.initialize();
+
+          success       *= vss_node.linked();
+          success       *= (vss_node.getVariableIndex() == static_cast<IdxT>(VSS));
+          const auto* y  = model.y().getData();
+          success       *= isEqual(y[V7], test.expected_v7, tol_);
+          success       *= isEqual(y[VSS], test.expected_vss, loose_tol);
+          success       *= isEqual(vss_node.read(), test.expected_vss, loose_tol);
+        }
+
+        const std::string name = orderedName(__func__, order);
+        return success.report(name.c_str());
+      }
+
+      template <size_t order>
       TestOutcome zeroInitialResidual()
       {
         TestStatus success = true;
 
-        // Create signal nodes for input (u) and output (Vss)
-        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
-        PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
-        ScalarT                                   u_value{0.0};
-        IdxT                                      u_index = 12; // beyond internal variables
-        ScalarT                                   vss_value{0.0};
-        IdxT                                      vss_index = INVALID_INDEX<IdxT>;
+        using Params = PhasorDynamics::Stabilizer::IeeestParameters;
 
-        // Link signal nodes to backing storage
-        u_node.set(&u_value, &u_index);
-        vss_node.set(&vss_value, &vss_index);
+        // The second case exercises the TIME_CONSTANT_MINIMUM flooring.
+        const std::vector<std::array<RealT, 3>> time_constant_cases = {
+            {1.0, 1.0, 5.0},
+            {0.0, 0.0, 0.0},
+        };
 
-        auto                                              data = makeTestData();
-        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> stab(data);
-
-        // Wire: stabilizer reads u_node as input, writes vss_node as output
-        stab.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
-        stab.getSignals().template assignSignalNode<PhasorDynamics::Stabilizer::IeeestInternalVariables::VSS>(&vss_node);
-
-        stab.allocate();
-        success *= (stab.verify() == 0);
-        stab.initialize();
-        stab.evaluateResidual();
-
-        auto        tol    = 10 * std::numeric_limits<RealT>::epsilon();
-        const auto& f      = stab.getResidual();
-        const auto* f_data = f.getData();
-        for (size_t i = 0; i < f.getSize(); ++i)
+        for (const auto& T : time_constant_cases)
         {
-          if (!isEqual(f_data[i], 0.0, tol))
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+          ScalarT                                   u_value{0.25};
+          IdxT                                      u_index{12};
+          ScalarT                                   vss_value{0.0};
+          IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+          u_node.set(&u_value, &u_index);
+          vss_node.set(&vss_value, &vss_index);
+
+          auto data                   = makeOrderData<order>();
+          data.parameters[Params::T2] = T[0];
+          data.parameters[Params::T4] = T[1];
+          data.parameters[Params::T6] = T[2];
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.getSignals().template assignSignalNode<InternalVariables<order>::VSS>(&vss_node);
+
+          model.allocate();
+          success *= (model.verify() == 0);
+          success *= (model.initialize() == 0);
+          success *= (model.evaluateResidual() == 0);
+
+          // The smooth clamp keeps the VSS row only approximately zero.
+          const auto  loose_tol = static_cast<RealT>(1.0e-4);
+          const auto& residual  = model.getResidual();
+          const auto* f         = residual.getData();
+          for (size_t i = 0; i < residual.getSize(); ++i)
           {
-            std::cout << "Non-zero residual at index " << i << ": " << f_data[i] << "\n";
-            success = false;
+            if (!isEqual(f[i], static_cast<ScalarT>(0.0), loose_tol))
+            {
+              std::cout << "Nonzero initial residual at row " << i << ": "
+                        << std::setprecision(15) << f[i] << "\n";
+              success = false;
+            }
           }
         }
 
-        // Verify output signal is linked and reads the correct value
-        success *= vss_node.linked();
-        success *= (vss_node.getVariableIndex() == 11);
-        success *= isEqual(vss_node.read(), static_cast<ScalarT>(0.0), tol);
-
-        return success.report(__func__);
+        const std::string name = orderedName(__func__, order);
+        return success.report(name.c_str());
       }
 
-      /**
-       * @brief Residual evaluation against hand-computed answer key.
-       *
-       * Sets specific y/yp values and verifies residuals match
-       * pre-computed expected values. See plan for derivation.
-       */
+      template <size_t order>
       TestOutcome residual()
       {
         TestStatus success = true;
@@ -106,234 +189,524 @@ namespace GridKit
         PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
         PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
         ScalarT                                   u_value{0.5};
-        IdxT                                      u_index = 12;
+        IdxT                                      u_index{12};
         ScalarT                                   vss_value{0.0};
-        IdxT                                      vss_index = INVALID_INDEX<IdxT>;
+        IdxT                                      vss_index{INVALID_INDEX<IdxT>};
 
         u_node.set(&u_value, &u_index);
         vss_node.set(&vss_value, &vss_index);
 
-        auto                                              data = makeTestData();
-        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> stab(data);
+        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(makeOrderData<order>());
+        model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+        model.getSignals().template assignSignalNode<InternalVariables<order>::VSS>(&vss_node);
 
-        stab.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
-        stab.getSignals().template assignSignalNode<PhasorDynamics::Stabilizer::IeeestInternalVariables::VSS>(&vss_node);
+        model.allocate();
+        model.initialize();
 
-        stab.allocate();
-        stab.initialize();
-        setStatePoint(stab);
-        stab.evaluateResidual();
-
-        // Hand-computed answer key (see plan for full derivation)
-        const std::vector<ScalarT> res_answer = {
-            0.19,   // f[0]:  -x1_dot + x2
-            0.28,   // f[1]:  -x2_dot + x3
-            0.37,   // f[2]:  -x3_dot + x4
-            1.0975, // f[3]:  -x4_dot + (-a0*x1 - a1*x2 - a2*x3 - a3*x4 + u) / a4
-            0.25,   // f[4]:  -T2*x5_dot - x5 + v4
-            0.24,   // f[5]:  -T4*x6_dot - x6 + v5
-            -0.05,  // f[6]:  -T6*x7_dot - x7 + v6
-            -0.42,  // f[7]:  -v4 + x1 + A5*x2 + A6*x3
-            -0.25,  // f[8]:  -T2*(v5 - x5) + T1*(v4 - x5)
-            -0.31,  // f[9]:  -T4*(v6 - x6) + T3*(v5 - x6)
-            5.75,   // f[10]: -T6*v7 + Ks*T5*(v6 - x7)
-            0.0,    // f[11]: limiter (v7=0.05 within [-0.1, 0.1])
-        };
-
-        // Looser tolerance for f[11] — Math::clamp is a smooth ramp approximation.
-        const auto  loose_tol     = static_cast<RealT>(1.0e-4);
-        auto&       residual      = stab.getResidual();
-        const auto* residual_data = residual.getData();
-
-        for (size_t i = 0; i < res_answer.size(); ++i)
+        const auto y_values  = stateValues<order>();
+        const auto yp_values = derivativeValues<order>();
+        auto*      y         = model.y().getData();
+        auto*      yp        = model.yp().getData();
+        for (size_t i = 0; i < y_values.size(); ++i)
         {
-          auto test_tol = (i == 11) ? loose_tol : static_cast<RealT>(10 * std::numeric_limits<ScalarT>::epsilon());
-          if (!isEqual(residual_data[i], res_answer[i], test_tol))
+          y[i]  = y_values[i];
+          yp[i] = yp_values[i];
+        }
+        model.y().setDataUpdated();
+        model.yp().setDataUpdated();
+
+        model.evaluateResidual();
+        const auto* f = model.getResidual().getData();
+
+        // The smooth clamp on the VSS row carries approximation error, so
+        // that row is compared with a looser tolerance.
+        const auto VSS       = static_cast<size_t>(InternalVariables<order>::VSS);
+        const auto loose_tol = static_cast<RealT>(1.0e-4);
+        const auto expected  = expectedResidual<order>();
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+          const auto test_tol = (i == VSS) ? loose_tol : tol_;
+          if (!isEqual(f[i], expected[i], test_tol))
           {
-            std::cout << "Incorrect result for residual " << i << ": "
-                      << std::setprecision(15) << residual_data[i]
-                      << " != " << res_answer[i] << "\n";
+            std::cout << "Incorrect residual for order " << order
+                      << " row " << i << ": "
+                      << std::setprecision(15) << f[i]
+                      << " != " << expected[i] << "\n";
             success = false;
           }
         }
 
-        // Verify output signal reads the stabilizer output
-        success *= isEqual(vss_node.read(), static_cast<ScalarT>(0.05), loose_tol);
+        const std::string name = orderedName(__func__, order);
+        return success.report(name.c_str());
+      }
 
+      template <size_t order>
+      TestOutcome tags()
+      {
+        TestStatus success = true;
+
+        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+        ScalarT                                   u_value{0.0};
+        IdxT                                      u_index{12};
+        u_node.set(&u_value, &u_index);
+
+        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(makeOrderData<order>());
+        model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+
+        model.allocate();
+
+        for (size_t i = 0; i < model.tag().size(); ++i)
+        {
+          if (model.tag()[i])
+          {
+            std::cout << "Differential tag set before tagDifferentiable at row " << i << "\n";
+            success = false;
+          }
+        }
+
+        model.tagDifferentiable();
+
+        const auto X7 = static_cast<size_t>(InternalVariables<order>::X7);
+        for (size_t i = 0; i < model.tag().size(); ++i)
+        {
+          const bool expected = (i <= X7);
+          if (model.tag()[i] != expected)
+          {
+            std::cout << "Incorrect differential tag at row " << i << "\n";
+            success = false;
+          }
+        }
+
+        const std::string name = orderedName(__func__, order);
+        return success.report(name.c_str());
+      }
+
+      TestOutcome verify()
+      {
+        TestStatus success = true;
+        using Params       = PhasorDynamics::Stabilizer::IeeestParameters;
+
+        // Missing input signal fails verification.
+        {
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 4> model(makeOrderData<4>());
+          model.allocate();
+          success *= (model.verify() != 0);
+        }
+
+        // Attached but unlinked input signal fails verification.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT>            u_node;
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 4> model(makeOrderData<4>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() != 0);
+        }
+
+        // Parameters implying a different order fail verification.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 2> model(makeOrderData<4>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() != 0);
+        }
+
+        // First-order notch with a second-order numerator fails verification.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          auto data                   = makeOrderData<1>();
+          data.parameters[Params::A6] = static_cast<RealT>(0.6);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 1> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() != 0);
+        }
+
+        // First-order notch with a first-order numerator verifies.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 1> model(makeOrderData<1>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() == 0);
+        }
+
+        // Zeroth-order notch with a nonzero numerator fails verification.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          auto data                   = makeOrderData<0>();
+          data.parameters[Params::A5] = static_cast<RealT>(0.5);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 0> model(data);
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() != 0);
+        }
+
+        // Zeroth-order pass-through verifies.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.0};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, 0> model(makeOrderData<0>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.allocate();
+          success *= (model.verify() == 0);
+        }
+
+        return success.report(__func__);
+      }
+
+      TestOutcome factory()
+      {
+        TestStatus success = true;
+
+        success *= checkFactoryOrder<0>();
+        success *= checkFactoryOrder<1>();
+        success *= checkFactoryOrder<2>();
+        success *= checkFactoryOrder<3>();
+        success *= checkFactoryOrder<4>();
+
+        // A null output node is allowed.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          ScalarT                                   u_value{0.5};
+          IdxT                                      u_index{12};
+          u_node.set(&u_value, &u_index);
+
+          auto* stabilizer =
+              PhasorDynamics::Stabilizer::StabilizerFactory<ScalarT, IdxT>::create(makeOrderData<4>(), &u_node, nullptr);
+          stabilizer->allocate();
+          success *= (stabilizer->verify() == 0);
+          delete stabilizer;
+        }
+
+        // A null input node constructs, but fails verification.
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+          ScalarT                                   vss_value{0.0};
+          IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+          vss_node.set(&vss_value, &vss_index);
+
+          auto* stabilizer =
+              PhasorDynamics::Stabilizer::StabilizerFactory<ScalarT, IdxT>::create(makeOrderData<4>(), nullptr, &vss_node);
+          stabilizer->allocate();
+          success *= (stabilizer->verify() != 0);
+          delete stabilizer;
+        }
+
+        return success.report(__func__);
+      }
+
+      /// Symmetric notch filter (A1 = A3 = 0): a standard fourth-order
+      /// configuration with zero interior denominator coefficients
+      /// (a1 = a3 = 0)
+      ///
+      /// The Enzyme-vs-dependency-tracking Jacobian comparison is not run for
+      /// this configuration: Enzyme's `sparse_store` drops exact-zero entries
+      /// (the a1/a3 columns) while dependency tracking retains them, so the
+      /// key sets legitimately differ.
+      TestOutcome symmetricNotch()
+      {
+        TestStatus success = true;
+
+        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+        PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+        ScalarT                                   u_value{0.5};
+        IdxT                                      u_index{12};
+        ScalarT                                   vss_value{0.0};
+        IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+        u_node.set(&u_value, &u_index);
+        vss_node.set(&vss_value, &vss_index);
+
+        auto* stabilizer =
+            PhasorDynamics::Stabilizer::StabilizerFactory<ScalarT, IdxT>::create(makeSymmetricNotchData(), &u_node, &vss_node);
+
+        // a = (0, A2 + A4, 0, A2 * A4): the factory must dispatch to order 4.
+        success *= (stabilizer->size() == static_cast<IdxT>(InternalVariables<4>::MAXIMUM));
+        success *= (stabilizer->allocate() == 0);
+        success *= (stabilizer->verify() == 0);
+        success *= (stabilizer->initialize() == 0);
+        success *= (stabilizer->evaluateResidual() == 0);
+
+        const auto y_values  = stateValues<4>();
+        const auto yp_values = derivativeValues<4>();
+        auto*      y         = stabilizer->y().getData();
+        auto*      yp        = stabilizer->yp().getData();
+        for (size_t i = 0; i < y_values.size(); ++i)
+        {
+          y[i]  = y_values[i];
+          yp[i] = yp_values[i];
+        }
+        stabilizer->y().setDataUpdated();
+        stabilizer->yp().setDataUpdated();
+
+        stabilizer->evaluateResidual();
+        const auto* f = stabilizer->getResidual().getData();
+
+        // Derived with the a1 and a3 residual terms dropped:
+        // x4_rhs = (0.5 - 0.1 - 0.6 * 0.3) / 0.08 = 2.75
+        const std::vector<ScalarT> expected =
+            {0.19, 0.28, 0.37, 2.71, 0.25, 0.24, -0.01, -0.42, -0.25, -0.31, 1.15, 0.0};
+
+        // The smooth clamp on the VSS row carries approximation error, so
+        // that row is compared with a looser tolerance.
+        const auto VSS       = static_cast<size_t>(InternalVariables<4>::VSS);
+        const auto loose_tol = static_cast<RealT>(1.0e-4);
+        for (size_t i = 0; i < expected.size(); ++i)
+        {
+          const auto test_tol = (i == VSS) ? loose_tol : tol_;
+          if (!isEqual(f[i], expected[i], test_tol))
+          {
+            std::cout << "Incorrect symmetric-notch residual row " << i << ": "
+                      << std::setprecision(15) << f[i]
+                      << " != " << expected[i] << "\n";
+            success = false;
+          }
+        }
+
+        delete stabilizer;
         return success.report(__func__);
       }
 
 #ifdef GRIDKIT_ENABLE_ENZYME
-      /**
-       * @brief Compare DependencyTracking Jacobian against Enzyme Jacobian.
-       */
+      template <size_t order>
       TestOutcome jacobian()
       {
         TestStatus success = true;
+        using DepVar       = DependencyTracking::Variable;
 
-        auto data = makeTestData();
+        // The input signal takes the first global index after the model block
+        // so the dependency-tracking and Enzyme variable numbers align.
+        const IdxT u_index_value = static_cast<IdxT>(InternalVariables<order>::MAXIMUM);
 
-        std::vector<DependencyTracking::Variable::DependencyMap>
-            dependency_tracking_jacobian = DependencyTrackingJacobian(data);
+        const auto y_values  = stateValues<order>();
+        const auto yp_values = derivativeValues<order>();
 
-        std::vector<DependencyTracking::Variable::DependencyMap>
-            enzyme_jacobian = EnzymeJacobian(data);
+        std::vector<DependencyTracking::Variable::DependencyMap> dependency_tracking_jacobian;
 
-        // Compare DependencyTracking dependencies to Enzyme's
-        auto tol = 10 * std::numeric_limits<RealT>::epsilon();
+        {
+          PhasorDynamics::SignalNode<DepVar, IdxT> u_node;
+          PhasorDynamics::SignalNode<DepVar, IdxT> vss_node;
+          DepVar                                   u_value{0.5};
+          IdxT                                     u_index{u_index_value};
+          DepVar                                   vss_value{0.0};
+          IdxT                                     vss_index{INVALID_INDEX<IdxT>};
+
+          u_node.set(&u_value, &u_index);
+          vss_node.set(&vss_value, &vss_index);
+
+          PhasorDynamics::Stabilizer::Ieeest<DepVar, IdxT, order> model(makeOrderData<order>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.getSignals().template assignSignalNode<InternalVariables<order>::VSS>(&vss_node);
+
+          model.allocate();
+          model.initialize();
+
+          auto* y  = model.y().getData();
+          auto* yp = model.yp().getData();
+          for (size_t i = 0; i < model.size(); ++i)
+          {
+            y[i].setVariableNumber(i);
+          }
+          u_value.setVariableNumber(model.size());
+          u_value.setValue(0.5);
+
+          for (size_t i = 0; i < y_values.size(); ++i)
+          {
+            y[i].setValue(y_values[i]);
+          }
+          for (size_t i = 0; i < yp_values.size(); ++i)
+          {
+            yp[i].setValue(yp_values[i]);
+          }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
+
+          model.evaluateResidual();
+          const auto&         residual_y_view = model.getResidual();
+          std::vector<DepVar> residual_y(residual_y_view.getData(),
+                                         residual_y_view.getData() + residual_y_view.getSize());
+
+          model.initialize();
+          for (size_t i = 0; i < model.size(); ++i)
+          {
+            y[i] = y[i].getValue();
+            yp[i].setVariableNumber(i);
+          }
+          u_value = 0.5;
+
+          for (size_t i = 0; i < y_values.size(); ++i)
+          {
+            y[i].setValue(y_values[i]);
+          }
+          for (size_t i = 0; i < yp_values.size(); ++i)
+          {
+            yp[i].setValue(yp_values[i]);
+          }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
+
+          model.evaluateResidual();
+          const auto&         residual_yp_view = model.getResidual();
+          std::vector<DepVar> residual_yp(residual_yp_view.getData(),
+                                          residual_yp_view.getData() + residual_yp_view.getSize());
+
+          dependency_tracking_jacobian.resize(residual_y.size());
+          for (size_t i = 0; i < residual_y.size(); ++i)
+          {
+            auto dependency_y  = residual_y[i].getDependencies();
+            auto dependency_yp = residual_yp[i].getDependencies();
+
+            for (const auto& pair_y : dependency_y)
+            {
+              auto it_yp = dependency_yp.find(pair_y.first);
+              if (it_yp != dependency_yp.end())
+              {
+                dependency_tracking_jacobian[i].insert(std::make_pair(pair_y.first, pair_y.second + it_yp->second));
+              }
+              else
+              {
+                dependency_tracking_jacobian[i].insert(std::make_pair(pair_y.first, pair_y.second));
+              }
+            }
+
+            for (const auto& pair_yp : dependency_yp)
+            {
+              if (!dependency_y.contains(pair_yp.first))
+              {
+                dependency_tracking_jacobian[i].insert(std::make_pair(pair_yp.first, pair_yp.second));
+              }
+            }
+          }
+        }
+
+        std::vector<DependencyTracking::Variable::DependencyMap> enzyme_jacobian;
+
+        {
+          PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+          PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+          ScalarT                                   u_value{0.5};
+          IdxT                                      u_index{u_index_value};
+          ScalarT                                   vss_value{0.0};
+          IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+          u_node.set(&u_value, &u_index);
+          vss_node.set(&vss_value, &vss_index);
+
+          PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(makeOrderData<order>());
+          model.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
+          model.getSignals().template assignSignalNode<InternalVariables<order>::VSS>(&vss_node);
+
+          model.allocate();
+          model.initialize();
+
+          auto* y  = model.y().getData();
+          auto* yp = model.yp().getData();
+          for (size_t i = 0; i < y_values.size(); ++i)
+          {
+            y[i]  = y_values[i];
+            yp[i] = yp_values[i];
+          }
+          model.y().setDataUpdated();
+          model.yp().setDataUpdated();
+
+          model.updateTime(0.0, 1.0);
+          model.evaluateResidual();
+          model.evaluateJacobian();
+          model.constructCsr();
+          auto model_jacobian = model.getCsrJacobian();
+          enzyme_jacobian     = GridKit::Testing::MapFromCsr(model_jacobian);
+        }
+
         for (size_t i = 0; i < dependency_tracking_jacobian.size(); ++i)
         {
-          success *= (GridKit::Testing::isEqual(dependency_tracking_jacobian[i], enzyme_jacobian[i], tol));
+          success *= GridKit::Testing::isEqual(dependency_tracking_jacobian[i], enzyme_jacobian[i], tol_);
         }
 
-        return success.report(__func__);
-      }
-
-    private:
-      std::vector<DependencyTracking::Variable::DependencyMap> DependencyTrackingJacobian(
-          PhasorDynamics::Stabilizer::IeeestData<RealT, IdxT> ieeestdata)
-      {
-        using DepVar = DependencyTracking::Variable;
-
-        // Set up signal nodes with DependencyTracking scalar type
-        PhasorDynamics::SignalNode<DepVar, IdxT> u_node;
-        PhasorDynamics::SignalNode<DepVar, IdxT> vss_node;
-        DepVar                                   u_value{0.5};
-        IdxT                                     u_index = 12;
-        DepVar                                   vss_value{0.0};
-        IdxT                                     vss_index = INVALID_INDEX<IdxT>;
-
-        u_node.set(&u_value, &u_index);
-        vss_node.set(&vss_value, &vss_index);
-
-        PhasorDynamics::Stabilizer::Ieeest<DepVar, IdxT> stab(ieeestdata);
-        stab.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
-        stab.getSignals().template assignSignalNode<PhasorDynamics::Stabilizer::IeeestInternalVariables::VSS>(&vss_node);
-
-        stab.allocate();
-        stab.initialize();
-
-        // --- d/dy: tag internal variables as independent ---
-        auto* y = stab.y().getData();
-        for (size_t i = 0; i < stab.size(); ++i)
-        {
-          y[i].setVariableNumber(i);
-        }
-        // Tag external signal u as an additional independent variable
-        u_value.setVariableNumber(stab.size());
-        u_value.setValue(0.5);
-
-        setStatePointDep(stab);
-
-        stab.evaluateResidual();
-        auto&               residual_y_view = stab.getResidual();
-        std::vector<DepVar> residual_y(residual_y_view.getData(), residual_y_view.getData() + residual_y_view.getSize());
-
-        // --- d/dy': tag derivatives as independent ---
-        stab.initialize();
-        auto* yp = stab.yp().getData();
-        for (size_t i = 0; i < stab.size(); ++i)
-        {
-          yp[i].setVariableNumber(i);
-        }
-
-        u_value = 0.5;
-        setStatePointDep(stab);
-
-        stab.evaluateResidual();
-        auto&               residual_yp_view = stab.getResidual();
-        std::vector<DepVar> residual_yp(residual_yp_view.getData(), residual_yp_view.getData() + residual_yp_view.getSize());
-
-        // Print dependencies for debugging
-        for (size_t i = 0; i < residual_y.size(); ++i)
-        {
-          std::cout << i << "th residual, y: ";
-          (residual_y[i]).print(std::cout);
-          std::cout << "\n";
-          std::cout << i << "th residual, yp: ";
-          (residual_yp[i]).print(std::cout);
-          std::cout << "\n";
-        }
-
-        // Merge d/dy and d/dy' into a single dependency map
-        std::vector<DependencyTracking::Variable::DependencyMap> dependencies(residual_y.size());
-        for (IdxT i = 0; i < residual_y.size(); ++i)
-        {
-          auto dependency_y  = (residual_y[i]).getDependencies();
-          auto dependency_yp = (residual_yp[i]).getDependencies();
-
-          for (const auto& pair_y : dependency_y)
-          {
-            auto it_yp = dependency_yp.find(pair_y.first);
-            if (it_yp != dependency_yp.end())
-            {
-              dependencies[i].insert(std::make_pair(pair_y.first, pair_y.second + it_yp->second));
-            }
-            else
-            {
-              dependencies[i].insert(std::make_pair(pair_y.first, pair_y.second));
-            }
-          }
-
-          // Insert yp dependencies that did not exist in the y dependencies
-          for (const auto& pair_yp : dependency_yp)
-          {
-            if (!dependency_y.contains(pair_yp.first))
-            {
-              dependencies[i].insert(std::make_pair(pair_yp.first, pair_yp.second));
-            }
-          }
-        }
-
-        return dependencies;
-      }
-
-      std::vector<DependencyTracking::Variable::DependencyMap> EnzymeJacobian(
-          PhasorDynamics::Stabilizer::IeeestData<RealT, IdxT> ieeestdata)
-      {
-        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
-        PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
-        ScalarT                                   u_value{0.5};
-        IdxT                                      u_index = 12;
-        ScalarT                                   vss_value{0.0};
-        IdxT                                      vss_index = INVALID_INDEX<IdxT>;
-
-        u_node.set(&u_value, &u_index);
-        vss_node.set(&vss_value, &vss_index);
-
-        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT> stab(ieeestdata);
-        stab.getSignals().template attachSignalNode<PhasorDynamics::Stabilizer::IeeestExternalVariables::U>(&u_node);
-        stab.getSignals().template assignSignalNode<PhasorDynamics::Stabilizer::IeeestInternalVariables::VSS>(&vss_node);
-
-        stab.allocate();
-        stab.initialize();
-        setStatePoint(stab);
-
-        stab.updateTime(0.0, 1.0); // alpha = 1.0 to verify d/dy' term
-
-        stab.evaluateResidual();
-        stab.evaluateJacobian();
-        stab.constructCsr();
-        auto model_jacobian = stab.getCsrJacobian();
-        std::cout << "Sparse Csr Matrix: Ieeest Jacobian\n";
-        model_jacobian->print();
-
-        return GridKit::Testing::MapFromCsr(model_jacobian);
+        const std::string name = orderedName(__func__, order);
+        return success.report(name.c_str());
       }
 #endif
 
     private:
       static constexpr ScalarT tol_ = 10 * std::numeric_limits<ScalarT>::epsilon();
 
-      /**
-       * @brief Standard IEEEST parameter set for all tests.
-       * Derived: a0=1, a1=0.4, a2=0.63, a3=0.1, a4=0.08
-       */
-      auto makeTestData() -> PhasorDynamics::Stabilizer::IeeestData<RealT, IdxT>
+      static std::string orderedName(const char* funcname, size_t order)
+      {
+        return std::string(funcname) + " (order " + std::to_string(order) + ")";
+      }
+
+      template <size_t order>
+      bool checkConstructedSize()
+      {
+        PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT, order> model(makeOrderData<order>());
+
+        bool success = (model.size() == static_cast<IdxT>(InternalVariables<order>::MAXIMUM));
+        // `order` notch states + X5..X7 + V4..V7 + VSS
+        success      = success && (model.size() == static_cast<IdxT>(order + 8));
+        success      = success && (model.getMonitor() != nullptr);
+
+        return success;
+      }
+
+      template <size_t order>
+      bool checkFactoryOrder()
+      {
+        PhasorDynamics::SignalNode<ScalarT, IdxT> u_node;
+        PhasorDynamics::SignalNode<ScalarT, IdxT> vss_node;
+        ScalarT                                   u_value{0.25};
+        IdxT                                      u_index{12};
+        ScalarT                                   vss_value{0.0};
+        IdxT                                      vss_index{INVALID_INDEX<IdxT>};
+
+        u_node.set(&u_value, &u_index);
+        vss_node.set(&vss_value, &vss_index);
+
+        auto* stabilizer =
+            PhasorDynamics::Stabilizer::StabilizerFactory<ScalarT, IdxT>::create(makeOrderData<order>(), &u_node, &vss_node);
+
+        bool success = (stabilizer->size() == static_cast<IdxT>(InternalVariables<order>::MAXIMUM));
+        success      = success && (stabilizer->allocate() == 0);
+        success      = success && (stabilizer->verify() == 0);
+        success      = success && (stabilizer->initialize() == 0);
+        success      = success && vss_node.linked();
+        success      = success && (vss_node.getVariableIndex() == static_cast<IdxT>(InternalVariables<order>::VSS));
+
+        if (!success)
+        {
+          std::cout << "Factory checks failed for order " << order << "\n";
+        }
+
+        delete stabilizer;
+        return success;
+      }
+
+      auto makeData() -> DataT
       {
         using Params = PhasorDynamics::Stabilizer::IeeestParameters;
 
-        PhasorDynamics::Stabilizer::IeeestData<RealT, IdxT> data;
+        DataT data;
         data.device_class          = "stabilizer";
         data.disambiguation_string = "ieeest_test";
         data.monitored_variables.insert(PhasorDynamics::Stabilizer::IeeestMonitorableVariables::vss);
@@ -360,72 +733,134 @@ namespace GridKit
         return data;
       }
 
-      /**
-       * @brief Set a non-trivial operating point for residual/Jacobian tests.
-       * Avoids zeros and ones to catch coefficient errors.
-       */
-      void setStatePoint(PhasorDynamics::Stabilizer::Ieeest<ScalarT, IdxT>& stab)
+      /// Base data with A1 = A3 = 0: still fourth order, with a1 = a3 = 0
+      auto makeSymmetricNotchData() -> DataT
       {
-        auto* y  = stab.y().getData();
-        auto* yp = stab.yp().getData();
+        using Params = PhasorDynamics::Stabilizer::IeeestParameters;
 
-        y[0]  = 0.1;  // x1
-        y[1]  = 0.2;  // x2
-        y[2]  = 0.3;  // x3
-        y[3]  = 0.4;  // x4
-        y[4]  = 0.5;  // x5
-        y[5]  = 0.6;  // x6
-        y[6]  = 0.7;  // x7
-        y[7]  = 0.8;  // v4
-        y[8]  = 0.9;  // v5
-        y[9]  = 1.0;  // v6
-        y[10] = 0.05; // v7  (within limiter range)
-        y[11] = 0.05; // Vss (model output)
+        auto data                   = makeData();
+        data.parameters[Params::A1] = static_cast<RealT>(0.0);
+        data.parameters[Params::A3] = static_cast<RealT>(0.0);
 
-        yp[0] = 0.01; // x1_dot
-        yp[1] = 0.02; // x2_dot
-        yp[2] = 0.03; // x3_dot
-        yp[3] = 0.04; // x4_dot
-        yp[4] = 0.05; // x5_dot
-        yp[5] = 0.06; // x6_dot
-        yp[6] = 0.07; // x7_dot
-
-        stab.y().setDataUpdated();
-        stab.yp().setDataUpdated();
+        return data;
       }
 
-      /**
-       * @brief Set the same operating point for DependencyTracking variables.
-       * Uses setValue() to set the numeric value while preserving dependency info.
-       */
-      void setStatePointDep(PhasorDynamics::Stabilizer::Ieeest<DependencyTracking::Variable, IdxT>& stab)
+      /// Base data edited so the derived notch-filter order equals `order`
+      template <size_t order>
+      auto makeOrderData() -> DataT
       {
-        auto* y  = stab.y().getData();
-        auto* yp = stab.yp().getData();
+        using Params = PhasorDynamics::Stabilizer::IeeestParameters;
 
-        y[0].setValue(0.1);
-        y[1].setValue(0.2);
-        y[2].setValue(0.3);
-        y[3].setValue(0.4);
-        y[4].setValue(0.5);
-        y[5].setValue(0.6);
-        y[6].setValue(0.7);
-        y[7].setValue(0.8);
-        y[8].setValue(0.9);
-        y[9].setValue(1.0);
-        y[10].setValue(0.05);
-        y[11].setValue(0.05);
+        auto data = makeData();
 
-        yp[0].setValue(0.01);
-        yp[1].setValue(0.02);
-        yp[2].setValue(0.03);
-        yp[3].setValue(0.04);
-        yp[4].setValue(0.05);
-        yp[5].setValue(0.06);
-        yp[6].setValue(0.07);
+        if constexpr (order == 3)
+        {
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+        }
+        else if constexpr (order == 2)
+        {
+          data.parameters[Params::A3] = static_cast<RealT>(0.0);
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+        }
+        else if constexpr (order == 1)
+        {
+          data.parameters[Params::A2] = static_cast<RealT>(0.0);
+          data.parameters[Params::A3] = static_cast<RealT>(0.0);
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+          data.parameters[Params::A6] = static_cast<RealT>(0.0);
+        }
+        else if constexpr (order == 0)
+        {
+          data.parameters[Params::A1] = static_cast<RealT>(0.0);
+          data.parameters[Params::A2] = static_cast<RealT>(0.0);
+          data.parameters[Params::A3] = static_cast<RealT>(0.0);
+          data.parameters[Params::A4] = static_cast<RealT>(0.0);
+          data.parameters[Params::A5] = static_cast<RealT>(0.0);
+          data.parameters[Params::A6] = static_cast<RealT>(0.0);
+        }
 
-        stab.y().setDataUpdated();
-        stab.yp().setDataUpdated();
+        return data;
+      }
+
+      /// Test state: every variable keeps its named value at every order
+      /// (x1..x4 = 0.1..0.4, x5..x7 = 0.5..0.7, v4..v6 = 0.8..1.0,
+      /// v7 = vss = 0.05), so shared residual rows match across orders.
+      template <size_t order>
+      static std::vector<RealT> stateValues()
+      {
+        if constexpr (order == 0)
+        {
+          return {0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.05, 0.05};
+        }
+        else if constexpr (order == 1)
+        {
+          return {0.1, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.05, 0.05};
+        }
+        else if constexpr (order == 2)
+        {
+          return {0.1, 0.2, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.05, 0.05};
+        }
+        else if constexpr (order == 3)
+        {
+          return {0.1, 0.2, 0.3, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.05, 0.05};
+        }
+        else
+        {
+          return {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 0.05, 0.05};
+        }
+      }
+
+      /// Test state derivatives (differential block only; algebraic rows zero)
+      template <size_t order>
+      static std::vector<RealT> derivativeValues()
+      {
+        if constexpr (order == 0)
+        {
+          return {0.05, 0.06, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+        else if constexpr (order == 1)
+        {
+          return {0.01, 0.05, 0.06, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+        else if constexpr (order == 2)
+        {
+          return {0.01, 0.02, 0.05, 0.06, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+        else if constexpr (order == 3)
+        {
+          return {0.01, 0.02, 0.03, 0.05, 0.06, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+        else
+        {
+          return {0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.0, 0.0, 0.0, 0.0, 0.0};
+        }
+      }
+
+      /// Expected residuals for `stateValues`/`derivativeValues` with
+      /// `makeOrderData` and u = 0.5, derived from the model equations
+      template <size_t order>
+      static std::vector<ScalarT> expectedResidual()
+      {
+        if constexpr (order == 0)
+        {
+          return {0.25, 0.24, -0.01, -0.3, -0.25, -0.31, 1.15, 0.0};
+        }
+        else if constexpr (order == 1)
+        {
+          return {3.99, 0.25, 0.24, -0.01, 1.3, -0.25, -0.31, 1.15, 0.0};
+        }
+        else if constexpr (order == 2)
+        {
+          return {0.19, 1.88, 0.25, 0.24, -0.01, 0.54, -0.25, -0.31, 1.15, 0.0};
+        }
+        else if constexpr (order == 3)
+        {
+          return {0.19, 0.28, 4.153333333333333, 0.25, 0.24, -0.01, -0.42, -0.25, -0.31, 1.15, 0.0};
+        }
+        else
+        {
+          return {0.19, 0.28, 0.37, 1.0975, 0.25, 0.24, -0.01, -0.42, -0.25, -0.31, 1.15, 0.0};
+        }
       }
     }; // class StabilizerIeeestTests
 

@@ -4,6 +4,7 @@
 #include <GridKit/Definitions.hpp>
 #include <GridKit/Model/PhasorDynamics/Bus/BusFactory.hpp>
 #include <GridKit/Model/PhasorDynamics/BusBase.hpp>
+#include <GridKit/Model/PhasorDynamics/Stabilizer/StabilizerFactory.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
 #include <GridKit/Model/VariableMonitorController.hpp>
@@ -322,23 +323,19 @@ namespace GridKit
       // Add IEEEST stabilizers
       for (const auto& stabdata : data.stabilizer)
       {
-        auto* stabilizer = new Ieeest<ScalarT, IdxT>(stabdata);
-
+        SignalT* input = nullptr;
         if (stabdata.signal_inputs.contains(IeeestSignalInputs::input))
         {
-          IdxT           input = stabdata.signal_inputs.at(IeeestSignalInputs::input);
-          constexpr auto U     = IeeestExternalVariables::U;
-          stabilizer->getSignals().template attachSignalNode<U>(getSignal(input));
+          input = getSignal(stabdata.signal_inputs.at(IeeestSignalInputs::input));
         }
 
+        SignalT* output = nullptr;
         if (stabdata.signal_outputs.contains(IeeestSignalOutputs::output))
         {
-          IdxT           output = stabdata.signal_outputs.at(IeeestSignalOutputs::output);
-          constexpr auto VSS    = IeeestInternalVariables::VSS;
-          stabilizer->getSignals().template assignSignalNode<VSS>(getSignal(output));
+          output = getSignal(stabdata.signal_outputs.at(IeeestSignalOutputs::output));
         }
 
-        addComponent(stabilizer);
+        addComponent(StabilizerFactory<ScalarT, IdxT>::create(stabdata, input, output));
       }
 
       // Add constant signal sources
