@@ -163,6 +163,12 @@ namespace GridKit
           raw_component.get_to(gov);
           sm.hygov.push_back(gov);
         }
+        else if (kind == "GastPti")
+        {
+          typename SystemModelData<RealT, IdxT>::GastPtiDataT gov;
+          raw_component.get_to(gov);
+          sm.gastpti.push_back(gov);
+        }
         else if (kind == "Ieeet1")
         {
           typename SystemModelData<RealT, IdxT>::Ieeet1DataT exciter;
