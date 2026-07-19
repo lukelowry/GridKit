@@ -1,0 +1,17 @@
+{
+    "system_model_file": "wecc.case.json",
+    "dt_monitor": 0.02,
+    "tmax": 6.0,
+    "events": [
+        {
+            "time": 0.1,
+            "type": "fault_on",
+            "element_id": 0
+        },
+        {
+            "time": 0.2,
+            "type": "fault_off",
+            "element_id": 0
+        }
+    ]
+}

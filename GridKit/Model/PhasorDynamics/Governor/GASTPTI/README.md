@@ -10,6 +10,7 @@ fuel-flow, and exhaust-temperature limiting chain.
 - Power signal ports and the `pmech` monitor output are on system base.
 - Internal fuel/load states and limiter quantities are on GASTPTI component base.
 - GASTPTI uses $T^\mathrm{rate}$, loaded from `Trate`, as its component power base.
+- All ten JSON parameters listed below are required.
 - The diagram shows the GASTD speed deadband block (`dbL`/`dbH`). That block is
   only used by GASTD; GASTPTI uses $\omega$ directly.
 
@@ -186,18 +187,33 @@ side and set all internal derivatives to zero:
     &= x_{\mathrm{flow},0} \\
   V_{\mathrm{temp}}
     &= A_T + K_T(A_T - x_{\mathrm{temp},0}) \\
+  \Delta_0
+    &= V_{\mathrm{temp},0} - x_{\mathrm{flow},0} > 0 \\
   V_{\mathrm{load}}
-    &= x_{\mathrm{valve},0} \\
+    &= V_{\mathrm{temp},0}
+       - \operatorname{ramp}_{\mu}^{-1}\!\left(\Delta_0\right) \\
   V_{\mathrm{LV}}
-    &= x_{\mathrm{valve},0}
+    &= x_{\mathrm{flow},0}
 \end{aligned}
 ```
 
 The closed-form start requires
-$V^{\min} \le x_{\mathrm{flow},0} \le V^{\max}$ and
-$V_{\mathrm{temp},0} \ge V_{\mathrm{load},0}$ so the fuel-valve and
-temperature-gate residuals are zero. Starts that bind the fuel-valve limit or
-the temperature gate are rejected by this initialization path.
+$V^{\min} \le x_{\mathrm{flow},0} \le V^{\max}$ and a strictly positive
+temperature-gate margin $\Delta_0$. The inverse uses the same smooth ramp as
+the residual:
+
+```math
+\operatorname{ramp}_{\mu}^{-1}(y)
+  = \frac{\log\!\left(\exp(\mu y)-1\right)}{\mu},
+  \qquad y>0.
+```
+
+It is evaluated with `expm1` and a large-argument linear branch for numerical
+stability. Solving for $V_{\mathrm{load},0}$ this way makes
+$\operatorname{min}(V_{\mathrm{load},0},V_{\mathrm{temp},0})
+=x_{\mathrm{flow},0}$ under GridKit's smooth minimum, including starts close
+to the gate transition. Starts outside the fuel-valve limits or with a
+non-positive temperature-gate margin are rejected by this initialization path.
 
 ### Output Initialization
 

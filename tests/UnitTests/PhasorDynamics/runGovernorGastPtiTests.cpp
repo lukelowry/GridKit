@@ -15,9 +15,12 @@ int main()
   result += test.residual();
   result += test.antiWindupLimiter();
   result += test.initializationValidation();
+  result += test.smoothMinimumInitialization();
+  result += test.smoothMinimumEqualityRejected();
   result += test.timeConstantMinimum();
   result += test.parameterValidation();
   result += test.signalValidation();
+  result += test.jsonParseAndSystemAssembly();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
 #endif

@@ -1,15 +1,21 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <limits>
+#include <sstream>
+#include <variant>
 #include <vector>
 
 #include <GridKit/AutomaticDifferentiation/DependencyTracking/Variable.hpp>
+#include <GridKit/CommonMath.hpp>
 #include <GridKit/Definitions.hpp>
 #include <GridKit/Model/PhasorDynamics/Governor/GASTPTI/GastPti.hpp>
 #include <GridKit/Model/PhasorDynamics/Governor/GASTPTI/GastPtiData.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalNode/SignalNode.hpp>
+#include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
+#include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Testing/Testing.hpp>
 #include <GridKit/Utilities/MapFromCsr.hpp>
@@ -397,6 +403,74 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome smoothMinimumInitialization()
+      {
+        TestStatus success = true;
+
+        auto data                   = makeTestData();
+        data.parameters[Params::At] = static_cast<RealT>(
+            kInitialPmech + kNearGateMargin / (1.0 + kKt));
+        Gov model(data);
+
+        PhasorDynamics::SignalNode<ScalarT, IdxT> pmech_node;
+        PhasorDynamics::SignalNode<ScalarT, IdxT> pref_node;
+        ScalarT                                   pmech_value{0.0};
+        ScalarT                                   pref_value{0.0};
+        IdxT                                      pmech_index = INVALID_INDEX<IdxT>;
+        IdxT                                      pref_index  = 10;
+        pmech_node.set(&pmech_value, &pmech_index);
+        pref_node.set(&pref_value, &pref_index);
+
+        model.getSignals().template assignSignalNode<Var::PMECH>(&pmech_node);
+        model.getSignals().template attachSignalNode<Ext::PREF>(&pref_node);
+
+        success *= (model.allocate() == 0);
+        pmech_node.init(scalar(kInitialPmech));
+        success *= (model.initialize() == 0);
+        success *= (model.evaluateResidual() == 0);
+
+        const ScalarT xflow0 = scalar(kInitialPmech);
+        const ScalarT at     = scalar(
+            kInitialPmech + kNearGateMargin / (1.0 + kKt));
+        const ScalarT vtemp0 = at + scalar(kKt) * (at - xflow0);
+        const RealT   margin = static_cast<RealT>(vtemp0 - xflow0);
+        const ScalarT vload0 = vtemp0 - scalar(inverseRamp(margin));
+
+        success *= (margin > ZERO<RealT>);
+        success *= isEqual(margin, kNearGateMargin, kTolerance);
+        success *= (vload0 > vtemp0);
+        success *= isEqual(model.y().getData()[index(Var::VLOAD)], vload0, scalar(kTolerance));
+        success *= isEqual(model.y().getData()[index(Var::VTEMP)], vtemp0, scalar(kTolerance));
+        success *= isEqual(model.y().getData()[index(Var::VLV)], xflow0, scalar(kTolerance));
+        success *= isEqual(pref_node.read(), vload0, scalar(kTolerance));
+
+        checkZeroResidual(model, success);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome smoothMinimumEqualityRejected()
+      {
+        TestStatus success = true;
+
+        auto data                   = makeTestData();
+        data.parameters[Params::At] = static_cast<RealT>(kInitialPmech);
+        Gov model(data);
+
+        PhasorDynamics::SignalNode<ScalarT, IdxT> pmech_node;
+        ScalarT                                   pmech_value{0.0};
+        IdxT                                      pmech_index = INVALID_INDEX<IdxT>;
+        pmech_node.set(&pmech_value, &pmech_index);
+
+        model.getSignals().template assignSignalNode<Var::PMECH>(&pmech_node);
+
+        success *= (model.allocate() == 0);
+        pmech_node.init(scalar(kInitialPmech));
+        success *= (model.initialize() != 0);
+
+        return success.report(__func__);
+      }
+
       TestOutcome timeConstantMinimum()
       {
         TestStatus success = true;
@@ -501,6 +575,110 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome jsonParseAndSystemAssembly()
+      {
+        TestStatus success = true;
+
+        std::istringstream input(R"json(
+{
+  "header": {
+    "format_version": 0,
+    "format_revision": 1,
+    "case_name": "gas-turbine governor",
+    "case_description": "GASTPTI parser and assembly test",
+    "case_comments": "",
+    "freq_base": 60.0,
+    "va_base": 100000000.0
+  },
+  "buses": [
+    {
+      "number": 1,
+      "class": "infinite_bus",
+      "name": "Bus 1",
+      "init": { "Vr": 1.0, "Vi": 0.0 },
+      "params": { "kv": 1.0 }
+    }
+  ],
+  "signals": [
+    { "signal_id": 10, "name": "Pmech" }
+  ],
+  "devices": [
+    {
+      "class": "Genrou",
+      "ports": { "bus": 1, "pmech": 10 },
+      "id": "GEN1",
+      "params": {
+        "p0": 0.3, "q0": 0.0, "H": 3.0, "D": 0.0, "Ra": 0.0,
+        "Tdop": 7.0, "Tdopp": 0.04, "Tqop": 0.75, "Tqopp": 0.05,
+        "Xd": 2.1, "Xdp": 0.2, "Xdpp": 0.18, "Xq": 0.5, "Xqp": 0.5,
+        "Xqpp": 0.18, "Xl": 0.15, "S10": 0.0, "S12": 0.0,
+        "mva": 100.0
+      }
+    },
+    {
+      "class": "GastPti",
+      "ports": { "pmech": 10 },
+      "id": "GAST1",
+      "params": {
+        "R": 0.05, "T1": 0.4, "T2": 0.5, "T3": 0.25,
+        "At": 2.0, "Kt": 0.3, "Vmax": 1.2, "Vmin": 0.0,
+        "Dturb": 0.1, "Trate": 100.0
+      },
+      "mon": ["pmech", "fuelvalve"]
+    }
+  ]
+}
+)json");
+
+        auto data             = PhasorDynamics::parseSystemModelData(input);
+        success              *= (data.gastpti.size() == 1);
+        const auto& gov_data  = data.gastpti[0];
+        success              *= (gov_data.device_class == "GastPti");
+        success              *= gov_data.buses.empty();
+        success              *= gov_data.signal_inputs.empty();
+        success              *= (gov_data.signal_outputs.at(Data::SignalOutputs::pmech)
+                    == static_cast<IdxT>(10));
+        success              *= (std::get_if<double>(&gov_data.parameters.at(Params::R))
+                    != nullptr);
+        success              *= (std::get_if<double>(&gov_data.parameters.at(Params::Trate))
+                    != nullptr);
+        success              *= (gov_data.monitored_variables.count(Mon::pmech) == 1);
+        success              *= (gov_data.monitored_variables.count(Mon::fuelvalve) == 1);
+
+        PhasorDynamics::SystemModel<ScalarT, IdxT> system(data);
+        success *= (system.allocate() == 0);
+        success *= (system.initialize() == 0);
+
+        auto* governor  = dynamic_cast<Gov*>(system.getComponent(1));
+        success        *= (governor != nullptr);
+        if (governor != nullptr)
+        {
+          success *= isEqual(governor->y().getData()[index(Var::PMECH)],
+                             static_cast<ScalarT>(0.3),
+                             static_cast<ScalarT>(1.0e-8));
+          const auto* pmech =
+              governor->getSignals().template getSignalNode<Var::PMECH>();
+          success *= (pmech != nullptr);
+          if (pmech != nullptr)
+          {
+            success *= pmech->linked();
+          }
+        }
+
+        success              *= (system.tagDifferentiable() == 0);
+        success              *= (system.evaluateResidual() == 0);
+        const auto& residual  = system.getResidual();
+        for (size_t i = 0; i < residual.getSize(); ++i)
+        {
+          success *= isEqual(residual.getData()[i],
+                             static_cast<ScalarT>(0.0),
+                             static_cast<ScalarT>(1.0e-8));
+        }
+        success *= (system.evaluateJacobian() == 0);
+
+        return success.report(__func__);
+      }
+
 #ifdef GRIDKIT_ENABLE_ENZYME
       TestOutcome jacobian()
       {
@@ -535,9 +713,10 @@ namespace GridKit
       static constexpr RealT kDturb               = 0.1;
       static constexpr RealT kTrate               = 100.0;
 
-      static constexpr RealT kInitialPmech = 0.75;
-      static constexpr RealT kInitialOmega = 0.02;
-      static constexpr RealT kPrefStep     = 0.1;
+      static constexpr RealT kInitialPmech   = 0.75;
+      static constexpr RealT kInitialOmega   = 0.02;
+      static constexpr RealT kNearGateMargin = 1.0e-4;
+      static constexpr RealT kPrefStep       = 0.1;
 
       static constexpr RealT kSystemFrequency        = 60.0;
       static constexpr RealT kConversionTrate        = 50.0;
@@ -571,6 +750,16 @@ namespace GridKit
       static size_t index(Var variable)
       {
         return static_cast<size_t>(variable);
+      }
+
+      static RealT inverseRamp(RealT value)
+      {
+        const RealT scaled_value = Math::MU<RealT> * value;
+        if (scaled_value > static_cast<RealT>(50.0))
+        {
+          return value;
+        }
+        return std::log(std::expm1(scaled_value)) / Math::MU<RealT>;
       }
 
       template <typename value_type>

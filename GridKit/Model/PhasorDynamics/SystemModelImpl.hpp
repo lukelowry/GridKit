@@ -107,6 +107,137 @@ namespace GridKit
         addComponent(adapter);
       }
 
+      // Add branches
+      for (const auto& branchdata : data.branch)
+      {
+        IdxT bus1_index = 0;
+        if (branchdata.buses.contains(BranchBuses::bus1))
+        {
+          bus1_index = branchdata.buses.at(BranchBuses::bus1);
+        }
+
+        IdxT bus2_index = 0;
+        if (branchdata.buses.contains(BranchBuses::bus2))
+        {
+          bus2_index = branchdata.buses.at(BranchBuses::bus2);
+        }
+
+        auto* branch = new Branch<ScalarT, IdxT>(
+            getBus(bus1_index), getBus(bus2_index), branchdata);
+        addComponent(branch);
+      }
+
+      // Add loads
+      /// @todo Add loads to JSON parser
+      for (const auto& loaddata : data.loadz)
+      {
+        IdxT bus_index = 0;
+        if (loaddata.buses.contains(LoadZBuses::bus))
+        {
+          bus_index = loaddata.buses.at(LoadZBuses::bus);
+        }
+        auto* load = new LoadZ<ScalarT, IdxT>(getBus(bus_index), loaddata);
+        addComponent(load);
+      }
+
+      // Add zip loads
+      /// @todo Add zip loads to JSON parser
+      for (const auto& loadzipdata : data.loadzip)
+      {
+        IdxT bus_index = 0;
+        if (loadzipdata.buses.contains(LoadZIPBuses::bus))
+        {
+          bus_index = loadzipdata.buses.at(LoadZIPBuses::bus);
+        }
+        auto* loadzip = new LoadZIP<ScalarT, IdxT>(getBus(bus_index), loadzipdata);
+        addComponent(loadzip);
+      }
+
+      // Add GENROU generators
+      for (const auto& gendata : data.genrou)
+      {
+        IdxT bus_index = 0;
+        if (gendata.buses.contains(GenrouBuses::bus))
+        {
+          bus_index = gendata.buses.at(GenrouBuses::bus);
+        }
+
+        auto* gen = new Genrou<ScalarT, IdxT>(getBus(bus_index), gendata);
+
+        /// @todo Genrou (and likely other components) would need to name multiple
+        /// signal inlets and outlets. For now we have only speed out and mechanical
+        /// power in.
+        if (gendata.signal_outputs.contains(GenrouSignalOutputs::speed))
+        {
+          IdxT           speed = gendata.signal_outputs.at(GenrouSignalOutputs::speed);
+          constexpr auto OMEGA = GenrouInternalVariables::OMEGA;
+          gen->getSignals().template assignSignalNode<OMEGA>(getSignal(speed));
+        }
+
+        if (gendata.signal_inputs.contains(GenrouSignalInputs::pmech))
+        {
+          IdxT           pmech = gendata.signal_inputs.at(GenrouSignalInputs::pmech);
+          constexpr auto PM    = GenrouExternalVariables::PM;
+          gen->getSignals().template attachSignalNode<PM>(getSignal(pmech));
+        }
+
+        if (gendata.signal_inputs.contains(GenrouSignalInputs::efd))
+        {
+          IdxT           efd = gendata.signal_inputs.at(GenrouSignalInputs::efd);
+          constexpr auto EFD = GenrouExternalVariables::EFD;
+          gen->getSignals().template attachSignalNode<EFD>(getSignal(efd));
+        }
+
+        addComponent(gen);
+      }
+
+      // Add GENSAL generators
+      for (const auto& gendata : data.gensal)
+      {
+        IdxT bus_index = 0;
+        if (gendata.buses.contains(GensalBuses::bus))
+        {
+          bus_index = gendata.buses.at(GensalBuses::bus);
+        }
+
+        auto* gen = new Gensal<ScalarT, IdxT>(getBus(bus_index), gendata);
+
+        if (gendata.signal_outputs.contains(GensalSignalOutputs::speed))
+        {
+          IdxT           speed = gendata.signal_outputs.at(GensalSignalOutputs::speed);
+          constexpr auto OMEGA = GensalInternalVariables::OMEGA;
+          gen->getSignals().template assignSignalNode<OMEGA>(getSignal(speed));
+        }
+
+        if (gendata.signal_inputs.contains(GensalSignalInputs::pmech))
+        {
+          IdxT           pmech = gendata.signal_inputs.at(GensalSignalInputs::pmech);
+          constexpr auto PM    = GensalExternalVariables::PM;
+          gen->getSignals().template attachSignalNode<PM>(getSignal(pmech));
+        }
+
+        if (gendata.signal_inputs.contains(GensalSignalInputs::efd))
+        {
+          IdxT           efd = gendata.signal_inputs.at(GensalSignalInputs::efd);
+          constexpr auto EFD = GensalExternalVariables::EFD;
+          gen->getSignals().template attachSignalNode<EFD>(getSignal(efd));
+        }
+
+        addComponent(gen);
+      }
+
+      // Add classical generators
+      for (const auto& gendata : data.genclassical)
+      {
+        IdxT bus_index = 0;
+        if (gendata.buses.contains(GenClassicalBuses::bus))
+        {
+          bus_index = gendata.buses.at(GenClassicalBuses::bus);
+        }
+        auto* gen = new GenClassical<ScalarT, IdxT>(getBus(bus_index), gendata);
+        addComponent(gen);
+      }
+
       // Add REGCA converters
       for (const auto& regcadata : data.regca)
       {
@@ -301,137 +432,6 @@ namespace GridKit
         addComponent(repca);
       }
 
-      // Add branches
-      for (const auto& branchdata : data.branch)
-      {
-        IdxT bus1_index = 0;
-        if (branchdata.buses.contains(BranchBuses::bus1))
-        {
-          bus1_index = branchdata.buses.at(BranchBuses::bus1);
-        }
-
-        IdxT bus2_index = 0;
-        if (branchdata.buses.contains(BranchBuses::bus2))
-        {
-          bus2_index = branchdata.buses.at(BranchBuses::bus2);
-        }
-
-        auto* branch = new Branch<ScalarT, IdxT>(
-            getBus(bus1_index), getBus(bus2_index), branchdata);
-        addComponent(branch);
-      }
-
-      // Add loads
-      /// @todo Add loads to JSON parser
-      for (const auto& loaddata : data.loadz)
-      {
-        IdxT bus_index = 0;
-        if (loaddata.buses.contains(LoadZBuses::bus))
-        {
-          bus_index = loaddata.buses.at(LoadZBuses::bus);
-        }
-        auto* load = new LoadZ<ScalarT, IdxT>(getBus(bus_index), loaddata);
-        addComponent(load);
-      }
-
-      // Add zip loads
-      /// @todo Add zip loads to JSON parser
-      for (const auto& loadzipdata : data.loadzip)
-      {
-        IdxT bus_index = 0;
-        if (loadzipdata.buses.contains(LoadZIPBuses::bus))
-        {
-          bus_index = loadzipdata.buses.at(LoadZIPBuses::bus);
-        }
-        auto* loadzip = new LoadZIP<ScalarT, IdxT>(getBus(bus_index), loadzipdata);
-        addComponent(loadzip);
-      }
-
-      // Add GENROU generators
-      for (const auto& gendata : data.genrou)
-      {
-        IdxT bus_index = 0;
-        if (gendata.buses.contains(GenrouBuses::bus))
-        {
-          bus_index = gendata.buses.at(GenrouBuses::bus);
-        }
-
-        auto* gen = new Genrou<ScalarT, IdxT>(getBus(bus_index), gendata);
-
-        /// @todo Genrou (and likely other components) would need to name multiple
-        /// signal inlets and outlets. For now we have only speed out and mechanical
-        /// power in.
-        if (gendata.signal_outputs.contains(GenrouSignalOutputs::speed))
-        {
-          IdxT           speed = gendata.signal_outputs.at(GenrouSignalOutputs::speed);
-          constexpr auto OMEGA = GenrouInternalVariables::OMEGA;
-          gen->getSignals().template assignSignalNode<OMEGA>(getSignal(speed));
-        }
-
-        if (gendata.signal_inputs.contains(GenrouSignalInputs::pmech))
-        {
-          IdxT           pmech = gendata.signal_inputs.at(GenrouSignalInputs::pmech);
-          constexpr auto PM    = GenrouExternalVariables::PM;
-          gen->getSignals().template attachSignalNode<PM>(getSignal(pmech));
-        }
-
-        if (gendata.signal_inputs.contains(GenrouSignalInputs::efd))
-        {
-          IdxT           efd = gendata.signal_inputs.at(GenrouSignalInputs::efd);
-          constexpr auto EFD = GenrouExternalVariables::EFD;
-          gen->getSignals().template attachSignalNode<EFD>(getSignal(efd));
-        }
-
-        addComponent(gen);
-      }
-
-      // Add GENSAL generators
-      for (const auto& gendata : data.gensal)
-      {
-        IdxT bus_index = 0;
-        if (gendata.buses.contains(GensalBuses::bus))
-        {
-          bus_index = gendata.buses.at(GensalBuses::bus);
-        }
-
-        auto* gen = new Gensal<ScalarT, IdxT>(getBus(bus_index), gendata);
-
-        if (gendata.signal_outputs.contains(GensalSignalOutputs::speed))
-        {
-          IdxT           speed = gendata.signal_outputs.at(GensalSignalOutputs::speed);
-          constexpr auto OMEGA = GensalInternalVariables::OMEGA;
-          gen->getSignals().template assignSignalNode<OMEGA>(getSignal(speed));
-        }
-
-        if (gendata.signal_inputs.contains(GensalSignalInputs::pmech))
-        {
-          IdxT           pmech = gendata.signal_inputs.at(GensalSignalInputs::pmech);
-          constexpr auto PM    = GensalExternalVariables::PM;
-          gen->getSignals().template attachSignalNode<PM>(getSignal(pmech));
-        }
-
-        if (gendata.signal_inputs.contains(GensalSignalInputs::efd))
-        {
-          IdxT           efd = gendata.signal_inputs.at(GensalSignalInputs::efd);
-          constexpr auto EFD = GensalExternalVariables::EFD;
-          gen->getSignals().template attachSignalNode<EFD>(getSignal(efd));
-        }
-
-        addComponent(gen);
-      }
-
-      // Add classical generators
-      for (const auto& gendata : data.genclassical)
-      {
-        IdxT bus_index = 0;
-        if (gendata.buses.contains(GenClassicalBuses::bus))
-        {
-          bus_index = gendata.buses.at(GenClassicalBuses::bus);
-        }
-        auto* gen = new GenClassical<ScalarT, IdxT>(getBus(bus_index), gendata);
-        addComponent(gen);
-      }
-
       // Add Tgov1 governors
       for (const auto& govdata : data.gov)
       {
@@ -519,6 +519,25 @@ namespace GridKit
         addComponent(gov);
       }
 
+      // Add IEEEST stabilizers
+      for (const auto& stabdata : data.stabilizer)
+      {
+        SignalT* input = nullptr;
+        if (stabdata.signal_inputs.contains(IeeestSignalInputs::input))
+        {
+          input = getSignal(stabdata.signal_inputs.at(IeeestSignalInputs::input));
+        }
+
+        SignalT* output = nullptr;
+        if (stabdata.signal_outputs.contains(IeeestSignalOutputs::output))
+        {
+          output = getSignal(stabdata.signal_outputs.at(IeeestSignalOutputs::output));
+        }
+
+        addComponent(StabilizerFactory<ScalarT, IdxT>::create(stabdata, input, output));
+      }
+
+      // Add IEEET1 exciters
       for (const auto& excitedata : data.exciter)
       {
         IdxT bus_index = 0;
@@ -553,6 +572,7 @@ namespace GridKit
         addComponent(exciter);
       }
 
+      // Add ESDC1A exciters
       for (const auto& excitedata : data.esdc1a)
       {
         IdxT bus_index = 0;
@@ -601,6 +621,7 @@ namespace GridKit
         addComponent(exciter);
       }
 
+      // Add SEXS-PTI exciters
       for (const auto& excitedata : data.sexspti)
       {
         IdxT bus_index = 0;
@@ -626,24 +647,6 @@ namespace GridKit
         }
 
         addComponent(exciter);
-      }
-
-      // Add IEEEST stabilizers
-      for (const auto& stabdata : data.stabilizer)
-      {
-        SignalT* input = nullptr;
-        if (stabdata.signal_inputs.contains(IeeestSignalInputs::input))
-        {
-          input = getSignal(stabdata.signal_inputs.at(IeeestSignalInputs::input));
-        }
-
-        SignalT* output = nullptr;
-        if (stabdata.signal_outputs.contains(IeeestSignalOutputs::output))
-        {
-          output = getSignal(stabdata.signal_outputs.at(IeeestSignalOutputs::output));
-        }
-
-        addComponent(StabilizerFactory<ScalarT, IdxT>::create(stabdata, input, output));
       }
 
       // Add constant signal sources
@@ -864,7 +867,11 @@ namespace GridKit
       // without needing the Jacobian values.
       if (hasJacobian())
       {
-        initialize();
+        const int initialization_status = initialize();
+        if (initialization_status != 0)
+        {
+          return initialization_status;
+        }
         evaluateResidual();
         evaluateJacobian();
       }
@@ -951,12 +958,20 @@ namespace GridKit
     {
       for (const auto& bus : buses_)
       {
-        bus->initialize();
+        const int initialization_status = bus->initialize();
+        if (initialization_status != 0)
+        {
+          return initialization_status;
+        }
       }
 
       for (const auto& component : components_)
       {
-        component->initialize();
+        const int initialization_status = component->initialize();
+        if (initialization_status != 0)
+        {
+          return initialization_status;
+        }
       }
 
       y_.setDataUpdated();

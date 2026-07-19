@@ -5,7 +5,8 @@ resources.
 
 ## Notes
 
-- When used with REPCA active-power control, connect REPCA `pext` to REECB `pref`.
+- When used with REPCA plant control, connect REPCA `qext` to REECB `qext`
+  and REPCA `pext` to REECB `pref`.
 
 ## Block Diagram
 

@@ -97,7 +97,7 @@ namespace GridKit
           raw_component.get_to(adapter);
           sm.adapter.push_back(adapter);
         }
-        if (kind == "Branch")
+        else if (kind == "Branch")
         {
           typename SystemModelData<RealT, IdxT>::BranchDataT branch;
           raw_component.get_to(branch);

@@ -1,7 +1,7 @@
 # **IEEE Stabilizer Model (IEEEST)**
 
-Standard IEEE power system stabilizer: 4th-order notch filter, two lead–lag
-blocks, washout, and output limiter.
+Standard IEEE power system stabilizer: up-to-fourth-order notch filter, two
+lead–lag blocks, washout, and output limiter.
 
 ## Notes
 
@@ -45,6 +45,9 @@ IEEEST denominator time constants are conditioned and unsupported notch forms ar
 \begin{aligned}
   T &\leftarrow \max\!\left(T, \epsilon_T\right)
     \quad T\in\{T_2,T_4,T_6\} \\
+  A_5 &= A_6 = 0
+    \quad\text{when}\quad
+    n = 0 \\
   A_6 &= 0
     \quad\text{when}\quad
     n = 1

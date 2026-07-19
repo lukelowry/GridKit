@@ -10,6 +10,7 @@ int main()
   result += test.zeroInitialResidual();
   result += test.blockDiagramSemantics();
   result += test.parameterValidation();
+  result += test.jsonParseAndSystemAssembly();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobianStructureAndValues();
 #endif

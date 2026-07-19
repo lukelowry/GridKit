@@ -92,8 +92,8 @@ add_executable(test_phasor_governor_gastpti runGovernorGastPtiTests.cpp)
 target_link_libraries(
   test_phasor_governor_gastpti
   GridKit::definitions
-  GridKit::phasor_dynamics_components
-  GridKit::phasor_dynamics_components_dependency_tracking
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::phasor_dynamics_systemmodel_dependency_tracking
   GridKit::testing)
 
 add_executable(test_phasor_governor_hygov runGovernorHygovTests.cpp)
@@ -116,8 +116,8 @@ add_executable(test_phasor_exciter_esdc1a runExciterEsdc1aTests.cpp)
 target_link_libraries(
   test_phasor_exciter_esdc1a
   GridKit::definitions
-  GridKit::phasor_dynamics_components
-  GridKit::phasor_dynamics_components_dependency_tracking
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::phasor_dynamics_systemmodel_dependency_tracking
   GridKit::testing)
 
 add_executable(test_phasor_exciter_sexspti runExciterSexsPtiTests.cpp)
@@ -132,16 +132,16 @@ add_executable(test_phasor_converter_regca runConverterRegcaTests.cpp)
 target_link_libraries(
   test_phasor_converter_regca
   GridKit::definitions
-  GridKit::phasor_dynamics_components
-  GridKit::phasor_dynamics_components_dependency_tracking
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::phasor_dynamics_systemmodel_dependency_tracking
   GridKit::testing)
 
 add_executable(test_phasor_converter_reecb runConverterReecbTests.cpp)
 target_link_libraries(
   test_phasor_converter_reecb
   GridKit::definitions
-  GridKit::phasor_dynamics_components
-  GridKit::phasor_dynamics_components_dependency_tracking
+  GridKit::phasor_dynamics_systemmodel
+  GridKit::phasor_dynamics_systemmodel_dependency_tracking
   GridKit::testing)
 
 add_executable(test_phasor_converter_repca runConverterRepcaTests.cpp)

@@ -3,6 +3,7 @@
 
 #include <GridKit/Model/PhasorDynamics/ComponentLibrary.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
+#include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Testing/Testing.hpp>
 
@@ -185,6 +186,66 @@ namespace GridKit
 
         delete system;
         system = nullptr;
+
+        return success.report(__func__);
+      }
+
+      TestOutcome initializationFailurePropagation()
+      {
+        using namespace PhasorDynamics;
+        using namespace PhasorDynamics::Governor;
+
+        TestStatus success = true;
+
+        constexpr IdxT pmech_id = 1;
+
+        SystemModelData<RealT, IdxT>                       data;
+        typename SystemModelData<RealT, IdxT>::SignalDataT pmech;
+        pmech.signal_id = pmech_id;
+        data.signal.push_back(pmech);
+
+        GastPtiData<RealT, IdxT> gastpti;
+        gastpti.device_class                                = "GastPti";
+        gastpti.signal_outputs[GastPtiSignalOutputs::pmech] = pmech_id;
+        gastpti.parameters[GastPtiParameters::R]            = static_cast<RealT>(0.05);
+        gastpti.parameters[GastPtiParameters::T1]           = static_cast<RealT>(0.4);
+        gastpti.parameters[GastPtiParameters::T2]           = static_cast<RealT>(0.5);
+        gastpti.parameters[GastPtiParameters::T3]           = static_cast<RealT>(0.25);
+        // The initial PMECH value is zero, so At = 0 makes VTEMP - XFLOW exactly zero.
+        gastpti.parameters[GastPtiParameters::At]           = static_cast<RealT>(0.0);
+        gastpti.parameters[GastPtiParameters::Kt]           = static_cast<RealT>(0.3);
+        gastpti.parameters[GastPtiParameters::Vmax]         = static_cast<RealT>(1.2);
+        gastpti.parameters[GastPtiParameters::Vmin]         = static_cast<RealT>(0.0);
+        gastpti.parameters[GastPtiParameters::Dturb]        = static_cast<RealT>(0.1);
+        gastpti.parameters[GastPtiParameters::Trate]        = static_cast<RealT>(100.0);
+        data.gastpti.push_back(gastpti);
+
+        SystemModel<ScalarT, IdxT> system(data);
+        auto*                      gastpti_model =
+            dynamic_cast<GastPti<ScalarT, IdxT>*>(system.getComponent(0));
+        success *= gastpti_model != nullptr;
+        if (gastpti_model == nullptr)
+        {
+          return success.report(__func__);
+        }
+        success *= gastpti_model->verify() == 0;
+        success *= gastpti_model->getSignals()
+                       .template getSignalNode<GastPtiInternalVariables::PMECH>()
+                   == system.getSignal(pmech_id);
+
+        const bool initializes_during_allocation = system.hasJacobian();
+        const int  allocation_status             = system.allocate();
+        if (initializes_during_allocation)
+        {
+          success *= allocation_status != 0;
+          success *= system.getCsrJacobian() == nullptr;
+        }
+        else
+        {
+          success *= allocation_status == 0;
+        }
+        success *= system.getSignal(pmech_id)->linked();
+        success *= system.initialize() != 0;
 
         return success.report(__func__);
       }

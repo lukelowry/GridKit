@@ -7,6 +7,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <variant>
 
 #include <GridKit/Model/PhasorDynamics/Governor/GASTPTI/GastPti.hpp>
@@ -278,21 +279,34 @@ namespace GridKit
           return 1;
         }
 
-        if (static_cast<RealT>(vtemp0) < static_cast<RealT>(xflow0))
+        const RealT ramp_target = static_cast<RealT>(vtemp0 - xflow0);
+        if (ramp_target <= ZERO<RealT>)
         {
-          Log::error() << "GastPti: initial temperature gate cannot select speed/load demand\n";
+          Log::error() << "GastPti: initial temperature-gate margin must be positive\n";
           return 1;
         }
+
+        auto inverse_ramp = [](RealT value)
+        {
+          const RealT scaled_value = Math::MU<RealT> * value;
+          if (scaled_value > static_cast<RealT>(50.0))
+          {
+            return value;
+          }
+          return std::log(std::expm1(scaled_value)) / Math::MU<RealT>;
+        };
+
+        const ScalarT vload0 = vtemp0 - inverse_ramp(ramp_target);
 
         y[XFLOW]  = xflow0;
         y[XVALVE] = xflow0;
         y[XTEMP]  = xflow0;
+        y[VLOAD]  = vload0;
         y[VTEMP]  = vtemp0;
-        y[VLV]    = y[XVALVE];
-        y[VLOAD]  = y[XVALVE];
+        y[VLV]    = xflow0;
         y[PMECH]  = toSystemBase(pmech0);
 
-        pref_set_ = toSystemBase(y[VLOAD] + omega0 / R_);
+        pref_set_ = toSystemBase(vload0 + omega0 / R_);
         if (signals_.template isAttached<GastPtiExternalVariables::PREF>())
         {
           signals_.template writeExternalVariable<GastPtiExternalVariables::PREF>(pref_set_);

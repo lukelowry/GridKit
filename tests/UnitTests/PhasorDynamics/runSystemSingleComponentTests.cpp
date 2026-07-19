@@ -15,6 +15,7 @@ int main()
   result += test.load();
   result += test.loadZIP();
   result += test.regca();
+  result += test.initializationFailurePropagation();
   result += test.genrou();
   result += test.genClassical();
   result += test.tgov1();

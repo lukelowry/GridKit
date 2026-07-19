@@ -2,6 +2,8 @@
 
 #include <cmath>
 #include <iostream>
+#include <sstream>
+#include <variant>
 #include <vector>
 
 #include <GridKit/AutomaticDifferentiation/DependencyTracking/Variable.hpp>
@@ -10,6 +12,8 @@
 #include <GridKit/Model/PhasorDynamics/Exciter/ESDC1A/Esdc1a.hpp>
 #include <GridKit/Model/PhasorDynamics/Exciter/ESDC1A/Esdc1aData.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalNode/SignalNode.hpp>
+#include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
+#include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Testing/Testing.hpp>
 #include <GridKit/Utilities/MapFromCsr.hpp>
@@ -167,6 +171,121 @@ namespace GridKit
         missing_speed_model.getSignals().template assignSignalNode<Esdc1aInternalVariables::EFD>(&efd_node);
         missing_speed_model.allocate();
         success *= (missing_speed_model.verify() > 0);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome jsonParseAndSystemAssembly()
+      {
+        using namespace PhasorDynamics::Exciter;
+
+        TestStatus success = true;
+
+        std::istringstream input(R"json(
+{
+  "header": {
+    "format_version": 0,
+    "format_revision": 1,
+    "case_name": "dc exciter",
+    "case_description": "ESDC1A parser and assembly test",
+    "case_comments": "",
+    "freq_base": 60.0,
+    "va_base": 100000000.0
+  },
+  "buses": [
+    {
+      "number": 1,
+      "class": "infinite_bus",
+      "name": "Bus 1",
+      "init": { "Vr": 1.0, "Vi": 0.0 },
+      "params": { "kv": 1.0 }
+    }
+  ],
+  "signals": [
+    { "signal_id": 10, "name": "Efd" }
+  ],
+  "devices": [
+    {
+      "class": "Genrou",
+      "ports": { "bus": 1, "efd": 10 },
+      "id": "GEN1",
+      "params": {
+        "p0": 0.3, "q0": 0.0, "H": 3.0, "D": 0.0, "Ra": 0.0,
+        "Tdop": 7.0, "Tdopp": 0.04, "Tqop": 0.75, "Tqopp": 0.05,
+        "Xd": 2.1, "Xdp": 0.2, "Xdpp": 0.18, "Xq": 0.5, "Xqp": 0.5,
+        "Xqpp": 0.18, "Xl": 0.15, "S10": 0.0, "S12": 0.0,
+        "mva": 100.0
+      }
+    },
+    {
+      "class": "Esdc1a",
+      "ports": { "bus": 1, "efd": 10 },
+      "id": "EXC1",
+      "params": {
+        "Tr": 0.0, "Ka": 40.0, "Ta": 0.1, "Tb": 0.0, "Tc": 0.0,
+        "Vrmax": 100.0, "Vrmin": -100.0, "Ke": 1.0, "Te": 0.5,
+        "Kf": 0.0, "Tf1": 0.7, "Spdmlt": 0.0,
+        "E1": 0.0, "Se1": 0.0, "E2": 0.0, "Se2": 0.0,
+        "UEL": 2, "exclim": false
+      },
+      "mon": ["efd", "vc"]
+    }
+  ]
+}
+)json");
+
+        auto data                 = PhasorDynamics::parseSystemModelData(input);
+        success                  *= (data.esdc1a.size() == 1);
+        const auto& exciter_data  = data.esdc1a[0];
+        success                  *= (exciter_data.device_class == "Esdc1a");
+        success                  *= (exciter_data.buses.at(Esdc1aBuses::bus)
+                    == static_cast<IdxT>(1));
+        success                  *= exciter_data.signal_inputs.empty();
+        success                  *= (exciter_data.signal_outputs.at(Esdc1aSignalOutputs::efd)
+                    == static_cast<IdxT>(10));
+        success                  *= (std::get_if<double>(&exciter_data.parameters.at(Params::Ka))
+                    != nullptr);
+        success                  *= (std::get_if<size_t>(&exciter_data.parameters.at(Params::UEL))
+                    != nullptr);
+        success                  *= (std::get_if<bool>(&exciter_data.parameters.at(Params::exclim))
+                    != nullptr);
+        success                  *= (exciter_data.monitored_variables.count(
+                        Esdc1aMonitorableVariables::efd)
+                    == 1);
+        success                  *= (exciter_data.monitored_variables.count(
+                        Esdc1aMonitorableVariables::vc)
+                    == 1);
+
+        PhasorDynamics::SystemModel<ScalarT, IdxT> system(data);
+        success *= (system.allocate() == 0);
+        success *= (system.initialize() == 0);
+
+        auto* exciter  = dynamic_cast<Esdc1a<ScalarT, IdxT>*>(system.getComponent(1));
+        success       *= (exciter != nullptr);
+        if (exciter != nullptr)
+        {
+          const auto efd  = exciter->y().getData()[idx(Internal::EFD)];
+          success        *= std::isfinite(static_cast<RealT>(efd));
+          success        *= (efd > static_cast<ScalarT>(0.0));
+          const auto* efd_signal =
+              exciter->getSignals().template getSignalNode<Internal::EFD>();
+          success *= (efd_signal != nullptr);
+          if (efd_signal != nullptr)
+          {
+            success *= efd_signal->linked();
+          }
+        }
+
+        success              *= (system.tagDifferentiable() == 0);
+        success              *= (system.evaluateResidual() == 0);
+        const auto& residual  = system.getResidual();
+        for (size_t i = 0; i < residual.getSize(); ++i)
+        {
+          success *= isEqual(residual.getData()[i],
+                             static_cast<ScalarT>(0.0),
+                             static_cast<ScalarT>(1.0e-8));
+        }
+        success *= (system.evaluateJacobian() == 0);
 
         return success.report(__func__);
       }
