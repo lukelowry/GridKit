@@ -62,6 +62,21 @@ namespace GridKit::EMT
       return result;
     }
 
+    inline unsigned short unsignedShortValue(const json&        value,
+                                             const std::string& context)
+    {
+      const auto result = realValue<double>(value, context);
+      if (result < 0.0
+          || result > static_cast<double>(
+                 std::numeric_limits<unsigned short>::max())
+          || std::floor(result) != result)
+      {
+        throw std::runtime_error(
+            context + " must be a nonnegative integer representable as unsigned short");
+      }
+      return static_cast<unsigned short>(result);
+    }
+
     template <typename RealT>
     ABCVector<RealT> realVector(const json&        value,
                                 const std::string& context)
@@ -295,13 +310,13 @@ namespace GridKit::EMT
     }
     if (header.contains("format_version"))
     {
-      model.format_version = static_cast<unsigned short>(
-          header.at("format_version").get<double>());
+      model.format_version = unsignedShortValue(
+          header.at("format_version"), "format_version");
     }
     if (header.contains("format_revision"))
     {
-      model.format_revision = static_cast<unsigned short>(
-          header.at("format_revision").get<double>());
+      model.format_revision = unsignedShortValue(
+          header.at("format_revision"), "format_revision");
     }
 
     if (input.contains("monitors"))

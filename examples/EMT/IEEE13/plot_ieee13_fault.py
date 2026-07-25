@@ -62,9 +62,11 @@ def rolling_rms(times, values, period=1.0 / 60.0):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot the EMT three-bus fault run")
+    parser = argparse.ArgumentParser(
+        description="Plot the fixed-ABC IEEE 13-node projection fault run"
+    )
     parser.add_argument("csv_file", type=Path)
-    parser.add_argument("--output", type=Path, default=Path("emt_three_bus_fault.png"))
+    parser.add_argument("--output", type=Path, default=Path("emt_ieee13_fault.png"))
     parser.add_argument("--fault-on", type=float, default=0.050)
     parser.add_argument("--fault-off", type=float, default=0.100)
     args = parser.parse_args()
@@ -80,9 +82,9 @@ def main():
 
     time_name = headers[0]
     times = [float(row[time_name]) for row in rows]
-    voltage_names = select_columns(headers, ["632", "v"])
+    voltage_names = select_columns(headers, ["671", "v"])
     source_names = select_columns(headers, ["source650", "i"])
-    fault_names = select_columns(headers, ["fault632", "i"])
+    fault_names = select_columns(headers, ["fault671", "i"])
 
     voltage = [[float(row[name]) for row in rows] for name in voltage_names]
     source = [[float(row[name]) for row in rows] for name in source_names]
@@ -107,10 +109,10 @@ def main():
         axis.axvspan(args.fault_on, args.fault_off, color="tab:red", alpha=0.12)
         axis.grid(True, alpha=0.25)
         axis.legend(loc="upper right", ncols=3)
-    axes[0].set_ylabel("V")
-    axes[1].set_ylabel("V RMS (1 cycle)")
-    axes[2].set_ylabel("A")
-    axes[3].set_ylabel("A")
+    axes[0].set_ylabel("Bus 671 V")
+    axes[1].set_ylabel("Bus 671 V RMS (1 cycle)")
+    axes[2].set_ylabel("Source A")
+    axes[3].set_ylabel("Fault injected A")
     axes[3].set_xlabel("Time [s]")
     figure.tight_layout()
     figure.savefig(args.output, dpi=160)

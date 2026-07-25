@@ -104,6 +104,9 @@ namespace GridKit
       RealT omega0_{2.0 * std::numbers::pi_v<RealT> * 60.0};
 
       std::unique_ptr<MonitorT> monitor_;
+      std::size_t               monitored_bus_count_{0};
+      std::size_t               monitored_component_count_{0};
+      bool                      monitor_started_{false};
     };
   } // namespace EMT
 } // namespace GridKit

@@ -290,34 +290,53 @@ namespace GridKit::EMT
   template <typename scalar_type, typename index_type>
   void SystemModel<scalar_type, index_type>::initializeMonitor()
   {
-    for (const auto* bus : buses_)
+    for (std::size_t index = monitored_bus_count_;
+         index < buses_.size();
+         ++index)
     {
+      const auto* bus               = buses_[index];
       const auto* component_monitor = bus->getMonitor();
       if (component_monitor != nullptr && !component_monitor->empty())
       {
         monitor_->addMonitor(component_monitor);
       }
     }
-    for (const auto* component : components_)
+    monitored_bus_count_ = buses_.size();
+
+    for (std::size_t index = monitored_component_count_;
+         index < components_.size();
+         ++index)
     {
+      const auto* component         = components_[index];
       const auto* component_monitor = component->getMonitor();
       if (component_monitor != nullptr && !component_monitor->empty())
       {
         monitor_->addMonitor(component_monitor);
       }
     }
+    monitored_component_count_ = components_.size();
   }
 
   template <typename scalar_type, typename index_type>
   void SystemModel<scalar_type, index_type>::startMonitor()
   {
+    if (monitor_started_ || monitor_->empty())
+    {
+      return;
+    }
     monitor_->start();
+    monitor_started_ = true;
   }
 
   template <typename scalar_type, typename index_type>
   void SystemModel<scalar_type, index_type>::stopMonitor()
   {
+    if (!monitor_started_)
+    {
+      return;
+    }
     monitor_->stop();
+    monitor_started_ = false;
   }
 
   template <typename scalar_type, typename index_type>
@@ -514,7 +533,8 @@ namespace GridKit::EMT
     {
       throw std::invalid_argument("Null or duplicate EMT bus");
     }
-    const auto local_id                = static_cast<IdxT>(buses_.size());
+    const auto local_id = static_cast<IdxT>(buses_.size());
+    stopMonitor();
     gridkit_bus_indices_[bus->busID()] = local_id;
     buses_.push_back(bus);
     allocated_ = false;
@@ -541,6 +561,7 @@ namespace GridKit::EMT
     {
       throw std::invalid_argument("Null EMT component");
     }
+    stopMonitor();
     component->setGridKitComponentID(
         static_cast<IdxT>(components_.size()));
     component->updateTime(time_, alpha_);

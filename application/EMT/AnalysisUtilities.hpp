@@ -7,6 +7,7 @@
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <nlohmann/json.hpp>
@@ -124,12 +125,18 @@ namespace GridKit::EMT
       throw std::runtime_error("Invalid EMT solver settings");
     }
 
-    std::ranges::sort(study.events, {}, &SignalEvent::time);
+    std::ranges::stable_sort(study.events, {}, &SignalEvent::time);
+    std::set<std::pair<double, std::size_t>> event_targets;
     for (const auto& event : study.events)
     {
-      if (event.time > study.tmax)
+      if (event.time >= study.tmax)
       {
-        throw std::runtime_error("EMT event occurs after tmax");
+        throw std::runtime_error("EMT event must occur before tmax");
+      }
+      if (!event_targets.emplace(event.time, event.signal_id).second)
+      {
+        throw std::runtime_error(
+            "Duplicate EMT event time and signal_id");
       }
     }
   }
@@ -149,6 +156,10 @@ namespace GridKit::EMT
     if (!study.system_model_file.is_absolute())
     {
       study.system_model_file = input_directory / study.system_model_file;
+    }
+    if (!study.output_file.empty() && !study.output_file.is_absolute())
+    {
+      study.output_file = input_directory / study.output_file;
     }
     study.model_data = parseSystemModelData(study.system_model_file);
 

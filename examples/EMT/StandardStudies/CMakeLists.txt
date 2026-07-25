@@ -1,0 +1,5 @@
+gridkit_example_add_file(BalancedRLC3Bus.case.json)
+gridkit_example_add_file(BalancedRLC3Bus.steady.solver.json)
+gridkit_example_add_file(BalancedRLC3Bus.fault.solver.json)
+gridkit_example_add_file(BalancedRLC3Bus.slg_fault.solver.json)
+gridkit_example_add_file(BalancedRLC3Bus.load_rejection.solver.json)

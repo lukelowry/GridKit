@@ -1,5 +1,6 @@
 #include <array>
 #include <cmath>
+#include <complex>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -185,6 +186,114 @@ namespace
     return std::sqrt(sum_squares / static_cast<double>(sample_count));
   }
 
+  double interpolate(const CsvTable& table,
+                     std::size_t     value_column,
+                     double          target_time)
+  {
+    const auto time_column = requireColumn(table, "t");
+    if (target_time < table.rows.front()[time_column]
+        || target_time > table.rows.back()[time_column])
+    {
+      throw std::runtime_error("EMT interpolation time is outside the monitor range");
+    }
+
+    for (std::size_t row = 0; row < table.rows.size(); ++row)
+    {
+      const auto time = table.rows[row][time_column];
+      if (time == target_time || row == 0)
+      {
+        if (time == target_time)
+        {
+          return table.rows[row][value_column];
+        }
+        continue;
+      }
+      if (time > target_time)
+      {
+        const auto previous_time  = table.rows[row - 1][time_column];
+        const auto previous_value = table.rows[row - 1][value_column];
+        const auto fraction       = (target_time - previous_time)
+                              / (time - previous_time);
+        return previous_value
+               + fraction * (table.rows[row][value_column] - previous_value);
+      }
+    }
+    return table.rows.back()[value_column];
+  }
+
+  std::complex<double> fundamentalPhasor(const CsvTable& table,
+                                         std::size_t     value_column,
+                                         double          window_begin,
+                                         double          period)
+  {
+    const auto   time_column = requireColumn(table, "t");
+    const double window_end  = window_begin + period;
+    const double omega       = 2.0 * std::acos(-1.0) / period;
+    double       cos_integral{0.0};
+    double       sin_integral{0.0};
+    double       previous_time  = window_begin;
+    double       previous_value = interpolate(table, value_column, window_begin);
+
+    const auto accumulate = [&](double time, double value)
+    {
+      const auto step  = time - previous_time;
+      cos_integral    += 0.5 * step
+                      * (previous_value * std::cos(omega * previous_time)
+                         + value * std::cos(omega * time));
+      sin_integral += 0.5 * step
+                      * (previous_value * std::sin(omega * previous_time)
+                         + value * std::sin(omega * time));
+      previous_time  = time;
+      previous_value = value;
+    };
+
+    for (const auto& row : table.rows)
+    {
+      const auto time = row[time_column];
+      if (time <= window_begin)
+      {
+        continue;
+      }
+      if (time >= window_end)
+      {
+        break;
+      }
+      accumulate(time, row[value_column]);
+    }
+    accumulate(window_end, interpolate(table, value_column, window_end));
+
+    const auto scale = std::sqrt(2.0) / period;
+    return {scale * cos_integral, -scale * sin_integral};
+  }
+
+  void validatePrefaultPeriodicSteadyState(const CsvTable& table)
+  {
+    constexpr double                  cycle = 1.0 / 60.0;
+    const auto                        first = table.rows.front()[requireColumn(table, "t")];
+    const std::array<std::string, 12> columns{
+        "Bus_650_va", "Bus_650_vb", "Bus_650_vc", "Bus_632_va", "Bus_632_vb", "Bus_632_vc", "Bus_670_va", "Bus_670_vb", "Bus_670_vc", "VoltageSource_source_650_ia", "VoltageSource_source_650_ib", "VoltageSource_source_650_ic"};
+
+    double maximum_relative_change{0.0};
+    for (const auto& column : columns)
+    {
+      const auto index           = requireColumn(table, column);
+      const auto phasor1         = fundamentalPhasor(table, index, first, cycle);
+      const auto phasor2         = fundamentalPhasor(table, index, first + cycle, cycle);
+      const auto relative_change = std::abs(phasor2 - phasor1)
+                                   / std::max(1.0, std::abs(phasor1));
+      maximum_relative_change = std::max(maximum_relative_change,
+                                         relative_change);
+    }
+
+    if (maximum_relative_change > 1.0e-3)
+    {
+      throw std::runtime_error(
+          "EMT prefault state is not cycle-to-cycle periodic");
+    }
+    std::cout << "Maximum prefault phasor change: "
+              << maximum_relative_change << '\n';
+  }
+
   void validateFaultResponse(const CsvTable& table)
   {
     constexpr double cycle      = 1.0 / 60.0;
@@ -264,6 +373,7 @@ int main(int argc, const char* argv[])
   {
     const auto table = readCsv(argv[1]);
     validateTimes(table, 0.200);
+    validatePrefaultPeriodicSteadyState(table);
     validateFaultResponse(table);
   }
   catch (const std::exception& error)

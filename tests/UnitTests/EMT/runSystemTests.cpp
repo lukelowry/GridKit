@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <array>
 #include <complex>
+#include <filesystem>
 #include <fstream>
 #include <set>
 #include <sstream>
@@ -12,6 +14,7 @@
 
 #include <GridKit/Testing/Testing.hpp>
 
+#include "AnalysisUtilities.hpp"
 #include "EMTTestFixture.hpp"
 
 namespace
@@ -134,6 +137,12 @@ namespace
         { static_cast<void>(EMT::parseSystemModelData(stream)); });
   }
 
+  bool studyParserRejects(const Json& input)
+  {
+    return throws<>([&input]
+                    { static_cast<void>(input.get<EMT::StudyData>()); });
+  }
+
   template <typename Mutation>
   bool parserRejectsAfter(Mutation mutation)
   {
@@ -165,6 +174,10 @@ namespace
     success *= data.loadz.size() == 2;
     success *= data.vector_fit.size() == 1;
     success *= data.signal.size() == 8;
+    success *= data.format_version.has_value();
+    success *= data.format_version.value() == 0;
+    success *= data.format_revision.has_value();
+    success *= data.format_revision.value() == 1;
 
     success *= data.bus[0].monitored_variables.size() == 3;
     success *= data.bus[1].monitored_variables.size() == 3;
@@ -385,6 +398,14 @@ namespace
                                   { findDevice(input, "source_650")["params"]["omega"] = 377.0; });
     success *= parserRejectsAfter([](Json& input)
                                   { input["header"]["omega0"] = -1.0; });
+    success *= parserRejectsAfter([](Json& input)
+                                  { input["header"]["format_version"] = 0.1; });
+    success *= parserRejectsAfter([](Json& input)
+                                  { input["header"]["format_version"] = -1; });
+    success *= parserRejectsAfter([](Json& input)
+                                  { input["header"]["format_version"] = 65536; });
+    success *= parserRejectsAfter([](Json& input)
+                                  { input["header"]["format_revision"] = 1.5; });
 
     return success.report(__func__);
   }
@@ -575,6 +596,71 @@ namespace
     return success.report(__func__);
   }
 
+  TestOutcome studyParserRules()
+  {
+    TestStatus success = true;
+    Json       input{
+              {"system_model_file", std::filesystem::path{EMT_TEST_FIXTURE}.string()},
+              {"dt_fixed", 0.000025},
+              {"dt_monitor", 0.0001},
+              {"tmax", 0.2},
+              {"output_file", "resolved.csv"},
+              {"events", Json::array({{{"time", 0.1}, {"type", "signal_set"}, {"signal_id", 1}, {"value", 0.0}}, {{"time", 0.05}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 1.0}}})}};
+
+    const auto study  = input.get<EMT::StudyData>();
+    success          *= study.events.size() == 2;
+    success          *= study.events[0].time == 0.05;
+    success          *= study.events[1].time == 0.1;
+
+    auto same_time              = input;
+    same_time["events"]         = Json::array({{{"time", 0.05},
+                                                {"type", "signal_set"},
+                                                {"signal_id", 1},
+                                                {"value", 0.0}},
+                                               {{"time", 0.05},
+                                                {"type", "signal_set"},
+                                                {"signal_id", 0},
+                                                {"value", 1.0}}});
+    const auto same_time_study  = same_time.get<EMT::StudyData>();
+    success                    *= same_time_study.events[0].signal_id == 1;
+    success                    *= same_time_study.events[1].signal_id == 0;
+
+    auto duplicate                       = same_time;
+    duplicate["events"][1]["signal_id"]  = 1;
+    success                             *= studyParserRejects(duplicate);
+
+    auto final_time_event                  = input;
+    final_time_event["events"][0]["time"]  = 0.2;
+    success                               *= studyParserRejects(final_time_event);
+
+    const auto solver_file = std::filesystem::temp_directory_path()
+                             / "gridkit_emt_study_parser.solver.json";
+    {
+      std::ofstream output(solver_file);
+      output << input.dump(2);
+    }
+    const auto parsed           = EMT::parseStudyData(solver_file);
+    const auto expected_output  = solver_file.parent_path() / "resolved.csv";
+    success                    *= parsed.output_file == expected_output;
+    success                    *= parsed.model_data.monitor_sink.size() == 1;
+    success                    *= parsed.model_data.monitor_sink[0].file_name
+               == expected_output.string();
+
+    input["events"] = Json::array({{{"time", 0.05},
+                                    {"type", "signal_set"},
+                                    {"signal_id", 999},
+                                    {"value", 1.0}}});
+    {
+      std::ofstream output(solver_file);
+      output << input.dump(2);
+    }
+    success *= throws<>([&solver_file]
+                        { static_cast<void>(EMT::parseStudyData(solver_file)); });
+    std::filesystem::remove(solver_file);
+
+    return success.report(__func__);
+  }
+
   TestOutcome layoutAndInitialization()
   {
     TestStatus success  = true;
@@ -671,6 +757,50 @@ namespace
     }
     success *= caller_owned_bus.busID() == 650;
 
+    return success.report(__func__);
+  }
+
+  TestOutcome repeatedAllocationMonitor()
+  {
+    TestStatus success  = true;
+    auto       data     = loadFixtureData();
+    success            *= isThreeBusMutuallyCoupled(data);
+
+    const auto output_file = std::filesystem::temp_directory_path()
+                             / "gridkit_emt_repeated_allocation.csv";
+    std::filesystem::remove(output_file);
+    data.monitor_sink = {{Model::VariableMonitorFormat::CSV,
+                          output_file.string(),
+                          ","}};
+
+    {
+      SystemT system(data);
+      success *= system.allocate() == 0;
+      success *= system.allocate() == 0;
+      system.printMonitoredVariables();
+      system.stopMonitor();
+    }
+
+    std::ifstream input(output_file);
+    std::string   header;
+    std::string   values;
+    std::string   extra;
+    success *= static_cast<bool>(std::getline(input, header));
+    success *= static_cast<bool>(std::getline(input, values));
+    success *= !static_cast<bool>(std::getline(input, extra));
+    success *= std::count(header.begin(), header.end(), ',') == 39;
+    success *= std::count(values.begin(), values.end(), ',') == 39;
+
+    const auto first_bus_voltage  = header.find("Bus_650_va");
+    success                      *= first_bus_voltage != std::string::npos;
+    if (first_bus_voltage != std::string::npos)
+    {
+      success *= header.find("Bus_650_va", first_bus_voltage + 1)
+                 == std::string::npos;
+    }
+
+    input.close();
+    std::filesystem::remove(output_file);
     return success.report(__func__);
   }
 
@@ -786,7 +916,9 @@ int main()
   result += parserEnvelopeAndPortRules();
   result += parserMatrixAndPhysicalRules();
   result += parserComplexMonitorAndSignalRules();
+  result += studyParserRules();
   result += layoutAndInitialization();
+  result += repeatedAllocationMonitor();
   result += kclResetAndDirectAccumulation();
   result += jacobianAssembly();
   return result.summary();

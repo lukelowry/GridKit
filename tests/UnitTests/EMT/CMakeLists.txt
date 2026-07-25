@@ -18,7 +18,7 @@ add_executable(test_emt_vectorfit runVectorFitTests.cpp)
 
 target_include_directories(
   test_emt_system
-  PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include)
+  PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include ${PROJECT_SOURCE_DIR}/application/EMT)
 
 foreach(_target IN LISTS _emt_test_targets)
   target_include_directories(${_target} PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include)
