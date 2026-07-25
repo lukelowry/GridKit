@@ -1,0 +1,13 @@
+{
+  "system_model_file": "IEEE13ReducedABC.case.json",
+  "dt_fixed": 0.000025,
+  "dt_monitor": 0.0001,
+  "tmax": 0.2,
+  "rel_tol": 1.0e-7,
+  "abs_tol": 1.0e-8,
+  "output_file": "emt_three_bus_fault.csv",
+  "events": [
+    {"time": 0.05, "type": "signal_set", "signal_id": 1, "value": 1.0},
+    {"time": 0.10, "type": "signal_set", "signal_id": 1, "value": 0.0}
+  ]
+}

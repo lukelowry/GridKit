@@ -142,6 +142,43 @@ namespace GridKit
         return (*external_variable_signals_[static_cast<size_t>(variable)])->read();
       }
 
+      /// Check if the signal node attached to an external variable has a
+      /// derivative linked to it
+      ///
+      /// @tparam variable The external variable to check
+      /// @pre A signal node has been assigned to the requested external
+      ///      variable
+      template <ExternalVariables variable>
+      auto isDerivativeLinked() const -> bool
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        if (!external_variable_signals_[static_cast<size_t>(variable)])
+        {
+          throw std::logic_error("A signal node has not been assigned to this external variable");
+        }
+
+        return (*external_variable_signals_[static_cast<size_t>(variable)])
+            ->derivativeLinked();
+      }
+
+      /// Returns the derivative of the specified external variable
+      ///
+      /// @tparam variable The external variable to read from
+      /// @pre A signal node with a linked derivative has been assigned to the
+      ///      requested external variable
+      template <ExternalVariables variable>
+      auto readExternalVariableDerivative() const -> ScalarT
+      {
+        static_assert(variable < ExternalVariables::MAXIMUM);
+        if (!external_variable_signals_[static_cast<size_t>(variable)])
+        {
+          throw std::logic_error("A signal node has not been assigned to this external variable");
+        }
+
+        return (*external_variable_signals_[static_cast<size_t>(variable)])
+            ->readDerivative();
+      }
+
       /// Returns the global index of the specified external variable
       ///
       /// @tparam variable The external variable to read from

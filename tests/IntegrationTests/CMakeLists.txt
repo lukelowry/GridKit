@@ -1,3 +1,6 @@
 if(TARGET SUNDIALS::idas)
+  if(TARGET EMTDynamicSimulation)
+    add_subdirectory(EMT)
+  endif()
   add_subdirectory(PhasorDynamics)
 endif()

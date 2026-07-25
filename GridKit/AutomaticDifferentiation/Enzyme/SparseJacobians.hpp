@@ -7,6 +7,7 @@
 #pragma once
 
 #include <GridKit/AutomaticDifferentiation/Enzyme/DfDwb.hpp>
+#include <GridKit/AutomaticDifferentiation/Enzyme/DfDwbp.hpp>
 #include <GridKit/AutomaticDifferentiation/Enzyme/DfDws.hpp>
 #include <GridKit/AutomaticDifferentiation/Enzyme/DfDy.hpp>
 #include <GridKit/AutomaticDifferentiation/Enzyme/DfDyp.hpp>

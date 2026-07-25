@@ -72,6 +72,8 @@ namespace GridKit
       ScalarT s_real_{0.0};
       /// Imaginary part of source value
       ScalarT s_imag_{0.0};
+      /// Time derivative of both constant source values
+      ScalarT s_derivative_{0.0};
 
       // Placeholders for variable indices
       IdxT sr_index_{INVALID_INDEX<IdxT>};

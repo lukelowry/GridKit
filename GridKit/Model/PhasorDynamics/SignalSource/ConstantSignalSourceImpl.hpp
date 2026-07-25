@@ -71,11 +71,13 @@ namespace GridKit
 
       if (signals_.template isAssigned<SREAL>())
       {
-        signals_.template getSignalNode<SREAL>()->set(&s_real_, &sr_index_);
+        signals_.template getSignalNode<SREAL>()->set(
+            &s_real_, &s_derivative_, &sr_index_);
       }
       if (signals_.template isAssigned<SIMAG>())
       {
-        signals_.template getSignalNode<SIMAG>()->set(&s_imag_, &si_index_);
+        signals_.template getSignalNode<SIMAG>()->set(
+            &s_imag_, &s_derivative_, &si_index_);
       }
 
       allocated_ = true;

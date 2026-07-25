@@ -6,6 +6,7 @@
 #]]
 
 add_subdirectory(PhasorDynamics)
+add_subdirectory(EMT)
 add_subdirectory(PowerFlow)
 add_subdirectory(PowerElectronics)
 

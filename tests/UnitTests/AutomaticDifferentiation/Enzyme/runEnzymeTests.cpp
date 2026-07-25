@@ -16,6 +16,7 @@ int main()
 
   result += test.scalarFunction();
   result += test.vectorFunctionSparse();
+  result += test.internalResidualWithBusDerivative();
 
   return result.summary();
 }

@@ -9,6 +9,7 @@
 
 #include <GridKit/AutomaticDifferentiation/Enzyme/EnzymeDefinitions.hpp>
 #include <GridKit/AutomaticDifferentiation/Enzyme/LowerSparseStorage.hpp>
+#include <GridKit/AutomaticDifferentiation/Enzyme/SparseJacobians.hpp>
 #include <GridKit/LinearAlgebra/SparseMatrix/CooMatrix.hpp>
 #include <GridKit/MemoryUtilities/MemoryUtils.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
@@ -18,11 +19,30 @@ namespace GridKit
 {
   namespace Testing
   {
+    template <class scalar_type, typename index_type>
+    class BusDerivativeResidualModel
+    {
+    public:
+      using ScalarT = scalar_type;
+      using IdxT    = index_type;
+      using RealT   = scalar_type;
+
+      void evaluateInternalResidual(const ScalarT* y,
+                                    const ScalarT* yp,
+                                    const ScalarT* wb,
+                                    const ScalarT* wbp,
+                                    ScalarT*       f)
+      {
+        f[0] = 2.0 * y[0] + 3.0 * yp[0] + 5.0 * wb[0] + 7.0 * wbp[0];
+      }
+    };
+
     template <class ScalarT, typename IdxT>
     class EnzymeTests
     {
     public:
       using SparseMatrix = GridKit::LinearAlgebra::CooMatrix<ScalarT, IdxT>;
+      using RealT        = ScalarT;
 
       EnzymeTests()  = default;
       ~EnzymeTests() = default;
@@ -107,7 +127,120 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      /**
+       * @brief Verify sparse Jacobians for an internal residual that depends
+       *        on bus-variable derivatives
+       */
+      TestOutcome internalResidualWithBusDerivative()
+      {
+        TestStatus success = true;
+
+        using ModelT = BusDerivativeResidualModel<ScalarT, IdxT>;
+        using namespace GridKit::Enzyme::Sparse;
+
+        constexpr auto function = MemberFunctions::InternalResidualWithBusDerivative;
+
+        ModelT  model;
+        ScalarT y[1]{1.0};
+        ScalarT yp[1]{2.0};
+        ScalarT wb[1]{3.0};
+        ScalarT wbp[1]{4.0};
+
+        IdxT  residual_indices[1]{11};
+        IdxT  variable_indices[1]{13};
+        IdxT  rows[4]{};
+        IdxT  cols[4]{};
+        RealT values[4]{};
+        IdxT  nnz{0};
+
+        DfDy<ModelT, function>::eval(&model,
+                                     1,
+                                     1,
+                                     residual_indices,
+                                     variable_indices,
+                                     y,
+                                     yp,
+                                     wb,
+                                     wbp,
+                                     rows,
+                                     cols,
+                                     values,
+                                     nnz);
+        success *= checkSingleJacobianEntry(rows, cols, values, nnz, 11, 13, 2.0);
+
+        nnz = 0;
+        DfDyp<ModelT, function>::eval(&model,
+                                      1,
+                                      1,
+                                      residual_indices,
+                                      variable_indices,
+                                      y,
+                                      yp,
+                                      wb,
+                                      wbp,
+                                      11.0,
+                                      rows,
+                                      cols,
+                                      values,
+                                      nnz);
+        success *= checkSingleJacobianEntry(rows, cols, values, nnz, 11, 13, 33.0);
+
+        nnz = 0;
+        DfDwb<ModelT, function>::eval(&model,
+                                      1,
+                                      1,
+                                      residual_indices,
+                                      variable_indices,
+                                      y,
+                                      yp,
+                                      wb,
+                                      wbp,
+                                      rows,
+                                      cols,
+                                      values,
+                                      nnz);
+        success *= checkSingleJacobianEntry(rows, cols, values, nnz, 11, 13, 5.0);
+
+        nnz = 0;
+        DfDwbp<ModelT, function>::eval(&model,
+                                       1,
+                                       1,
+                                       residual_indices,
+                                       variable_indices,
+                                       y,
+                                       yp,
+                                       wb,
+                                       wbp,
+                                       11.0,
+                                       rows,
+                                       cols,
+                                       values,
+                                       nnz);
+        success *= checkSingleJacobianEntry(rows, cols, values, nnz, 11, 13, 77.0);
+
+        return success.report(__func__);
+      }
+
     private:
+      TestStatus checkSingleJacobianEntry(const IdxT*  rows,
+                                          const IdxT*  cols,
+                                          const RealT* values,
+                                          IdxT         nnz,
+                                          IdxT         expected_row,
+                                          IdxT         expected_col,
+                                          RealT        expected_value)
+      {
+        TestStatus success  = true;
+        success            *= (nnz == 1);
+        if (nnz == 1)
+        {
+          success *= (rows[0] == expected_row);
+          success *= (cols[0] == expected_col);
+          success *= GridKit::Testing::isEqual(values[0], expected_value);
+        }
+        return success;
+      }
+
       static ScalarT square(ScalarT x)
       {
         return x * x;

@@ -26,7 +26,8 @@ namespace GridKit
         BusResidual11, //< Special case for branches that are connected to two buses
         BusResidual12, //< Special case for branches that are connected to two buses
         BusResidual21, //< Special case for branches that are connected to two buses
-        BusResidual22  //< Special case for branches that are connected to two buses
+        BusResidual22, //< Special case for branches that are connected to two buses
+        InternalResidualWithBusDerivative
       };
 
       /**
@@ -39,6 +40,35 @@ namespace GridKit
       template <typename ModelT, MemberFunctions function>
       struct ModelWrapper
       {
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for an internal
+       *        residual that depends on bus-variable derivatives
+       *
+       */
+      template <typename ModelT>
+      struct ModelWrapper<ModelT, MemberFunctions::InternalResidualWithBusDerivative>
+      {
+        using ScalarT = typename ModelT::ScalarT;
+
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] wbp - Bus-variable derivatives
+         * @param[out] f - Internal residual
+         */
+        static void eval(ModelT*        model,
+                         const ScalarT* y,
+                         const ScalarT* yp,
+                         const ScalarT* wb,
+                         const ScalarT* wbp,
+                         ScalarT*       f)
+        {
+          model->evaluateInternalResidual(y, yp, wb, wbp, f);
+        }
       };
 
       /**
