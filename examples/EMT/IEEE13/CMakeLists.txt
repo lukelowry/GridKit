@@ -1,3 +1,4 @@
-gridkit_example_add_file(IEEE13FixedABC.case.json)
-gridkit_example_add_file(IEEE13FixedABC.solver.json)
+gridkit_example_add_file(IEEE13.case.json)
+gridkit_example_add_file(IEEE13.solver.json)
 gridkit_example_add_file(plot_ieee13_fault.py)
+gridkit_example_add_file(IEEE13.png)

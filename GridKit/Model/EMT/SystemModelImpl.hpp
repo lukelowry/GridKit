@@ -4,6 +4,7 @@
 #include <cassert>
 #include <stdexcept>
 
+#include <GridKit/Model/EMT/ABCUtils.hpp>
 #include <GridKit/Model/EMT/ComponentLibrary.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
 #include <GridKit/Model/EMT/SystemModelData.hpp>
@@ -267,6 +268,54 @@ namespace GridKit::EMT
     for (const auto* component : components_)
     {
       errors += component->verify();
+    }
+
+    std::map<const BusT*, ABCMatrix<RealT>> aggregate_bus_capacitance;
+    for (const auto* bus : buses_)
+    {
+      aggregate_bus_capacitance.emplace(bus, ABCMatrix<RealT>{});
+    }
+    for (const auto* component : components_)
+    {
+      const auto* line =
+          dynamic_cast<const LineLumped<ScalarT, IdxT>*>(component);
+      if (line == nullptr)
+      {
+        continue;
+      }
+
+      const auto bus1 = aggregate_bus_capacitance.find(line->bus1_);
+      const auto bus2 = aggregate_bus_capacitance.find(line->bus2_);
+      if (bus1 == aggregate_bus_capacitance.end()
+          || bus2 == aggregate_bus_capacitance.end())
+      {
+        Log::error()
+            << "EMT::SystemModel: LineLumped references a bus outside the system\n";
+        ++errors;
+        continue;
+      }
+
+      for (std::size_t row = 0; row < 3; ++row)
+      {
+        for (std::size_t column = 0; column < 3; ++column)
+        {
+          const auto terminal_capacitance =
+              RealT{0.5} * line->C_[row][column];
+          bus1->second[row][column] += terminal_capacitance;
+          bus2->second[row][column] += terminal_capacitance;
+        }
+      }
+    }
+    for (const auto& [bus, capacitance] : aggregate_bus_capacitance)
+    {
+      if (!Detail::positiveDefinite(capacitance))
+      {
+        Log::error()
+            << "EMT::SystemModel: bus " << bus->busID()
+            << " requires full-rank aggregate incident capacitance because "
+               "its ABC voltages are differential variables\n";
+        ++errors;
+      }
     }
     return errors;
   }

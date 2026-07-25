@@ -13,6 +13,9 @@ namespace GridKit
   namespace EMT
   {
     template <typename scalar_type, typename index_type>
+    class SystemModel;
+
+    template <typename scalar_type, typename index_type>
     class LineLumped final : public PhasorDynamics::Component<scalar_type, index_type>
     {
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
@@ -71,6 +74,8 @@ namespace GridKit
           ScalarT*       h);
 
     private:
+      friend class SystemModel<ScalarT, IdxT>;
+
       void initializeParameters(const ModelDataT&);
       void initializeMonitor();
 

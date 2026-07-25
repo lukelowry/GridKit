@@ -1,5 +1,6 @@
-gridkit_example_add_file(BalancedRLC3Bus.case.json)
-gridkit_example_add_file(BalancedRLC3Bus.steady.solver.json)
-gridkit_example_add_file(BalancedRLC3Bus.fault.solver.json)
-gridkit_example_add_file(BalancedRLC3Bus.slg_fault.solver.json)
-gridkit_example_add_file(BalancedRLC3Bus.load_rejection.solver.json)
+gridkit_example_add_file(plot_balanced_rlc_studies.py)
+
+add_subdirectory(BalancedSteadyState)
+add_subdirectory(ThreePhaseFault)
+add_subdirectory(SingleLineGroundFault)
+add_subdirectory(LoadRejection)

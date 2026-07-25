@@ -1,5 +1,5 @@
-configure_file(${PROJECT_SOURCE_DIR}/examples/EMT/ThreeBus/IEEE13ReducedABC.case.json
-               ${CMAKE_CURRENT_BINARY_DIR}/IEEE13ReducedABC.case.json COPYONLY)
+configure_file(${PROJECT_SOURCE_DIR}/examples/EMT/ThreeBus/ThreeBus.case.json
+               ${CMAKE_CURRENT_BINARY_DIR}/ThreeBus.case.json COPYONLY)
 
 set(_emt_test_targets
     test_emt_system
@@ -19,11 +19,14 @@ add_executable(test_emt_vectorfit runVectorFitTests.cpp)
 target_include_directories(
   test_emt_system
   PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/nlohmann-json/include ${PROJECT_SOURCE_DIR}/application/EMT)
+target_compile_definitions(
+  test_emt_system
+  PRIVATE EMT_IEEE13_TEST_FIXTURE="${PROJECT_SOURCE_DIR}/examples/EMT/IEEE13/IEEE13.case.json")
 
 foreach(_target IN LISTS _emt_test_targets)
   target_include_directories(${_target} PRIVATE ${GRIDKIT_THIRD_PARTY_DIR}/magic-enum/include)
   target_compile_definitions(
-    ${_target} PRIVATE EMT_TEST_FIXTURE="${CMAKE_CURRENT_BINARY_DIR}/IEEE13ReducedABC.case.json")
+    ${_target} PRIVATE EMT_TEST_FIXTURE="${CMAKE_CURRENT_BINARY_DIR}/ThreeBus.case.json")
   target_link_libraries(
     ${_target}
     GridKit::definitions

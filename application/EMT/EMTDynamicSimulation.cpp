@@ -29,6 +29,8 @@ int main(int argc, const char* argv[])
     AnalysisManager::Sundials::Ida<ScalarT, IdxT> ida(&system);
     ida.setTolerance(study.rel_tol, study.abs_tol);
     ida.setFixedStep(study.dt_fixed);
+    ida.setMaxSteps(study.max_steps);
+    ida.setSuppressAlgebraicErrors(study.suppress_algebraic_errors);
     if (ida.configureSimulation() != 0)
     {
       return 1;
@@ -40,12 +42,14 @@ int main(int argc, const char* argv[])
       return 1;
     }
 
+    long int internal_steps{0};
     for (const auto& event : study.events)
     {
       if (ida.runSimulation(event.time, study.dt_monitor) != 0)
       {
         return 1;
       }
+      internal_steps += ida.getStats().num_steps_;
 
       system.getSignal(event.signal_id)->init(event.value);
       if (ida.initializeSimulation(event.time) != 0)
@@ -58,9 +62,11 @@ int main(int argc, const char* argv[])
     {
       return 1;
     }
+    internal_steps += ida.getStats().num_steps_;
 
     system.stopMonitor();
     const auto stop = std::clock();
+    std::cout << "IDA internal steps: " << internal_steps << '\n';
     std::cout << "Complete in "
               << static_cast<double>(stop - start) / CLOCKS_PER_SEC
               << " seconds\n";

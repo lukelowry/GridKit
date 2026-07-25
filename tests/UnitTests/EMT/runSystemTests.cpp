@@ -1,8 +1,10 @@
 #include <algorithm>
 #include <array>
 #include <complex>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -602,6 +604,8 @@ namespace
     Json       input{
               {"system_model_file", std::filesystem::path{EMT_TEST_FIXTURE}.string()},
               {"dt_fixed", 0.000025},
+              {"max_steps", 100000},
+              {"suppress_algebraic_errors", true},
               {"dt_monitor", 0.0001},
               {"tmax", 0.2},
               {"output_file", "resolved.csv"},
@@ -609,6 +613,8 @@ namespace
 
     const auto study  = input.get<EMT::StudyData>();
     success          *= study.events.size() == 2;
+    success          *= study.max_steps == 100000;
+    success          *= study.suppress_algebraic_errors;
     success          *= study.events[0].time == 0.05;
     success          *= study.events[1].time == 0.1;
 
@@ -632,6 +638,33 @@ namespace
     auto final_time_event                  = input;
     final_time_event["events"][0]["time"]  = 0.2;
     success                               *= studyParserRejects(final_time_event);
+
+    auto negative_max_steps          = input;
+    negative_max_steps["max_steps"]  = -1;
+    success                         *= studyParserRejects(negative_max_steps);
+
+    auto fractional_max_steps          = input;
+    fractional_max_steps["max_steps"]  = 1.5;
+    success                           *= studyParserRejects(fractional_max_steps);
+
+    auto excessive_max_steps = input;
+    excessive_max_steps["max_steps"] =
+        static_cast<std::uint64_t>(std::numeric_limits<long int>::max())
+        + std::uint64_t{1};
+    success *= studyParserRejects(excessive_max_steps);
+
+    auto nonboolean_suppression                          = input;
+    nonboolean_suppression["suppress_algebraic_errors"]  = 1;
+    success                                             *= studyParserRejects(nonboolean_suppression);
+
+    auto default_max_steps = input;
+    default_max_steps.erase("max_steps");
+    success *= default_max_steps.get<EMT::StudyData>().max_steps == 0;
+
+    auto default_suppression = input;
+    default_suppression.erase("suppress_algebraic_errors");
+    success *= !default_suppression.get<EMT::StudyData>()
+                    .suppress_algebraic_errors;
 
     const auto solver_file = std::filesystem::temp_directory_path()
                              / "gridkit_emt_study_parser.solver.json";
@@ -747,15 +780,42 @@ namespace
     }
     success *= system->tag() == expected_tag;
 
-    EMT::Bus<double, std::size_t> caller_owned_bus(data.bus[0], data.omega0);
+    EMT::Bus<double, std::size_t> caller_owned_bus650(data.bus[0], data.omega0);
+    EMT::Bus<double, std::size_t> caller_owned_bus632(data.bus[1], data.omega0);
+    EMT::Bus<double, std::size_t> caller_owned_bus670(data.bus[2], data.omega0);
+    LineLumpedT                   caller_owned_line1(&caller_owned_bus650,
+                                   &caller_owned_bus632,
+                                   data.line_lumped[0],
+                                   data.omega0);
+    LineLumpedT                   caller_owned_line2(&caller_owned_bus632,
+                                   &caller_owned_bus670,
+                                   data.line_lumped[1],
+                                   data.omega0);
     {
       SystemT caller_owned_system;
-      caller_owned_system.addBus(&caller_owned_bus);
+      caller_owned_system.addBus(&caller_owned_bus650);
+      caller_owned_system.addBus(&caller_owned_bus632);
+      caller_owned_system.addBus(&caller_owned_bus670);
+      caller_owned_system.addComponent(&caller_owned_line1);
+      caller_owned_system.addComponent(&caller_owned_line2);
       caller_owned_system.updateTime(0.0, 1.0);
       success *= caller_owned_system.allocate() == 0;
       success *= caller_owned_system.initialize() == 0;
     }
-    success *= caller_owned_bus.busID() == 650;
+    success *= caller_owned_bus650.busID() == 650;
+    success *= caller_owned_bus632.busID() == 632;
+    success *= caller_owned_bus670.busID() == 670;
+
+    auto rank_deficient_data = data;
+    rank_deficient_data.line_lumped[0]
+        .parameters[EMT::LineLumpedParameters::Cp] =
+        EMT::ABCMatrix<double>{{{2.0e-12, -1.0e-12, -1.0e-12},
+                                {-1.0e-12, 2.0e-12, -1.0e-12},
+                                {-1.0e-12, -1.0e-12, 2.0e-12}}};
+    success *= throws<>([&rank_deficient_data]
+                        {
+      SystemT invalid_system(rank_deficient_data);
+      invalid_system.allocate(); });
 
     return success.report(__func__);
   }
@@ -801,6 +861,18 @@ namespace
 
     input.close();
     std::filesystem::remove(output_file);
+    return success.report(__func__);
+  }
+
+  TestOutcome ieee13Initialization()
+  {
+    TestStatus success = true;
+    const auto data    = EMT::parseSystemModelData(
+        std::filesystem::path{EMT_IEEE13_TEST_FIXTURE});
+    auto system  = makeFixtureSystem(data);
+    success     *= data.bus.size() == 14;
+    success     *= data.line_lumped.size() == 13;
+    success     *= normalizedResidualInfinityNorm(*system) < 1.0e-9;
     return success.report(__func__);
   }
 
@@ -918,6 +990,7 @@ int main()
   result += parserComplexMonitorAndSignalRules();
   result += studyParserRules();
   result += layoutAndInitialization();
+  result += ieee13Initialization();
   result += repeatedAllocationMonitor();
   result += kclResetAndDirectAccumulation();
   result += jacobianAssembly();

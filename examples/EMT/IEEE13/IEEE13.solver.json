@@ -1,11 +1,11 @@
 {
-  "system_model_file": "IEEE13FixedABC.case.json",
-  "dt_fixed": 2.5e-05,
+  "system_model_file": "IEEE13.case.json",
+  "max_steps": 100000,
+  "suppress_algebraic_errors": true,
   "dt_monitor": 0.0001,
   "tmax": 0.2,
-  "rel_tol": 1e-07,
   "abs_tol": 1e-08,
-  "output_file": "emt_ieee13_fault.csv",
+  "output_file": "IEEE13.csv",
   "events": [
     {
       "time": 0.05,

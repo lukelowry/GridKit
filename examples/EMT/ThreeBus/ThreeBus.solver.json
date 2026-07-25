@@ -1,0 +1,14 @@
+{
+  "system_model_file": "ThreeBus.case.json",
+  "max_steps": 100000,
+  "suppress_algebraic_errors": true,
+  "dt_monitor": 0.0001,
+  "tmax": 0.3,
+  "rel_tol": 1.0e-5,
+  "abs_tol": 1.0e-6,
+  "output_file": "ThreeBus.csv",
+  "events": [
+    {"time": 0.05, "type": "signal_set", "signal_id": 1, "value": 1.0},
+    {"time": 0.10, "type": "signal_set", "signal_id": 1, "value": 0.0}
+  ]
+}

@@ -1,0 +1,3 @@
+gridkit_example_add_file(ThreeBusFixed.case.json)
+gridkit_example_add_file(ThreeBusFixed.solver.json)
+gridkit_example_add_file(ThreeBusFixed.png)

@@ -1,0 +1,3 @@
+gridkit_example_add_file(LoadRejection.case.json)
+gridkit_example_add_file(LoadRejection.solver.json)
+gridkit_example_add_file(LoadRejection.png)

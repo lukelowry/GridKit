@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -32,13 +34,15 @@ namespace GridKit::EMT
 
   struct StudyData
   {
-    fs::path system_model_file;
-    double   dt_monitor{0.0};
-    double   tmax{0.0};
-    double   rel_tol{1.0e-7};
-    double   abs_tol{1.0e-9};
-    double   dt_fixed{0.0};
-    fs::path output_file;
+    fs::path    system_model_file;
+    double      dt_monitor{0.0};
+    double      tmax{0.0};
+    double      rel_tol{1.0e-7};
+    double      abs_tol{1.0e-9};
+    double      dt_fixed{0.0};
+    std::size_t max_steps{0};
+    bool        suppress_algebraic_errors{false};
+    fs::path    output_file;
 
     std::vector<SignalEvent>             events;
     SystemModelData<double, std::size_t> model_data;
@@ -68,6 +72,38 @@ namespace GridKit::EMT
         throw std::runtime_error("Missing " + context + " key: " + key);
       }
     }
+  }
+
+  inline std::size_t nonnegativeInteger(const json&        value,
+                                        const std::string& context)
+  {
+    if (value.is_number_unsigned())
+    {
+      const auto parsed = value.get<std::uint64_t>();
+      if (parsed
+          > static_cast<std::uint64_t>(
+              std::numeric_limits<long int>::max()))
+      {
+        throw std::runtime_error(
+            context + " exceeds the SUNDIALS long-int range");
+      }
+      return static_cast<std::size_t>(parsed);
+    }
+    if (value.is_number_integer())
+    {
+      const auto parsed = value.get<std::int64_t>();
+      if (parsed < 0)
+      {
+        throw std::runtime_error(context + " must be nonnegative");
+      }
+      if (parsed > std::numeric_limits<long int>::max())
+      {
+        throw std::runtime_error(
+            context + " exceeds the SUNDIALS long-int range");
+      }
+      return static_cast<std::size_t>(parsed);
+    }
+    throw std::runtime_error(context + " must be an integer");
   }
 
   inline void from_json(const json& j, SignalEvent& event)
@@ -100,7 +136,16 @@ namespace GridKit::EMT
   inline void from_json(const json& j, StudyData& study)
   {
     validateJsonKeys(j,
-                     {"system_model_file", "dt_monitor", "tmax", "rel_tol", "abs_tol", "dt_fixed", "output_file", "events"},
+                     {"system_model_file",
+                      "dt_monitor",
+                      "tmax",
+                      "rel_tol",
+                      "abs_tol",
+                      "dt_fixed",
+                      "max_steps",
+                      "suppress_algebraic_errors",
+                      "output_file",
+                      "events"},
                      {"system_model_file", "tmax"},
                      "EMT study");
     j.at("system_model_file").get_to(study.system_model_file);
@@ -110,6 +155,22 @@ namespace GridKit::EMT
     study.abs_tol     = j.value("abs_tol", 1.0e-9);
     study.dt_fixed    = j.value("dt_fixed", 0.0);
     study.output_file = j.value("output_file", fs::path{});
+
+    if (j.contains("max_steps"))
+    {
+      study.max_steps = nonnegativeInteger(j.at("max_steps"),
+                                           "EMT max_steps");
+    }
+    if (j.contains("suppress_algebraic_errors"))
+    {
+      if (!j.at("suppress_algebraic_errors").is_boolean())
+      {
+        throw std::runtime_error(
+            "EMT suppress_algebraic_errors must be boolean");
+      }
+      study.suppress_algebraic_errors =
+          j.at("suppress_algebraic_errors").get<bool>();
+    }
 
     if (j.contains("events"))
     {

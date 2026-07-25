@@ -2,8 +2,8 @@
   "header": {
     "format_version": 0,
     "format_revision": 1,
-    "case_name": "BalancedRLC3Bus",
-    "case_description": "Balanced fixed-ABC source-line-load EMT reference",
+    "case_name": "LoadRejection",
+    "case_description": "Balanced fixed-ABC source-line-load EMT load-rejection study",
     "case_comments": "Three buses with transposed full mutual line matrices derived by averaging IEEE configuration 601 phase entries; includes disabled three-phase-to-ground and phase-a-to-ground fault loads, with finite open-circuit impedances on phases b and c of the phase-selective fault",
     "omega0": 376.99111843077515
   },

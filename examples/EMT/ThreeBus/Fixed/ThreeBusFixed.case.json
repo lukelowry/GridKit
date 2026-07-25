@@ -2,7 +2,7 @@
   "header": {
     "format_version": 0,
     "format_revision": 1,
-    "case_name": "IEEE13ReducedABC",
+    "case_name": "ThreeBusFixed",
     "case_description": "Fixed-ABC EMT three-bus excerpt of the IEEE 13-node feeder",
     "case_comments": "Buses 650, 632, and 670 with full configuration-601 line matrices",
     "omega0": 376.99111843077515
