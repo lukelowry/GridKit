@@ -1,11 +1,10 @@
 # Switch Model
 
-`Switch` represents an ideal $N$-pole switch between two $N$-phase EMT buses.
-Series current $\mathbf{i}_{12}$ is directed from terminal 1 to terminal 2. Each
-pole has a component-owned discrete state $\sigma_n$, where $0$ is open and $1$
-is closed. The discrete state is not a DAE variable or a signal port. The switch
-contains no energy storage. Switching transients arise from the connected EMT
-network.
+`Switch` represents an ideal three-phase EMT switch between two buses. Series
+current $\mathbf{i}_{12}$ is directed from terminal 1 to terminal 2. The required
+Boolean input `open` operates all three phases: `true` is open and `false` is
+closed. The switch contains no energy storage; switching transients arise from
+the connected EMT network.
 
 ## Block Diagram
 
@@ -15,27 +14,15 @@ Figure 1: Switch model
 
 ## Model Parameters
 
-Symbol | Units | JSON | Description | Note
------- | ----- | ---- | ----------- | ----
-$N$ | [-] | `N` | Number of poles | Required, positive integer
-$\boldsymbol{\sigma}^{\mathrm{init}}$ | [-] | `state0` | Initial pole states | Boolean vector of length $N$, `false` open and `true` closed
+None.
 
 ### Parameter Validation
 
-```math
-\begin{aligned}
-N &\in \mathbb{Z}_{>0} \\
-\boldsymbol{\sigma}^{\mathrm{init}} &\in \{0,1\}^N
-\end{aligned}
-```
+None.
 
 ### Derived Parameters
 
-Define the pole-index set
-
-```math
-\mathcal{N} = \{1,\ldots,N\}.
-```
+None.
 
 ## Submodels
 
@@ -57,7 +44,7 @@ None.
 
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
-$\mathbf{i}_{12}$ | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^N$
+$\mathbf{i}_{12}$ | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^3$
 
 ### External Variables
 
@@ -65,8 +52,8 @@ $\mathbf{i}_{12}$ | [A] | Series current from terminal 1 to terminal 2 | $\mathb
 
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
-$\mathbf{v}_1$ | [V] | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^N$
-$\mathbf{v}_2$ | [V] | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^N$
+$\mathbf{v}_1$ | [V] | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^3$
+$\mathbf{v}_2$ | [V] | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^3$
 
 #### Algebraic
 
@@ -76,10 +63,11 @@ None.
 
 Symbol | Port | Type | Units | Description | Note
 ------ | ---- | ---- | ----- | ----------- | ----
-$\mathbf{v}_1$ | `v1` | Input | [V] | Terminal 1 bus voltage | $\mathbf{v}_1 \in \mathbb{R}^N$
-$\mathbf{v}_2$ | `v2` | Input | [V] | Terminal 2 bus voltage | $\mathbf{v}_2 \in \mathbb{R}^N$
-$\mathbf{i}_1$ | `i1` | Output | [A] | Current injection at terminal 1 | $\mathbf{i}_1 \in \mathbb{R}^N$
-$\mathbf{i}_2$ | `i2` | Output | [A] | Current injection at terminal 2 | $\mathbf{i}_2 \in \mathbb{R}^N$
+$\mathbf{v}_1$ | `v1` | Input | [V] | Terminal 1 bus voltage | $\mathbf{v}_1 \in \mathbb{R}^3$
+$\mathbf{v}_2$ | `v2` | Input | [V] | Terminal 2 bus voltage | $\mathbf{v}_2 \in \mathbb{R}^3$
+$\mathrm{open}$ | `open` | Input | [-] | Ganged three-phase switch command | Required Boolean; `true` open, `false` closed
+$\mathbf{i}_1$ | `i1` | Output | [A] | Current injection at terminal 1 | $\mathbf{i}_1 \in \mathbb{R}^3$
+$\mathbf{i}_2$ | `i2` | Output | [A] | Current injection at terminal 2 | $\mathbf{i}_2 \in \mathbb{R}^3$
 
 ## Model Equations
 
@@ -89,27 +77,20 @@ None.
 
 ### Algebraic Equations
 
-For each $n \in \mathcal{N}$,
-
 ```math
-0 =
 \begin{cases}
-i_{12,n}, & \sigma_n = 0 \\
-v_{2,n}-v_{1,n}, & \sigma_n = 1.
+\mathbf{i}_{12} = \mathbf{0}, & \text{open}, \\
+\mathbf{v}_2-\mathbf{v}_1 = \mathbf{0}, & \text{closed}.
 \end{cases}
 ```
 
-The open state enforces zero branch current. The closed state enforces zero
-terminal voltage difference. The model retains one algebraic current variable
-and one algebraic residual row per pole in both states. Its union Jacobian
-structure with respect to $i_{12,n}$, $v_{1,n}$, and $v_{2,n}$ is fixed across
-state changes.
-
-After a pole-state change, differential states are preserved and the assembled
-solver recomputes consistent algebraic variables and derivatives. Closing a
-pole across unequal differential terminal voltages or opening the only path for
-nonzero differential current requires an impulse and is outside this ideal
-finite-variable model.
+The model reserves the union Jacobian entries with respect to
+$\mathbf{i}_{12}$, $\mathbf{v}_1$, and $\mathbf{v}_2$ in both positions, so
+switching changes residual and Jacobian values without changing dimensions or
+sparsity. After `open` changes, the solver preserves differential states and
+recomputes consistent algebraic variables and differential-state derivatives.
+The connected network must admit a consistent finite solution in the commanded
+position.
 
 ### Wiring
 
@@ -124,7 +105,8 @@ finite-variable model.
 
 ### Input Initialization
 
-For $r \in \{1,2\}$,
+The connected signal source supplies `open` before the harmonic network is
+solved.
 
 ```math
 \begin{aligned}
@@ -133,19 +115,27 @@ For $r \in \{1,2\}$,
 \mathbf{v}_r
   &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}_r) \\
 \dfrac{\mathrm{d}\mathbf{v}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}_r).
+  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}_r),
+  \quad r \in \{1,2\}.
 \end{aligned}
 ```
 
 ### Internal Initialization
 
-The assembled harmonic network supplies the switch-current phasor. Closed-pole
-current cannot be recovered locally from the zero terminal-voltage difference.
+The assembled harmonic network supplies the switch-current phasor subject to
+
+```math
+\begin{cases}
+\mathbf{I}_{12} = \mathbf{0}, & \text{open}, \\
+\mathbf{V}_2-\mathbf{V}_1 = \mathbf{0}, & \text{closed}.
+\end{cases}
+```
+
+The closed-position current cannot be recovered locally from the zero terminal-
+voltage difference. At $t=0$,
 
 ```math
 \begin{aligned}
-\boldsymbol{\sigma}
-  &\leftarrow \boldsymbol{\sigma}^{\mathrm{init}} \\
 \mathbf{I}_{12}
   &\leftarrow \text{solved switch RMS current phasor} \\
 \mathbf{i}_{12}
@@ -155,23 +145,19 @@ current cannot be recovered locally from the zero terminal-voltage difference.
 \end{aligned}
 ```
 
-The solved phasors must satisfy the algebraic equations for
-$\boldsymbol{\sigma}^{\mathrm{init}}$.
-
 ### Output Initialization
-
-For $r \in \{1,2\}$,
 
 ```math
 \begin{aligned}
 \mathbf{I}_1
-  &\leftarrow -\mathbf{I}_{12} \\
+  &= -\mathbf{I}_{12} \\
 \mathbf{I}_2
-  &\leftarrow \mathbf{I}_{12} \\
+  &= \mathbf{I}_{12} \\
 \mathbf{i}_r
   &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_r) \\
 \dfrac{\mathrm{d}\mathbf{i}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_r).
+  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_r),
+  \quad r \in \{1,2\}.
 \end{aligned}
 ```
 
@@ -179,5 +165,5 @@ For $r \in \{1,2\}$,
 
 Monitor | Units | Description | Note
 ------- | ----- | ----------- | ----
-`state` | [-] | Pole states | $\boldsymbol{\sigma} \in \{0,1\}^N$
-`i12` | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^N$
+`open` | [-] | Switch command | Boolean; `true` open, `false` closed
+`i12` | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^3$
