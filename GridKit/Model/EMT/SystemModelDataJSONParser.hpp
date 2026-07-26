@@ -641,15 +641,13 @@ namespace GridKit::EMT
         typename SystemModelData<RealT, IdxT>::LoadZDataT data;
         populateEnvelope(device, kind, data);
         validateKeys(params, {"N"}, {"N"}, kind + " params");
-        validateKeys(ports, {"bus", "enable"}, {"bus", "enable"}, kind + " ports");
+        validateKeys(ports, {"bus"}, {"bus"}, kind + " ports");
         validateSubmodelNames(device, {"Z"}, kind);
         data.parameters[LoadZParameters::N] =
             indexValue<IdxT>(params.at("N"), "LoadZ N");
         data.submodels[LoadZSubmodels::Z] =
             submodelParameters<RealT, IdxT>(device, "Z", kind);
         ports.at("bus").get_to(data.buses[LoadZBuses::bus]);
-        ports.at("enable").get_to(
-            data.signal_inputs[LoadZSignalInputs::enable]);
         for (const auto& monitor : monitorNames(device))
         {
           if (monitor == "i")
@@ -739,6 +737,52 @@ namespace GridKit::EMT
           }
         }
         model.voltage_source.push_back(data);
+      }
+      else if (kind == "Switch")
+      {
+        typename SystemModelData<RealT, IdxT>::SwitchDataT data;
+        populateEnvelope(device, kind, data);
+        validateKeys(params, {"N"}, {"N"}, kind + " params");
+        validateKeys(ports,
+                     {"bus1", "bus2", "open"},
+                     {"bus1", "bus2", "open"},
+                     kind + " ports");
+        validateSubmodelNames(device, {}, kind);
+        data.parameters[SwitchParameters::N] =
+            indexValue<IdxT>(params.at("N"), "Switch N");
+        ports.at("bus1").get_to(data.buses[SwitchBuses::bus1]);
+        ports.at("bus2").get_to(data.buses[SwitchBuses::bus2]);
+        ports.at("open").get_to(data.signal_inputs[SwitchSignalInputs::open]);
+        for (const auto& monitor : monitorNames(device))
+        {
+          if (monitor == "open")
+          {
+            data.monitored_variables.insert(SwitchMonitorableVariables::open);
+          }
+          else if (monitor == "i12")
+          {
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12a);
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12b);
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12c);
+          }
+          else if (monitor == "i12a")
+          {
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12a);
+          }
+          else if (monitor == "i12b")
+          {
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12b);
+          }
+          else if (monitor == "i12c")
+          {
+            data.monitored_variables.insert(SwitchMonitorableVariables::i12c);
+          }
+          else
+          {
+            throw std::runtime_error("Unknown Switch monitor: " + monitor);
+          }
+        }
+        model.switches.push_back(data);
       }
       else if (kind == "VectorFit")
       {
@@ -848,13 +892,25 @@ namespace GridKit::EMT
     {
       requireBus(load.buses.at(LoadZBuses::bus),
                  load.disambiguation_string);
-      requireSignal(load.signal_inputs.at(LoadZSignalInputs::enable),
-                    load.disambiguation_string);
     }
     for (const auto& source : model.voltage_source)
     {
       requireBus(source.buses.at(VoltageSourceBuses::bus),
                  source.disambiguation_string);
+    }
+    for (const auto& device : model.switches)
+    {
+      const auto bus1 = device.buses.at(SwitchBuses::bus1);
+      const auto bus2 = device.buses.at(SwitchBuses::bus2);
+      requireBus(bus1, device.disambiguation_string);
+      requireBus(bus2, device.disambiguation_string);
+      if (bus1 == bus2)
+      {
+        throw std::runtime_error(
+            device.disambiguation_string + " must connect distinct buses");
+      }
+      requireSignal(device.signal_inputs.at(SwitchSignalInputs::open),
+                    device.disambiguation_string);
     }
 
     std::set<IdxT> signal_owners;
@@ -888,15 +944,14 @@ namespace GridKit::EMT
       }
     }
 
-    for (const auto& load : model.loadz)
+    for (const auto& device : model.switches)
     {
-      const auto signal_id = load.signal_inputs.at(
-          LoadZSignalInputs::enable);
+      const auto signal_id = device.signal_inputs.at(SwitchSignalInputs::open);
       if (!signal_owners.contains(signal_id))
       {
         throw std::runtime_error(
-            load.disambiguation_string
-            + " enable signal has no component owner");
+            device.disambiguation_string
+            + " open signal has no component owner");
       }
     }
     for (const auto& vector_fit : model.vector_fit)

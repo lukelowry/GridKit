@@ -85,6 +85,12 @@ namespace GridKit
     }
 
     template <typename scalar_type, typename index_type>
+    void ConstantSignalSource<scalar_type, index_type>::setRealValue(ScalarT value)
+    {
+      s_real_ = value;
+    }
+
+    template <typename scalar_type, typename index_type>
     int ConstantSignalSource<scalar_type, index_type>::verify() const
     {
       return 0;

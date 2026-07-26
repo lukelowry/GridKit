@@ -62,24 +62,24 @@ supported.
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{i}$ | [A] | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{i}$ | [A] | `i` | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{e}$ | [V] | Source voltage vector | $\mathbf{e} \in \mathbb{R}^N$
-$\mathbf{i}$ | [A] | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{e}$ | [V] | — | Source voltage vector | $\mathbf{e} \in \mathbb{R}^N$
+$\mathbf{i}$ | [A] | — | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{v}$ | [V] | Bus voltage vector owned by EMT bus | $\mathbf{v} \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{v}$ | [V] | — | Bus voltage vector owned by EMT bus | $\mathbf{v} \in \mathbb{R}^N$
 
 #### Algebraic
 
@@ -117,24 +117,7 @@ None.
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{v}$ | — | Connected bus | Terminal voltage at $t_0$
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{i}$ | `i` | Initial state | $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$, solve determines $\mathrm{d}\mathbf{i}/\mathrm{d}t$
-$\mathbf{i}$ | — | Consistent solve | $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
-$\mathbf{e}$ | — | Consistent solve | $e_n(t_0)=\sqrt{2}E_n\cos(\omega t_0+\phi_n)$
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Z.w`, `Z.v` | Initial state | Impedance memory states
-
-### Output Initialization
-
-None.
+None beyond the EMT initialization contract.
 
 ## Monitors
 

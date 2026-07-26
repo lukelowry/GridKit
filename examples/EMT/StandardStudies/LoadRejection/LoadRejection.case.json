@@ -4,7 +4,7 @@
     "format_revision": 1,
     "case_name": "LoadRejection",
     "case_description": "Balanced fixed-ABC source-line-load EMT load-rejection study",
-    "case_comments": "Three buses with transposed full mutual line matrices derived by averaging IEEE configuration 601 phase entries; includes disabled three-phase-to-ground and phase-a-to-ground fault loads, with finite open-circuit impedances on phases b and c of the phase-selective fault"
+    "case_comments": "Three buses with transposed full mutual line matrices derived by averaging IEEE configuration 601 phase entries; each fault branch is a purely resistive load on its own terminal bus behind a three-phase Switch, with finite open-circuit impedances on phases b and c of the phase-selective fault. The rejected share of the feeder load is a separate resistive branch behind its own Switch, because an ideal switch cannot interrupt a series inductance and the feeder must stay terminated while the switch is open"
   },
   "buses": [
     {
@@ -30,28 +30,62 @@
       "mon": [
         "v"
       ]
+    },
+    {
+      "number": 4,
+      "class": "bus",
+      "name": "three_phase_fault",
+      "mon": [
+        "v"
+      ]
+    },
+    {
+      "number": 5,
+      "class": "bus",
+      "name": "phase_a_ground_fault",
+      "mon": [
+        "v"
+      ]
+    },
+    {
+      "number": 6,
+      "class": "bus",
+      "name": "rejected_load",
+      "mon": [
+        "v"
+      ]
     }
   ],
   "signals": [
     {
       "signal_id": 0,
-      "name": "load_enable"
+      "name": "load_open"
     },
     {
       "signal_id": 1,
-      "name": "three_phase_fault_enable"
+      "name": "three_phase_fault_open"
     },
     {
       "signal_id": 2,
-      "name": "phase_a_ground_fault_enable"
+      "name": "phase_a_ground_fault_open"
     }
   ],
   "devices": [
     {
       "class": "ConstantSignalSource",
-      "id": "load_enable_source",
+      "id": "load_open_source",
       "ports": {
         "sr": 0
+      },
+      "params": {
+        "Sr": 0.0
+      }
+    },
+    {
+      "class": "ConstantSignalSource",
+      "id": "fault_open_source",
+      "ports": {
+        "sr": 1
       },
       "params": {
         "Sr": 1.0
@@ -59,22 +93,12 @@
     },
     {
       "class": "ConstantSignalSource",
-      "id": "fault_enable_source",
-      "ports": {
-        "sr": 1
-      },
-      "params": {
-        "Sr": 0.0
-      }
-    },
-    {
-      "class": "ConstantSignalSource",
-      "id": "phase_a_ground_fault_enable_source",
+      "id": "phase_a_ground_fault_open_source",
       "ports": {
         "sr": 2
       },
       "params": {
-        "Sr": 0.0
+        "Sr": 1.0
       }
     },
     {
@@ -348,8 +372,7 @@
       "class": "LoadZ",
       "id": "load_3",
       "ports": {
-        "bus": 3,
-        "enable": 0
+        "bus": 3
       },
       "params": {
         "N": 3
@@ -399,11 +422,26 @@
       ]
     },
     {
+      "class": "Switch",
+      "id": "fault_2_switch",
+      "ports": {
+        "bus1": 2,
+        "bus2": 4,
+        "open": 1
+      },
+      "params": {
+        "N": 3
+      },
+      "mon": [
+        "open",
+        "i12"
+      ]
+    },
+    {
       "class": "LoadZ",
       "id": "fault_2",
       "ports": {
-        "bus": 2,
-        "enable": 1
+        "bus": 4
       },
       "params": {
         "N": 3
@@ -429,19 +467,19 @@
           ],
           "E": [
             [
-              0.000265258238,
+              0.0,
               0.0,
               0.0
             ],
             [
               0.0,
-              0.000265258238,
+              0.0,
               0.0
             ],
             [
               0.0,
               0.0,
-              0.000265258238
+              0.0
             ]
           ],
           "poles": [],
@@ -453,11 +491,26 @@
       ]
     },
     {
+      "class": "Switch",
+      "id": "phase_a_ground_fault_2_switch",
+      "ports": {
+        "bus1": 2,
+        "bus2": 5,
+        "open": 2
+      },
+      "params": {
+        "N": 3
+      },
+      "mon": [
+        "open",
+        "i12"
+      ]
+    },
+    {
       "class": "LoadZ",
       "id": "phase_a_ground_fault_2",
       "ports": {
-        "bus": 2,
-        "enable": 2
+        "bus": 5
       },
       "params": {
         "N": 3
@@ -483,19 +536,88 @@
           ],
           "E": [
             [
-              0.000265258238,
+              0.0,
               0.0,
               0.0
             ],
             [
               0.0,
-              265258.238,
+              0.0,
               0.0
             ],
             [
               0.0,
               0.0,
-              265258.238
+              0.0
+            ]
+          ],
+          "poles": [],
+          "residues": []
+        }
+      },
+      "mon": [
+        "i"
+      ]
+    },
+    {
+      "class": "Switch",
+      "id": "rejected_load_3_switch",
+      "ports": {
+        "bus1": 3,
+        "bus2": 6,
+        "open": 0
+      },
+      "params": {
+        "N": 3
+      },
+      "mon": [
+        "open",
+        "i12"
+      ]
+    },
+    {
+      "class": "LoadZ",
+      "id": "rejected_load_3",
+      "ports": {
+        "bus": 6
+      },
+      "params": {
+        "N": 3
+      },
+      "submodels": {
+        "Z": {
+          "D": [
+            [
+              46.14826666666667,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              46.14826666666667,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              46.14826666666667
+            ]
+          ],
+          "E": [
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
+            ],
+            [
+              0.0,
+              0.0,
+              0.0
             ]
           ],
           "poles": [],

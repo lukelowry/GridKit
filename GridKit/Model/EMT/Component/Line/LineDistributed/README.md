@@ -86,19 +86,19 @@ None.
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{i}_1^\mathrm{ref}$ | [A] | Reflected current at terminal 1 | $\mathbf{i}_1^\mathrm{ref} \in \mathbb{R}^K$
-$\mathbf{i}_2^\mathrm{ref}$ | [A] | Reflected current at terminal 2 | $\mathbf{i}_2^\mathrm{ref} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{i}_1^\mathrm{ref}$ | [A] | — | Reflected current at terminal 1 | $\mathbf{i}_1^\mathrm{ref} \in \mathbb{R}^K$
+$\mathbf{i}_2^\mathrm{ref}$ | [A] | — | Reflected current at terminal 2 | $\mathbf{i}_2^\mathrm{ref} \in \mathbb{R}^K$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{v}_1$ | [V] | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^N$
-$\mathbf{v}_2$ | [V] | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{v}_1$ | [V] | — | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^N$
+$\mathbf{v}_2$ | [V] | — | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^N$
 
 #### Algebraic
 
@@ -155,23 +155,8 @@ The residuals use the wiring signals defined below.
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0$
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{i}_1^\mathrm{ref}$, $\mathbf{i}_2^\mathrm{ref}$ | — | Consistent solve | Reflected currents
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yc1.w`, `Yc1.v`, `Yc2.w`, `Yc2.v` | Initial state | Characteristic-admittance memory states
-Propagation states and histories | `H12.*`, `H21.*` | Initial state | See [Propagation](../../../Operators/Shift/Propagation/README.md)
-
-### Output Initialization
-
-Evaluated from the wiring equations after the consistent solve.
+The characteristic-admittance and propagation submodels initialize per their
+own specifications. There is no line-level initialization procedure.
 
 ## Monitors
 

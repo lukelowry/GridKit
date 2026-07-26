@@ -76,25 +76,25 @@ maintain independent states.
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{i}_{12}$ | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{i}_{12}$ | [A] | `i12` | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^K$
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{i}_1^\mathrm{sh}$ | [A] | Shunt current at terminal 1 | $\mathbf{i}_1^\mathrm{sh} \in \mathbb{R}^K$
-$\mathbf{i}_2^\mathrm{sh}$ | [A] | Shunt current at terminal 2 | $\mathbf{i}_2^\mathrm{sh} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{i}_1^\mathrm{sh}$ | [A] | — | Shunt current at terminal 1 | $\mathbf{i}_1^\mathrm{sh} \in \mathbb{R}^K$
+$\mathbf{i}_2^\mathrm{sh}$ | [A] | — | Shunt current at terminal 2 | $\mathbf{i}_2^\mathrm{sh} \in \mathbb{R}^K$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{v}_1$ | [V] | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^N$
-$\mathbf{v}_2$ | [V] | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{v}_1$ | [V] | — | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^N$
+$\mathbf{v}_2$ | [V] | — | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^N$
 
 #### Algebraic
 
@@ -148,24 +148,7 @@ $\mathbf{i}_2$ | `i2` | Output | [A] | Current injection at terminal 2 | $\mathb
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0$
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{i}_{12}$ | `i12` | Initial state | Solve determines $\mathrm{d}\mathbf{i}_{12}/\mathrm{d}t$
-$\mathbf{i}_1^\mathrm{sh}$, $\mathbf{i}_2^\mathrm{sh}$ | — | Consistent solve | Shunt currents
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Zp.w`, `Zp.v` | Initial state | Series-impedance memory states
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yp1.w`, `Yp1.v`, `Yp2.w`, `Yp2.v` | Initial state | Terminal shunt-admittance memory states
-
-### Output Initialization
-
-Evaluated from the wiring equations after the consistent solve.
+None beyond the EMT initialization contract.
 
 ## Monitors
 

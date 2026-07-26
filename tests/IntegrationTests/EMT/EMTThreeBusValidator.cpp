@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 #include <complex>
+#include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <map>
@@ -36,9 +37,12 @@ namespace
 
   double parseFiniteValue(const std::string& text)
   {
-    std::size_t parsed{0};
-    const auto  value = std::stod(text, &parsed);
-    if (parsed != text.size() || !std::isfinite(value))
+    // Algebraic currents settle on subnormal magnitudes while a switch is
+    // open. Those are valid finite values, so the parse must not reject the
+    // underflow that std::stod reports as an out-of-range error.
+    char*      end   = nullptr;
+    const auto value = std::strtod(text.c_str(), &end);
+    if (end != text.c_str() + text.size() || !std::isfinite(value))
     {
       throw std::runtime_error("EMT monitor CSV contains a non-finite or invalid value");
     }
@@ -192,14 +196,29 @@ namespace
         squared_reference     += reference_value * reference_value;
         ++sample_count;
       }
-      if (sample_count == 0 || squared_reference == 0.0)
+      if (sample_count == 0)
       {
         throw std::runtime_error(
             "EMT integrator comparison window has no usable samples");
       }
+      // A branch behind an open switch is quiescent for whole windows, so an
+      // empty window is measured against the channel's own working range
+      // rather than against itself.
+      double normalization = squared_reference;
+      if (normalization == 0.0)
+      {
+        for (const auto& row : reference.rows)
+        {
+          normalization += row[reference_column] * row[reference_column];
+        }
+      }
+      if (normalization == 0.0)
+      {
+        continue;
+      }
       maximum_error = std::max(
           maximum_error,
-          std::sqrt(squared_error / squared_reference));
+          std::sqrt(squared_error / normalization));
     }
     return maximum_error;
   }
@@ -235,14 +254,24 @@ namespace
             candidate_peak,
             std::abs(candidate.rows[row][candidate_column]));
       }
-      if (reference_peak == 0.0)
+      // A branch behind an open switch has no peak of its own in a quiescent
+      // window, so the difference is scaled by its peak over the whole record.
+      double normalization = reference_peak;
+      if (normalization == 0.0)
       {
-        throw std::runtime_error(
-            "EMT integrator comparison peak is zero");
+        for (const auto& row : reference.rows)
+        {
+          normalization = std::max(normalization,
+                                   std::abs(row[reference_column]));
+        }
+      }
+      if (normalization == 0.0)
+      {
+        continue;
       }
       maximum_error = std::max(
           maximum_error,
-          std::abs(candidate_peak - reference_peak) / reference_peak);
+          std::abs(candidate_peak - reference_peak) / normalization);
     }
     return maximum_error;
   }
@@ -486,7 +515,7 @@ namespace
     return std::sqrt(sum_squares / static_cast<double>(sample_count));
   }
 
-  void validateGatedFaultLoadResponse(const CsvTable& table)
+  void validateSwitchedFaultResponse(const CsvTable& table)
   {
     constexpr double                 cycle      = 1.0 / 60.0;
     constexpr double                 fault_on   = 0.050;
@@ -498,6 +527,8 @@ namespace
         "VoltageSource_source_650_ia",
         "VoltageSource_source_650_ib",
         "VoltageSource_source_650_ic"};
+    const std::array<std::string, 3> fault_current_columns{
+        "LoadZ_fault_632_ia", "LoadZ_fault_632_ib", "LoadZ_fault_632_ic"};
 
     for (std::size_t phase = 0; phase < bus_voltage_columns.size(); ++phase)
     {
@@ -532,15 +563,39 @@ namespace
                                                 final_time,
                                                 true);
 
-      if (!(fault_voltage > 2.0 * prefault_voltage))
+      const auto prefault_fault_current = sampledRms(table,
+                                                     fault_current_columns[phase],
+                                                     fault_on - cycle,
+                                                     fault_on,
+                                                     false);
+      const auto cleared_fault_current  = sampledRms(table,
+                                                    fault_current_columns[phase],
+                                                    final_time - cycle,
+                                                    final_time,
+                                                    true);
+      const auto faulted_fault_current  = sampledRms(table,
+                                                    fault_current_columns[phase],
+                                                    fault_off - cycle,
+                                                    fault_off,
+                                                    true);
+
+      // An open switch determines the branch current, so the fault branch
+      // carries nothing at all before the fault and after clearing.
+      if (!(prefault_fault_current < 1.0e-9 * faulted_fault_current)
+          || !(cleared_fault_current < 1.0e-9 * faulted_fault_current))
       {
         throw std::runtime_error(
-            "EMT gated fault load did not produce a bus-voltage switching surge");
+            "EMT open fault switch did not hold the branch current at zero");
+      }
+      if (!(fault_voltage < 0.5 * prefault_voltage))
+      {
+        throw std::runtime_error(
+            "EMT switched fault did not depress the faulted bus voltage");
       }
       if (!(fault_source > 20.0 * prefault_source))
       {
         throw std::runtime_error(
-            "EMT gated fault load did not produce a source-current transient");
+            "EMT switched fault did not produce a source-current transient");
       }
       if (std::abs(recovered_voltage - prefault_voltage)
               > 0.05 * prefault_voltage
@@ -615,7 +670,7 @@ int main(int argc, const char* argv[])
     const auto table = readCsv(argv[1]);
     validateTimes(table, 0.300);
     validatePrefaultPeriodicSteadyState(table);
-    validateGatedFaultLoadResponse(table);
+    validateSwitchedFaultResponse(table);
   }
   catch (const std::exception& error)
   {

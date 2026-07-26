@@ -91,9 +91,9 @@ def main():
         raise RuntimeError("monitor timestamps must be finite")
     if any(end <= start for start, end in zip(times, times[1:])):
         raise RuntimeError("monitor timestamps must be strictly increasing")
-    voltage_names = select_columns(headers, ["671", "v"])
+    voltage_names = select_columns(headers, ["bus671v"])
     source_names = select_columns(headers, ["source650", "i"])
-    fault_names = select_columns(headers, ["fault671", "i"])
+    fault_names = select_columns(headers, ["loadzfault671", "i"])
 
     voltage = [[float(row[name]) for row in rows] for name in voltage_names]
     source = [[float(row[name]) for row in rows] for name in source_names]
@@ -105,19 +105,11 @@ def main():
         for value in phase_values
     ):
         raise RuntimeError("monitor CSV contains non-finite values")
-    fault_injected = [
-        [
-            value if args.fault_on < time <= args.fault_off else 0.0
-            for time, value in zip(times, phase_values)
-        ]
-        for phase_values in fault
-    ]
-
     figure, axes = plt.subplots(4, 1, figsize=(11, 10), sharex=True)
     mode_label = "adaptive" if args.integration_mode == "adaptive" else "fixed step"
     monitor_step_us = 1.0e6 * (times[1] - times[0])
     figure.suptitle(
-        "IEEE 13-node fixed-ABC gated fault-load switching — "
+        "IEEE 13-node fixed-ABC switched fault — "
         f"IDA {mode_label}, {monitor_step_us:g} us monitor"
     )
     labels = ["a", "b", "c"]
@@ -125,7 +117,7 @@ def main():
         axes[0].plot(times, voltage[phase], label=f"v{label}")
         axes[1].plot(times, rolling_rms(times, voltage[phase]), label=f"v{label} RMS")
         axes[2].plot(times, source[phase], label=f"source i{label}")
-        axes[3].plot(times, fault_injected[phase], label=f"fault injected i{label}")
+        axes[3].plot(times, fault[phase], label=f"fault branch i{label}")
 
     for axis in axes:
         axis.axvspan(args.fault_on, args.fault_off, color="tab:red", alpha=0.12)
@@ -134,7 +126,7 @@ def main():
     axes[0].set_ylabel("Bus 671 V")
     axes[1].set_ylabel("Bus 671 V RMS\n(monitor-sampled 1 cycle)")
     axes[2].set_ylabel("Source A")
-    axes[3].set_ylabel("Fault injected A")
+    axes[3].set_ylabel("Fault branch A")
     axes[3].set_xlabel("Time [s]")
     figure.tight_layout(rect=(0.0, 0.0, 1.0, 0.97))
     figure.savefig(args.output, dpi=160)

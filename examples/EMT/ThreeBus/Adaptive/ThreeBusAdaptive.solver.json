@@ -3,12 +3,22 @@
   "initial_state_file": "ThreeBusAdaptive.initial.json",
   "max_steps": 100000,
   "suppress_algebraic_errors": true,
-  "dt_monitor": 0.0000002,
+  "dt_monitor": 2e-07,
   "tmax": 0.0003,
-  "abs_tol": 1.0e-8,
+  "abs_tol": 1e-08,
   "output_file": "ThreeBusAdaptive.csv",
   "events": [
-    {"time": 0.0001, "type": "signal_set", "signal_id": 1, "value": 1.0},
-    {"time": 0.0002, "type": "signal_set", "signal_id": 1, "value": 0.0}
+    {
+      "time": 0.0001,
+      "type": "signal_set",
+      "signal_id": 0,
+      "value": 0.0
+    },
+    {
+      "time": 0.0002,
+      "type": "signal_set",
+      "signal_id": 0,
+      "value": 1.0
+    }
   ]
 }

@@ -98,9 +98,9 @@ None.
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{u}$ | $[u]$ | Input vector | $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{u}$ | $[u]$ | — | Input vector | $\mathbf{u} \in \mathbb{R}^K$
 
 ## Model Ports
 
@@ -131,22 +131,8 @@ None.
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{u}$ | — | Consistent solve | Owned by the connected model
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `input.w`, `input.v`, `output.w`, `output.v` | Initial state | Rational-factor memory states
-Modal prehistory | `delays.*` | Initial state | See [Delay](../Delay/README.md)
-
-### Output Initialization
-
-Evaluated from the wiring equations after the consistent solve.
+The rational factors and the modal delay bank initialize per their own
+specifications. There is no operator-level initialization procedure.
 
 ## Monitors
 

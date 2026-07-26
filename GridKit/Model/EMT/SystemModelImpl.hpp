@@ -60,6 +60,7 @@ namespace GridKit::EMT
             .template assignSignalNode<
                 ConstantSignalSourceInternalVariables::SREAL>(
                 getSignal(signal_id));
+        constant_source_owners_[signal_id] = source;
       }
       if (source_data.signal_outputs.contains(
               ConstantSignalSourceSignalOutputs::si))
@@ -94,15 +95,23 @@ namespace GridKit::EMT
 
     for (const auto& load_data : data.loadz)
     {
-      const auto bus_id    = load_data.buses.at(LoadZBuses::bus);
-      auto*      load      = new LoadZ<ScalarT, IdxT>(getBus(bus_id),
-                                            load_data);
-      const auto signal_id = load_data.signal_inputs.at(
-          LoadZSignalInputs::enable);
-      load->getSignals()
-          .template attachSignalNode<LoadZExternalVariables::enable>(
-              getSignal(signal_id));
-      addComponent(load, load_data.disambiguation_string);
+      const auto bus_id = load_data.buses.at(LoadZBuses::bus);
+      addComponent(new LoadZ<ScalarT, IdxT>(getBus(bus_id), load_data),
+                   load_data.disambiguation_string);
+    }
+
+    for (const auto& switch_data : data.switches)
+    {
+      const auto bus1_id = switch_data.buses.at(SwitchBuses::bus1);
+      const auto bus2_id = switch_data.buses.at(SwitchBuses::bus2);
+      auto*      device  = new Switch<ScalarT, IdxT>(getBus(bus1_id),
+                                               getBus(bus2_id),
+                                               switch_data);
+      device->getSignals()
+          .template attachSignalNode<SwitchExternalVariables::open>(
+              getSignal(switch_data.signal_inputs.at(
+                  SwitchSignalInputs::open)));
+      addComponent(device, switch_data.disambiguation_string);
     }
 
     for (const auto& vector_fit_data : data.vector_fit)
@@ -240,7 +249,7 @@ namespace GridKit::EMT
       offset += component->size();
     }
 
-    if (offset != size_ || classifyBusVoltages() != 0 || verify() != 0)
+    if (offset != size_ || verify() != 0 || classifyBusVoltages() != 0)
     {
       throw std::runtime_error("EMT SystemModel verification failed");
     }
@@ -280,11 +289,13 @@ namespace GridKit::EMT
     std::map<IdxT, ABCMatrix<RealT>> derivative_gram;
     std::map<IdxT, ABCMatrix<RealT>> algebraic_gram;
     std::map<IdxT, std::size_t>      connection_count;
+    std::map<IdxT, bool>             differentiable_injections;
     for (const auto* bus : buses_)
     {
       derivative_gram.emplace(bus->busID(), ABCMatrix<RealT>{});
       algebraic_gram.emplace(bus->busID(), ABCMatrix<RealT>{});
       connection_count.emplace(bus->busID(), 0);
+      differentiable_injections.emplace(bus->busID(), true);
     }
 
     std::vector<BusVoltageContribution<ScalarT, IdxT>> contributions;
@@ -323,6 +334,9 @@ namespace GridKit::EMT
         return 1;
       }
       ++connection_count.at(contribution.bus_id);
+      differentiable_injections.at(contribution.bus_id) =
+          differentiable_injections.at(contribution.bus_id)
+          && contribution.differentiable_injection;
     }
 
     int errors = 0;
@@ -338,6 +352,15 @@ namespace GridKit::EMT
         {
           Log::error() << "EMT::SystemModel: bus " << bus->busID()
                        << " has no connected current equation\n";
+          ++errors;
+        }
+        else if (algebraic_rank == 0
+                 && !differentiable_injections.at(bus->busID()))
+        {
+          Log::error() << "EMT::SystemModel: bus " << bus->busID()
+                       << " requires a differentiated current balance but a "
+                          "connected component injects an algebraic current; "
+                          "add a shunt conductance or capacitance at this bus\n";
           ++errors;
         }
         else if (algebraic_rank == 0 || algebraic_rank == 3)
@@ -745,6 +768,19 @@ namespace GridKit::EMT
     addComponent(component);
     gridkit_component_indices_[component_id] =
         component->getGridKitComponentID();
+  }
+
+  template <typename scalar_type, typename index_type>
+  void SystemModel<scalar_type, index_type>::setSignalSourceValue(IdxT  signal_id,
+                                                                  RealT value)
+  {
+    const auto owner = constant_source_owners_.find(signal_id);
+    if (owner == constant_source_owners_.end())
+    {
+      throw std::invalid_argument(
+          "EMT signal has no constant signal source owner");
+    }
+    owner->second->setRealValue(static_cast<ScalarT>(value));
   }
 
   template <typename scalar_type, typename index_type>

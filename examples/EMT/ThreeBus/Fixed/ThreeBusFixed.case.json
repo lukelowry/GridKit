@@ -4,7 +4,7 @@
     "format_revision": 1,
     "case_name": "ThreeBusFixed",
     "case_description": "Fixed-ABC EMT three-bus excerpt of the IEEE 13-node feeder",
-    "case_comments": "Buses 650, 632, and 670 with full configuration-601 line matrices"
+    "case_comments": "Buses 650, 632, and 670 with full configuration-601 line matrices; the fault is a purely resistive load on its own terminal bus behind a three-phase Switch"
   },
   "buses": [
     {
@@ -30,46 +30,50 @@
       "mon": [
         "v"
       ]
+    },
+    {
+      "number": 6321,
+      "class": "bus",
+      "name": "632_fault",
+      "mon": [
+        "v"
+      ]
     }
   ],
   "signals": [
     {
       "signal_id": 0,
-      "name": "normal_load_enable"
+      "name": "fault_load_open"
     },
     {
       "signal_id": 1,
-      "name": "fault_load_enable"
-    },
-    {
-      "signal_id": 2,
       "name": "vectorfit_input_a"
     },
     {
-      "signal_id": 3,
+      "signal_id": 2,
       "name": "vectorfit_input_b"
     },
     {
-      "signal_id": 4,
+      "signal_id": 3,
       "name": "vectorfit_input_c"
     },
     {
-      "signal_id": 5,
+      "signal_id": 4,
       "name": "vectorfit_output_a"
     },
     {
-      "signal_id": 6,
+      "signal_id": 5,
       "name": "vectorfit_output_b"
     },
     {
-      "signal_id": 7,
+      "signal_id": 6,
       "name": "vectorfit_output_c"
     }
   ],
   "devices": [
     {
       "class": "ConstantSignalSource",
-      "id": "normal_load_enable_source",
+      "id": "fault_load_open_source",
       "ports": {
         "sr": 0
       },
@@ -79,19 +83,9 @@
     },
     {
       "class": "ConstantSignalSource",
-      "id": "fault_load_enable_source",
-      "ports": {
-        "sr": 1
-      },
-      "params": {
-        "Sr": 0.0
-      }
-    },
-    {
-      "class": "ConstantSignalSource",
       "id": "vectorfit_input_a_source",
       "ports": {
-        "sr": 2
+        "sr": 1
       },
       "params": {
         "Sr": 1.0
@@ -101,7 +95,7 @@
       "class": "ConstantSignalSource",
       "id": "vectorfit_input_b_source",
       "ports": {
-        "sr": 3
+        "sr": 2
       },
       "params": {
         "Sr": -0.5
@@ -111,7 +105,7 @@
       "class": "ConstantSignalSource",
       "id": "vectorfit_input_c_source",
       "ports": {
-        "sr": 4
+        "sr": 3
       },
       "params": {
         "Sr": 0.25
@@ -388,8 +382,7 @@
       "class": "LoadZ",
       "id": "load_670",
       "ports": {
-        "bus": 670,
-        "enable": 0
+        "bus": 670
       },
       "params": {
         "N": 3
@@ -439,11 +432,26 @@
       ]
     },
     {
+      "class": "Switch",
+      "id": "fault_632_switch",
+      "ports": {
+        "bus1": 632,
+        "bus2": 6321,
+        "open": 0
+      },
+      "params": {
+        "N": 3
+      },
+      "mon": [
+        "open",
+        "i12"
+      ]
+    },
+    {
       "class": "LoadZ",
       "id": "fault_632",
       "ports": {
-        "bus": 632,
-        "enable": 1
+        "bus": 6321
       },
       "params": {
         "N": 3
@@ -469,19 +477,19 @@
           ],
           "E": [
             [
-              0.000265258238,
+              0.0,
               0.0,
               0.0
             ],
             [
               0.0,
-              0.000265258238,
+              0.0,
               0.0
             ],
             [
               0.0,
               0.0,
-              0.000265258238
+              0.0
             ]
           ],
           "poles": [],
@@ -496,12 +504,12 @@
       "class": "VectorFit",
       "id": "vectorfit_identity",
       "ports": {
-        "input_a": 2,
-        "input_b": 3,
-        "input_c": 4,
-        "out_a": 5,
-        "out_b": 6,
-        "out_c": 7
+        "input_a": 1,
+        "input_b": 2,
+        "input_c": 3,
+        "out_a": 4,
+        "out_b": 5,
+        "out_c": 6
       },
       "params": {
         "D": [

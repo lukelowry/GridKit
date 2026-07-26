@@ -5,6 +5,7 @@ add_subdirectory(Bus)
 add_subdirectory(Component/Line/LineLumped)
 add_subdirectory(Component/Load/LoadZ)
 add_subdirectory(Component/Source/VoltageSource)
+add_subdirectory(Component/Switch)
 add_subdirectory(Operators/Rational/VectorFit)
 
 target_link_libraries(
@@ -13,6 +14,7 @@ target_link_libraries(
             GridKit::emt_linelumped
             GridKit::emt_loadz
             GridKit::emt_voltage_source
+            GridKit::emt_switch
             GridKit::emt_vectorfit
             GridKit::phasor_dynamics_signalsource)
 target_link_libraries(
@@ -21,6 +23,7 @@ target_link_libraries(
             GridKit::emt_linelumped_dependency_tracking
             GridKit::emt_loadz_dependency_tracking
             GridKit::emt_voltage_source_dependency_tracking
+            GridKit::emt_switch_dependency_tracking
             GridKit::emt_vectorfit_dependency_tracking
             GridKit::phasor_dynamics_signalsource_dependency_tracking)
 

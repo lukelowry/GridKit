@@ -13,61 +13,6 @@ namespace
   using namespace GridKit::Testing::EMTTest;
   using LoadT = EMT::LoadZ<double, std::size_t>;
 
-  double csrValue(SystemT::CsrMatrixT& jacobian,
-                  std::size_t          row,
-                  std::size_t          column)
-  {
-    const auto* row_data = jacobian.getRowData();
-    const auto* columns  = jacobian.getColData();
-    const auto* values   = jacobian.getValues();
-    for (std::size_t entry = row_data[row]; entry < row_data[row + 1]; ++entry)
-    {
-      if (columns[entry] == column)
-      {
-        return values[entry];
-      }
-    }
-    return 0.0;
-  }
-
-  bool captureGateJacobian(SystemT&                  system,
-                           LoadT&                    load,
-                           double                    enable_value,
-                           std::vector<std::size_t>& row_data,
-                           std::vector<std::size_t>& columns,
-                           std::array<double, 3>&    gate_values)
-  {
-    system.getSignal(1)->init(enable_value);
-    system.updateTime(0.0, 23.0);
-    if (system.evaluateResidual() != 0 || system.evaluateJacobian() != 0)
-    {
-      return false;
-    }
-
-    auto* jacobian = system.getCsrJacobian();
-    if (jacobian == nullptr)
-    {
-      return false;
-    }
-
-    row_data.assign(jacobian->getRowData(),
-                    jacobian->getRowData() + jacobian->getNumRows() + 1);
-    columns.assign(jacobian->getColData(),
-                   jacobian->getColData() + jacobian->getNnz());
-
-    auto* bus      = system.getBus(632);
-    gate_values[0] = csrValue(*jacobian,
-                              bus->getResidualIndex(0),
-                              load.getVariableIndex(0));
-    gate_values[1] = csrValue(*jacobian,
-                              bus->getResidualIndex(1),
-                              load.getVariableIndex(1));
-    gate_values[2] = csrValue(*jacobian,
-                              bus->getResidualIndex(2),
-                              load.getVariableIndex(2));
-    return true;
-  }
-
   EMT::ABCMatrix<double> coupledResistance()
   {
     return {{{2.0, 0.20, 0.10},
@@ -82,7 +27,12 @@ namespace
              {0.0010, 0.0015, 0.030}}};
   }
 
-  TestOutcome zeroInitializationAndInjectionGate()
+  EMT::ABCMatrix<double> zeroMatrix()
+  {
+    return {{{0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}, {0.0, 0.0, 0.0}}};
+  }
+
+  TestOutcome zeroInitializationAndBusInjection()
   {
     TestStatus success  = true;
     const auto data     = loadFixtureData();
@@ -114,47 +64,39 @@ namespace
       success *= fault_load->y().getData()[index] == 0.0;
       success *= fault_load->yp().getData()[index] == 0.0;
     }
+
+    // The fixture's fault branch is purely resistive and sits behind a switch,
+    // so its current is algebraic while the feeder load stays differential.
     success *= normal_load->tag()[0] && normal_load->tag()[1]
                && normal_load->tag()[2];
+    success *= !fault_load->tag()[0] && !fault_load->tag()[1]
+               && !fault_load->tag()[2];
 
-    auto* bus                    = system->getBus(632);
-    auto* enable                 = system->getSignal(1);
-    fault_load->y().getData()[0] = 0.70;
-    fault_load->y().getData()[1] = -1.10;
-    fault_load->y().getData()[2] = 1.40;
-    fault_load->y().setDataUpdated();
-    const double ia = fault_load->y().getData()[0];
-    const double ib = fault_load->y().getData()[1];
-    const double ic = fault_load->y().getData()[2];
+    std::vector<EMT::InitialStateVariable> differential_layout;
+    std::vector<EMT::InitialStateVariable> algebraic_layout;
+    normal_load->appendInitialStateVariables(differential_layout);
+    fault_load->appendInitialStateVariables(algebraic_layout);
+    success *= differential_layout.size() == 1
+               && differential_layout[0].name == "i";
+    success *= algebraic_layout.empty();
 
-    enable->init(0.0);
+    auto* bus                     = system->getBus(670);
+    normal_load->y().getData()[0] = 0.70;
+    normal_load->y().getData()[1] = -1.10;
+    normal_load->y().getData()[2] = 1.40;
+    normal_load->y().setDataUpdated();
+
     bus->evaluateResidual();
-    fault_load->evaluateResidual();
-    success *= bus->Ia() == 0.0 && bus->Ib() == 0.0 && bus->Ic() == 0.0;
-
-    enable->init(1.0);
-    bus->evaluateResidual();
-    fault_load->evaluateResidual();
-    success *= isEqual(bus->Ia(), ia, 1.0e-13);
-    success *= isEqual(bus->Ib(), ib, 1.0e-13);
-    success *= isEqual(bus->Ic(), ic, 1.0e-13);
-
-    enable->init(0.0);
-    bus->evaluateResidual();
-    fault_load->evaluateResidual();
-    success *= bus->Ia() == 0.0 && bus->Ib() == 0.0 && bus->Ic() == 0.0;
-    success *= isEqual(fault_load->y().getData()[0], ia, 1.0e-15);
-    success *= isEqual(fault_load->y().getData()[1], ib, 1.0e-15);
-    success *= isEqual(fault_load->y().getData()[2], ic, 1.0e-15);
+    normal_load->evaluateResidual();
+    success *= isEqual(bus->Ia(), 0.70, 1.0e-13);
+    success *= isEqual(bus->Ib(), -1.10, 1.0e-13);
+    success *= isEqual(bus->Ic(), 1.40, 1.0e-13);
 
     auto       coupled_data = data.loadz[0];
     const auto R            = coupledResistance();
     const auto L            = coupledInductance();
     setRationalBlock(coupled_data, EMT::LoadZSubmodels::Z, R, L);
     LoadT coupled_load(system->getBus(670), coupled_data);
-    coupled_load.getSignals()
-        .template attachSignalNode<EMT::LoadZExternalVariables::enable>(
-            system->getSignal(0));
     success *= coupled_load.allocate() == 0;
     success *= coupled_load.verify() == 0;
 
@@ -175,23 +117,86 @@ namespace
     }
 
     std::array<double, 3> h{};
-    coupled_load.evaluateBusResidual(y.data(), 0.35, h.data());
-    success *= isEqual(h[0], 0.35 * y[0], 1.0e-15);
-    success *= isEqual(h[1], 0.35 * y[1], 1.0e-15);
-    success *= isEqual(h[2], 0.35 * y[2], 1.0e-15);
+    coupled_load.evaluateBusResidual(y.data(), h.data());
+    success *= h[0] == y[0] && h[1] == y[1] && h[2] == y[2];
 
     return success.report(__func__);
   }
 
-  TestOutcome gateKeepsFixedJacobianPattern()
+  TestOutcome algebraicCurrentRequiresInvertibleResistance()
+  {
+    TestStatus success = true;
+    const auto data    = loadFixtureData();
+    auto       system  = makeFixtureSystem(data);
+
+    auto       algebraic_data = data.loadz[0];
+    const auto R              = coupledResistance();
+    setRationalBlock(algebraic_data, EMT::LoadZSubmodels::Z, R, zeroMatrix());
+    LoadT algebraic_load(system->getBus(670), algebraic_data);
+    success *= algebraic_load.allocate() == 0;
+    success *= algebraic_load.verify() == 0;
+    success *= algebraic_load.tagDifferentiable() == 0;
+    success *= !algebraic_load.tag()[0] && !algebraic_load.tag()[1]
+               && !algebraic_load.tag()[2];
+
+    // A zero linear coefficient makes the branch conductance the bus-voltage
+    // coefficient, which is what keeps the terminal bus nonsingular.
+    std::vector<EMT::BusVoltageContribution<double, std::size_t>> contributions;
+    algebraic_load.appendBusVoltageContributions(contributions);
+    success *= contributions.size() == 1;
+    if (contributions.size() == 1)
+    {
+      success *= !contributions[0].differentiable_injection;
+      success *= EMT::Detail::matrixRank(contributions[0].algebraic_block) == 3;
+      success *= EMT::Detail::matrixRank(contributions[0].derivative_block) == 0;
+    }
+
+    auto singular_data = data.loadz[0];
+    setRationalBlock(singular_data, EMT::LoadZSubmodels::Z, zeroMatrix(), zeroMatrix());
+    LoadT singular_load(system->getBus(670), singular_data);
+    success *= singular_load.allocate() == 0;
+    success *= singular_load.verify() != 0;
+
+    auto partial_data        = data.loadz[0];
+    auto partial_inductance  = coupledInductance();
+    partial_inductance[2]    = {0.0, 0.0, 0.0};
+    partial_inductance[0][2] = 0.0;
+    partial_inductance[1][2] = 0.0;
+    setRationalBlock(partial_data, EMT::LoadZSubmodels::Z, R, partial_inductance);
+    LoadT partial_load(system->getBus(670), partial_data);
+    success *= partial_load.allocate() == 0;
+    success *= partial_load.verify() != 0;
+
+    // A differential branch contributes no bus-voltage coefficient at all.
+    auto differential_data = data.loadz[0];
+    setRationalBlock(differential_data,
+                     EMT::LoadZSubmodels::Z,
+                     R,
+                     coupledInductance());
+    LoadT differential_load(system->getBus(670), differential_data);
+    success *= differential_load.allocate() == 0;
+    success *= differential_load.verify() == 0;
+    contributions.clear();
+    differential_load.appendBusVoltageContributions(contributions);
+    success *= contributions.size() == 1;
+    if (contributions.size() == 1)
+    {
+      success *= contributions[0].differentiable_injection;
+      success *= EMT::Detail::matrixRank(contributions[0].algebraic_block) == 0;
+    }
+
+    return success.report(__func__);
+  }
+
+  TestOutcome jacobianMatchesReferences()
   {
     TestStatus success  = true;
     auto       data     = loadFixtureData();
     success            *= isThreeBusMutuallyCoupled(data);
-    const auto R        = coupledResistance();
-    const auto L        = coupledInductance();
-    setRationalBlock(data.loadz[0], EMT::LoadZSubmodels::Z, R, L);
-    setRationalBlock(data.loadz[1], EMT::LoadZSubmodels::Z, R, L);
+    setRationalBlock(data.loadz[0],
+                     EMT::LoadZSubmodels::Z,
+                     coupledResistance(),
+                     coupledInductance());
     auto  system       = makeFixtureSystem(data);
     auto* normal_load  = findComponent<LoadT>(*system, data, 0);
     auto* fault_load   = findComponent<LoadT>(*system, data, 1);
@@ -202,51 +207,10 @@ namespace
       return success.report(__func__);
     }
 
-#ifdef GRIDKIT_ENABLE_ENZYME
-    std::vector<std::size_t> off_rows;
-    std::vector<std::size_t> off_columns;
-    std::array<double, 3>    off_values{};
-    success *= captureGateJacobian(*system,
-                                   *fault_load,
-                                   0.0,
-                                   off_rows,
-                                   off_columns,
-                                   off_values);
-
-    std::vector<std::size_t> on_rows;
-    std::vector<std::size_t> on_columns;
-    std::array<double, 3>    on_values{};
-    success *= captureGateJacobian(*system,
-                                   *fault_load,
-                                   1.0,
-                                   on_rows,
-                                   on_columns,
-                                   on_values);
-
-    std::vector<std::size_t> off_again_rows;
-    std::vector<std::size_t> off_again_columns;
-    std::array<double, 3>    off_again_values{};
-    success *= captureGateJacobian(*system,
-                                   *fault_load,
-                                   0.0,
-                                   off_again_rows,
-                                   off_again_columns,
-                                   off_again_values);
-
-    success *= off_rows == on_rows && on_rows == off_again_rows;
-    success *= off_columns == on_columns && on_columns == off_again_columns;
-    success *= off_values[0] == 0.0 && off_values[1] == 0.0
-               && off_values[2] == 0.0;
-    success *= on_values[0] == 1.0 && on_values[1] == 1.0
-               && on_values[2] == 1.0;
-    success *= off_again_values[0] == 0.0 && off_again_values[1] == 0.0
-               && off_again_values[2] == 0.0;
-
     success *= componentJacobianMatchesReferences(
         *system, *normal_load, data, {7.0, 23.0});
     success *= componentJacobianMatchesReferences(
         *system, *fault_load, data, {7.0, 23.0});
-#endif
 
     return success.report(__func__);
   }
@@ -255,7 +219,8 @@ namespace
 int main()
 {
   GridKit::Testing::TestingResults result;
-  result += zeroInitializationAndInjectionGate();
-  result += gateKeepsFixedJacobianPattern();
+  result += zeroInitializationAndBusInjection();
+  result += algebraicCurrentRequiresInvertibleResistance();
+  result += jacobianMatchesReferences();
   return result.summary();
 }

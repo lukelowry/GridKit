@@ -3,7 +3,6 @@
 #include <iostream>
 
 #include <GridKit/Model/EMT/SystemModel.hpp>
-#include <GridKit/Model/PhasorDynamics/SignalNode/SignalNode.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
 
 #include "AnalysisUtilities.hpp"
@@ -45,7 +44,7 @@ int main(int argc, const char* argv[])
            && study.events[event_index].time == study.initial_time)
     {
       const auto& event = study.events[event_index];
-      system.getSignal(event.signal_id)->init(event.value);
+      system.setSignalSourceValue(event.signal_id, event.value);
       ++event_index;
     }
 
@@ -74,7 +73,7 @@ int main(int argc, const char* argv[])
       do
       {
         const auto& event = study.events[event_index];
-        system.getSignal(event.signal_id)->init(event.value);
+        system.setSignalSourceValue(event.signal_id, event.value);
         ++event_index;
       } while (event_index < study.events.size()
                && study.events[event_index].time == event_time);

@@ -40,9 +40,9 @@ None.
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{v}$ | [V] | Bus voltage vector | $\mathbf{v} \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{v}$ | [V] | `v` | Bus voltage vector | $\mathbf{v} \in \mathbb{R}^N$
 
 #### Algebraic
 
@@ -73,9 +73,18 @@ $\mathbf{v}$ | `v` | Output | [V] | Bus voltage supplied to connected devices | 
 0 = \sum_{e \in \mathcal{E}} \mathbf{i}_e
 ```
 
+Current balance is also an initialization invariant.
+
 ### Algebraic Equations
 
 None.
+
+For an algebraic bus connected only through dynamic current branches, the
+runtime model differentiates the current balance to keep the assembled DAE
+index one. Every branch at such a bus must inject a differential current. A
+bus that carries an algebraic current injection and has neither a shunt
+conductance nor a shunt capacitance is rejected, because the consistent solve
+holds the derivatives of algebraic variables at their supplied values.
 
 ### Wiring
 
@@ -83,31 +92,7 @@ None.
 
 ## Initialization
 
-### Input Initialization
-
-None. Connected components contribute their residual equations to the
-assembled system; they do not initialize the bus.
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{v}$ | `v` | Initial state | Differential bus
-$\mathbf{v}$ | — | Consistent solve | Algebraic bus, `v` is not supplied
-
-The solve determines $\mathrm{d}\mathbf{v}/\mathrm{d}t$, and current balance is
-an initialization invariant:
-
-```math
-\sum_{e \in \mathcal{E}}\mathbf{i}_e=\mathbf{0}.
-```
-
-For an algebraic bus connected only through dynamic current branches, the
-runtime model uses differentiated KCL to keep the assembled DAE index one.
-
-### Output Initialization
-
-None.
+None beyond the EMT initialization contract.
 
 ## Monitors
 

@@ -66,22 +66,18 @@ Key | Description
 
 A `variables` entry is either a plain vector or, for an indexed variable, an
 array of `index` and `value` pairs. Each value matches the dimension listed
-for that variable under Model Variables. A submodel-owned state is named
-`<submodel>.<variable>` after its submodel instance. Every differential
-variable in the assembled system is supplied exactly once; supplying an
-algebraic variable is an error.
+for that variable under Model Variables. Every differential variable in the
+assembled system is supplied exactly once; supplying an algebraic variable is
+an error.
 
-Each model documents its own variables in an Internal Initialization table.
-Models whose initialization data are not DAE variables, such as delay
-prehistory, state the requirement in prose instead. The `Source` column takes
-one of the following values.
+A variable is supplied under the `JSON` name listed for it under Model
+Variables. Algebraic variables list `—` and are never supplied. A
+submodel-owned state is named `<instance>.<variable>` after the submodel
+instance named in the owning model's Submodels section.
 
-Source | Meaning
------- | -------
-Initial state | Read from the initial-state file under the listed JSON name
-Consistent solve | Determined by the consistent DAE solve
-Connected bus | Supplied by the connected EMT bus
-Signal source | Supplied by the connected signal before the consistent solve
+A model states its Initialization requirements in prose only where they are
+not DAE variables, such as delay prehistory. Every other model initializes
+under this contract alone.
 
 ## Contents
 

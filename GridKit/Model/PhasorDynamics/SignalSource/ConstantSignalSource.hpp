@@ -57,6 +57,13 @@ namespace GridKit
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
 
+      /// Overwrite the emitted real value
+      ///
+      /// The assigned signal node reads through to this value, so consumers
+      /// observe the new value on their next evaluation. This is the only
+      /// supported way to retarget a constant source at run time.
+      void setRealValue(ScalarT value);
+
       /// Get the `ComponentSignals` from this component
       auto getSignals()
           -> ComponentSignals<ScalarT,

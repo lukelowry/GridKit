@@ -42,18 +42,18 @@ None.
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{i}_{12}$ | [A] | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^3$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{i}_{12}$ | [A] | — | Series current from terminal 1 to terminal 2 | $\mathbf{i}_{12} \in \mathbb{R}^3$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{v}_1$ | [V] | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^3$
-$\mathbf{v}_2$ | [V] | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^3$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{v}_1$ | [V] | — | Terminal 1 voltage owned by EMT bus | $\mathbf{v}_1 \in \mathbb{R}^3$
+$\mathbf{v}_2$ | [V] | — | Terminal 2 voltage owned by EMT bus | $\mathbf{v}_2 \in \mathbb{R}^3$
 
 #### Algebraic
 
@@ -84,6 +84,11 @@ None.
 \end{cases}
 ```
 
+The series current is algebraic in both positions, so neither terminal bus may
+require a differentiated current balance. A terminal bus therefore needs a
+shunt conductance or capacitance of its own, which a purely resistive branch
+supplies.
+
 The model reserves the union Jacobian entries with respect to
 $\mathbf{i}_{12}$, $\mathbf{v}_1$, and $\mathbf{v}_2$ in both positions, so
 switching changes residual and Jacobian values without changing dimensions or
@@ -103,26 +108,14 @@ position.
 
 ## Initialization
 
-### Input Initialization
+None beyond the EMT initialization contract. The series current is algebraic
+and the consistent solve determines it subject to the commanded position.
 
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0$
-$\mathrm{open}$ | — | Signal source | Applied before the consistent solve
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{i}_{12}$ | — | Consistent solve | Subject to the commanded position
-
-Differential states owned by the connected network are preserved. Closing
-fails if the preserved states are incompatible with the closed-position
-constraint.
-
-### Output Initialization
-
-Evaluated from the wiring equations after the consistent solve.
+Closing fails if the preserved differential states of the connected network
+are incompatible with $\mathbf{v}_2=\mathbf{v}_1$. Opening fails if the
+network cannot carry $\mathbf{i}_{12}=\mathbf{0}$ with finite terminal
+voltages, which is the case when the switched branch is the only path for a
+series inductance.
 
 ## Monitors
 

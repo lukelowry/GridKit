@@ -45,7 +45,8 @@ namespace GridKit::Testing::EMTTest
 
   inline bool isThreeBusMutuallyCoupled(const DataT& data)
   {
-    if (data.bus.size() != 3 || data.line_lumped.size() != 2)
+    // Three feeder buses plus the terminal bus behind the fault switch.
+    if (data.bus.size() != 4 || data.line_lumped.size() != 2)
     {
       return false;
     }
@@ -74,6 +75,7 @@ namespace GridKit::Testing::EMTTest
            + data.voltage_source.size()
            + data.line_lumped.size()
            + data.loadz.size()
+           + data.switches.size()
            + data.vector_fit.size();
   }
 

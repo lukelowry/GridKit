@@ -134,7 +134,7 @@ namespace GridKit::EMT
     if (!std::isfinite(event.value)
         || (event.value != 0.0 && event.value != 1.0))
     {
-      throw std::runtime_error("EMT load-enable event value must be 0 or 1");
+      throw std::runtime_error("EMT Switch open event value must be 0 or 1");
     }
   }
 
@@ -252,18 +252,18 @@ namespace GridKit::EMT
       }
     }
 
-    std::set<std::size_t> load_enable_signals;
-    for (const auto& load : study.model_data.loadz)
+    std::set<std::size_t> switch_open_signals;
+    for (const auto& device : study.model_data.switches)
     {
-      load_enable_signals.insert(
-          load.signal_inputs.at(LoadZSignalInputs::enable));
+      switch_open_signals.insert(
+          device.signal_inputs.at(SwitchSignalInputs::open));
     }
     for (const auto& event : study.events)
     {
-      if (!load_enable_signals.contains(event.signal_id))
+      if (!switch_open_signals.contains(event.signal_id))
       {
         throw std::runtime_error(
-            "EMT signal_set events may target only LoadZ enable signals");
+            "EMT signal_set events may target only Switch open signals");
       }
     }
 

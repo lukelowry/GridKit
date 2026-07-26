@@ -105,9 +105,9 @@ def main():
         raise RuntimeError("monitor timestamps must be finite")
     if any(end <= start for start, end in zip(times, times[1:])):
         raise RuntimeError("monitor timestamps must be strictly increasing")
-    voltage_names = select_columns(headers, ["632", "v"])
+    voltage_names = select_columns(headers, ["bus632v"])
     source_names = select_columns(headers, ["source650", "i"])
-    fault_names = select_columns(headers, ["fault632", "i"])
+    fault_names = select_columns(headers, ["loadzfault632", "i"])
 
     voltage = [[float(row[name]) for row in rows] for name in voltage_names]
     source = [[float(row[name]) for row in rows] for name in source_names]
@@ -119,26 +119,18 @@ def main():
         for value in phase_values
     ):
         raise RuntimeError("monitor CSV contains non-finite values")
-    fault_injected = [
-        [
-            value if args.fault_on < time <= args.fault_off else 0.0
-            for time, value in zip(times, phase_values)
-        ]
-        for phase_values in fault
-    ]
-
     figure, axes = plt.subplots(4, 1, figsize=(11, 10), sharex=True)
     mode_label = "adaptive" if args.integration_mode == "adaptive" else "fixed step"
     monitor_step_us = 1.0e6 * (times[1] - times[0])
     figure.suptitle(
-        "IEEE 13 reduced three-bus gated fault-load switching — "
+        "IEEE 13 reduced three-bus switched fault — "
         f"IDA {mode_label}, {monitor_step_us:g} us monitor"
     )
     labels = ["a", "b", "c"]
     for phase, label in enumerate(labels):
         axes[0].plot(times, voltage[phase], label=f"v{label}")
         axes[2].plot(times, source[phase], label=f"source i{label}")
-        axes[3].plot(times, fault_injected[phase], label=f"fault injected i{label}")
+        axes[3].plot(times, fault[phase], label=f"fault branch i{label}")
 
     if times[-1] - times[0] >= 1.0 / 60.0:
         for phase, label in enumerate(labels):

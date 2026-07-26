@@ -31,6 +31,7 @@ namespace
   using VoltageSourceT = EMT::VoltageSource<double, std::size_t>;
   using LineLumpedT    = EMT::LineLumped<double, std::size_t>;
   using LoadZT         = EMT::LoadZ<double, std::size_t>;
+  using SwitchT        = EMT::Switch<double, std::size_t>;
   using VectorFitT     = EMT::VectorFit<double, std::size_t>;
 
   Json loadFixtureJson()
@@ -193,12 +194,14 @@ namespace
     success *= data.bus[0].bus_id == 650;
     success *= data.bus[1].bus_id == 632;
     success *= data.bus[2].bus_id == 670;
-    success *= data.constant_source.size() == 5;
+    success *= data.bus[3].bus_id == 6321;
+    success *= data.constant_source.size() == 4;
     success *= data.voltage_source.size() == 1;
     success *= data.line_lumped.size() == 2;
     success *= data.loadz.size() == 2;
+    success *= data.switches.size() == 1;
     success *= data.vector_fit.size() == 1;
-    success *= data.signal.size() == 8;
+    success *= data.signal.size() == 7;
     success *= data.format_version.has_value();
     success *= data.format_version.value() == 0;
     success *= data.format_revision.has_value();
@@ -275,30 +278,33 @@ namespace
     success *= data.line_lumped[0].buses.at(EMT::LineLumpedBuses::bus2)
                == 632;
     success *= data.loadz[0].buses.at(EMT::LoadZBuses::bus) == 670;
-    success *= data.loadz[0].signal_inputs.at(
-                   EMT::LoadZSignalInputs::enable)
+    success *= data.loadz[1].buses.at(EMT::LoadZBuses::bus) == 6321;
+    success *= data.switches[0].buses.at(EMT::SwitchBuses::bus1) == 632;
+    success *= data.switches[0].buses.at(EMT::SwitchBuses::bus2) == 6321;
+    success *= data.switches[0].signal_inputs.at(
+                   EMT::SwitchSignalInputs::open)
                == 0;
     success *= data.voltage_source[0].buses.at(
                    EMT::VoltageSourceBuses::bus)
                == 650;
     success *= data.vector_fit[0].signal_inputs.at(
                    EMT::VectorFitSignalInputs::input_a)
-               == 2;
+               == 1;
     success *= data.vector_fit[0].signal_inputs.at(
                    EMT::VectorFitSignalInputs::input_b)
-               == 3;
+               == 2;
     success *= data.vector_fit[0].signal_inputs.at(
                    EMT::VectorFitSignalInputs::input_c)
-               == 4;
+               == 3;
     success *= data.vector_fit[0].signal_outputs.at(
                    EMT::VectorFitSignalOutputs::out_a)
-               == 5;
+               == 4;
     success *= data.vector_fit[0].signal_outputs.at(
                    EMT::VectorFitSignalOutputs::out_b)
-               == 6;
+               == 5;
     success *= data.vector_fit[0].signal_outputs.at(
                    EMT::VectorFitSignalOutputs::out_c)
-               == 7;
+               == 6;
     success *= data.constant_source[0].signal_outputs.at(
                    PhasorDynamics::ConstantSignalSourceSignalOutputs::sr)
                == 0;
@@ -322,11 +328,11 @@ namespace
 
     success *= parserAcceptsAfter([](Json& input)
                                   {
-      input["signals"].push_back({{"signal_id", 8},
+      input["signals"].push_back({{"signal_id", 7},
                                    {"name", "constant_imaginary"}});
-      auto& source = findDevice(input, "normal_load_enable_source");
+      auto& source = findDevice(input, "fault_load_open_source");
       source["params"]["Si"] = 0.25;
-      source["ports"]["si"] = 8; });
+      source["ports"]["si"] = 7; });
 
     return success.report(__func__);
   }
@@ -349,7 +355,7 @@ namespace
                                   { input["devices"][0]["unexpected"] = 1; });
 
     const std::vector<std::string> device_ids{
-        "normal_load_enable_source", "source_650", "line_650_632", "load_670", "vectorfit_identity"};
+        "fault_load_open_source", "source_650", "line_650_632", "load_670", "fault_632_switch", "vectorfit_identity"};
     for (const auto& device_id : device_ids)
     {
       success *= parserRejectsAfter([&device_id](Json& input)
@@ -366,11 +372,12 @@ namespace
     const std::vector<std::pair<std::string, std::vector<std::string>>>
         required_ports{
             {"line_650_632", {"bus1", "bus2"}},
-            {"load_670", {"bus", "enable"}},
+            {"load_670", {"bus"}},
+            {"fault_632_switch", {"bus1", "bus2", "open"}},
             {"source_650", {"bus"}},
             {"vectorfit_identity",
              {"input_a", "input_b", "input_c", "out_a", "out_b", "out_c"}},
-            {"normal_load_enable_source", {"sr"}}};
+            {"fault_load_open_source", {"sr"}}};
     for (const auto& [device_id, ports] : required_ports)
     {
       for (const auto& port : ports)
@@ -400,16 +407,18 @@ namespace
     success *= parserRejectsAfter([](Json& input)
                                   { findDevice(input, "source_650")["ports"]["bus"] = 999; });
     success *= parserRejectsAfter([](Json& input)
-                                  { findDevice(input, "load_670")["ports"]["enable"] = 999; });
+                                  { findDevice(input, "fault_632_switch")["ports"]["open"] = 999; });
+    success *= parserRejectsAfter([](Json& input)
+                                  { findDevice(input, "fault_632_switch")["ports"]["bus2"] = 632; });
     success *= parserRejectsAfter([](Json& input)
                                   { findDevice(input, "vectorfit_identity")["ports"]["input_a"] = 999; });
     success *= parserRejectsAfter([](Json& input)
                                   { findDevice(input, "vectorfit_identity")["ports"]["out_a"] = 999; });
     success *= parserRejectsAfter([](Json& input)
-                                  { findDevice(input, "normal_load_enable_source")["ports"]["sr"] = 999; });
+                                  { findDevice(input, "fault_load_open_source")["ports"]["sr"] = 999; });
 
     success *= parserRejectsAfter([](Json& input)
-                                  { findDevice(input, "fault_load_enable_source")["ports"]["sr"] = 0; });
+                                  { findDevice(input, "vectorfit_input_a_source")["ports"]["sr"] = 0; });
     success *= parserRejectsAfter([](Json& input)
                                   { findDevice(input, "vectorfit_identity")["ports"]["out_a"] = 0; });
     success *= parserRejectsAfter([](Json& input)
@@ -640,7 +649,7 @@ namespace
           zeroComplexMatrix(), zeroComplexMatrix()}); });
 
     const std::vector<std::string> monitored_devices{
-        "line_650_632", "load_670", "source_650", "vectorfit_identity", "normal_load_enable_source"};
+        "line_650_632", "load_670", "source_650", "vectorfit_identity", "fault_632_switch", "fault_load_open_source"};
     success *= parserRejectsAfter([](Json& input)
                                   { input["buses"][0]["mon"] = Json::array({"unknown"}); });
     for (const auto& device_id : monitored_devices)
@@ -673,7 +682,7 @@ namespace
         {"dt_monitor", 0.0001},
         {"tmax", 0.2},
         {"output_file", "resolved.csv"},
-        {"events", Json::array({{{"time", 0.1}, {"type", "signal_set"}, {"signal_id", 1}, {"value", 0.0}}, {{"time", 0.05}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 1.0}}})}};
+        {"events", Json::array({{{"time", 0.1}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 0.0}}, {{"time", 0.05}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 1.0}}})}};
 
     const auto study  = input.get<EMT::StudyData>();
     success          *= study.events.size() == 2;
@@ -770,7 +779,8 @@ namespace
 
     success *= initial_state.case_name == data.case_name;
     success *= initial_state.time == 0.0;
-    success *= initial_state.buses.size() == data.bus.size();
+    // The switch terminal bus is algebraic and supplies no initial voltage.
+    success *= initial_state.buses.size() == data.bus.size() - 1;
 
     auto system  = makeFixtureSystem(data);
     success     *= !throws<>([&system, &initial_state]
@@ -868,10 +878,11 @@ namespace
     success            *= isThreeBusMutuallyCoupled(data);
 
     auto system  = makeFixtureSystem(data);
-    success     *= system->size() == 42;
+    success     *= system->size() == 48;
     success     *= system->getBus(650)->size() == 3;
     success     *= system->getBus(632)->size() == 3;
     success     *= system->getBus(670)->size() == 3;
+    success     *= system->getBus(6321)->size() == 3;
     for (std::size_t signal_id = 0; signal_id < data.signal.size(); ++signal_id)
     {
       success *= system->getSignal(signal_id)->signalId() == signal_id;
@@ -881,6 +892,7 @@ namespace
     success              *= system->getBus(650)->y().getData() == system_y;
     success              *= system->getBus(632)->y().getData() == system_y + 3;
     success              *= system->getBus(670)->y().getData() == system_y + 6;
+    success              *= system->getBus(6321)->y().getData() == system_y + 9;
     for (std::size_t index = 0; index < system->size(); ++index)
     {
       success *= system->y().getData()[index] == 0.0;
@@ -888,12 +900,11 @@ namespace
     }
 
     const std::array<std::size_t, 11> expected_offsets{
-        9, 9, 9, 9, 9, 9, 15, 24, 33, 36, 39};
+        12, 12, 12, 12, 12, 18, 27, 36, 39, 42, 45};
     const std::array<std::size_t, 11> expected_sizes{
-        0, 0, 0, 0, 0, 6, 9, 9, 3, 3, 3};
+        0, 0, 0, 0, 6, 9, 9, 3, 3, 3, 3};
     const std::array<std::string, 11> expected_component_ids{
-        "normal_load_enable_source",
-        "fault_load_enable_source",
+        "fault_load_open_source",
         "vectorfit_input_a_source",
         "vectorfit_input_b_source",
         "vectorfit_input_c_source",
@@ -902,6 +913,7 @@ namespace
         "line_632_670",
         "load_670",
         "fault_632",
+        "fault_632_switch",
         "vectorfit_identity"};
     for (std::size_t id = 0; id < componentCount(data); ++id)
     {
@@ -926,43 +938,39 @@ namespace
       }
     }
 
-    for (std::size_t id = 0; id < 5; ++id)
+    for (std::size_t id = 0; id < 4; ++id)
     {
       success *= dynamic_cast<ConstantSourceT*>(system->getComponent(id))
                  != nullptr;
     }
     success *= system->getSignal(0)->read() == 1.0;
-    success *= system->getSignal(1)->read() == 0.0;
-    success *= system->getSignal(2)->read() == 1.0;
-    success *= system->getSignal(3)->read() == -0.5;
-    success *= system->getSignal(4)->read() == 0.25;
-    success *= dynamic_cast<VoltageSourceT*>(system->getComponent(5))
+    success *= system->getSignal(1)->read() == 1.0;
+    success *= system->getSignal(2)->read() == -0.5;
+    success *= system->getSignal(3)->read() == 0.25;
+    success *= dynamic_cast<VoltageSourceT*>(system->getComponent(4))
                != nullptr;
+    success *= dynamic_cast<LineLumpedT*>(system->getComponent(5)) != nullptr;
     success *= dynamic_cast<LineLumpedT*>(system->getComponent(6)) != nullptr;
-    success *= dynamic_cast<LineLumpedT*>(system->getComponent(7)) != nullptr;
+    success *= dynamic_cast<LoadZT*>(system->getComponent(7)) != nullptr;
     success *= dynamic_cast<LoadZT*>(system->getComponent(8)) != nullptr;
-    success *= dynamic_cast<LoadZT*>(system->getComponent(9)) != nullptr;
+    success *= dynamic_cast<SwitchT*>(system->getComponent(9)) != nullptr;
     success *= dynamic_cast<VectorFitT*>(system->getComponent(10)) != nullptr;
     success *= throws<std::out_of_range>([&system]
                                          { system->getComponent("unknown"); });
     success *= system->monitoring();
 
-    std::vector<bool> expected_tag(system->size(), false);
-    for (std::size_t index = 0; index < 12; ++index)
+    // Feeder bus voltages, source and line currents, and the feeder load
+    // current are differential. The switch terminal bus, the switch current
+    // and the resistive fault current are algebraic.
+    std::vector<bool>                                        expected_tag(system->size(), false);
+    const std::array<std::pair<std::size_t, std::size_t>, 5> differential{
+        {{0, 9}, {12, 15}, {18, 21}, {27, 30}, {36, 39}}};
+    for (const auto& [first, last] : differential)
     {
-      expected_tag[index] = true;
-    }
-    for (std::size_t index = 15; index < 18; ++index)
-    {
-      expected_tag[index] = true;
-    }
-    for (std::size_t index = 24; index < 27; ++index)
-    {
-      expected_tag[index] = true;
-    }
-    for (std::size_t index = 33; index < 39; ++index)
-    {
-      expected_tag[index] = true;
+      for (std::size_t index = first; index < last; ++index)
+      {
+        expected_tag[index] = true;
+      }
     }
     success *= system->tag() == expected_tag;
 
@@ -1035,8 +1043,8 @@ namespace
     success *= static_cast<bool>(std::getline(input, header));
     success *= static_cast<bool>(std::getline(input, values));
     success *= !static_cast<bool>(std::getline(input, extra));
-    success *= std::count(header.begin(), header.end(), ',') == 39;
-    success *= std::count(values.begin(), values.end(), ',') == 39;
+    success *= std::count(header.begin(), header.end(), ',') == 46;
+    success *= std::count(values.begin(), values.end(), ',') == 46;
 
     const auto first_bus_voltage  = header.find("Bus_650_va");
     success                      *= first_bus_voltage != std::string::npos;
@@ -1057,7 +1065,7 @@ namespace
     const auto data    = EMT::parseSystemModelData(
         std::filesystem::path{EMT_IEEE13_TEST_FIXTURE});
     auto system  = makeFixtureSystem(data);
-    success     *= data.bus.size() == 14;
+    success     *= data.bus.size() == 15;
     success     *= data.line_lumped.size() == 13;
     for (std::size_t index = 0; index < system->size(); ++index)
     {
@@ -1067,7 +1075,9 @@ namespace
     for (const auto& bus_data : data.bus)
     {
       auto* bus = system->getBus(bus_data.bus_id);
-      if (bus_data.bus_id == 634)
+      // Bus 634 sits behind a transformer with no shunt admittance, and bus
+      // 6711 is the terminal of the fault switch.
+      if (bus_data.bus_id == 634 || bus_data.bus_id == 6711)
       {
         success *= bus->voltageClass() == EMT::BusVoltageClass::algebraic;
         success *= !bus->tag()[0] && !bus->tag()[1] && !bus->tag()[2];
@@ -1093,32 +1103,42 @@ namespace
     auto* line2   = dynamic_cast<LineLumpedT*>(system->getComponent("line_632_670"));
     auto* load    = dynamic_cast<LoadZT*>(system->getComponent("load_670"));
     auto* fault   = dynamic_cast<LoadZT*>(system->getComponent("fault_632"));
+    auto* device  = dynamic_cast<SwitchT*>(system->getComponent("fault_632_switch"));
     success      *= source != nullptr && line1 != nullptr && line2 != nullptr;
-    success      *= load != nullptr && fault != nullptr;
+    success      *= load != nullptr && fault != nullptr && device != nullptr;
     if (source == nullptr || line1 == nullptr || line2 == nullptr
-        || load == nullptr || fault == nullptr)
+        || load == nullptr || fault == nullptr || device == nullptr)
     {
       return success.report(__func__);
     }
 
-    auto* bus650 = system->getBus(650);
-    auto* bus632 = system->getBus(632);
-    auto* bus670 = system->getBus(670);
-    bus650->Ia() = 111.0;
-    bus650->Ib() = 222.0;
-    bus650->Ic() = 333.0;
-    bus632->Ia() = -111.0;
-    bus632->Ib() = -222.0;
-    bus632->Ic() = -333.0;
-    bus670->Ia() = 444.0;
-    bus670->Ib() = 555.0;
-    bus670->Ic() = 666.0;
+    auto* bus650  = system->getBus(650);
+    auto* bus632  = system->getBus(632);
+    auto* bus670  = system->getBus(670);
+    auto* bus6321 = system->getBus(6321);
+    bus650->Ia()  = 111.0;
+    bus650->Ib()  = 222.0;
+    bus650->Ic()  = 333.0;
+    bus632->Ia()  = -111.0;
+    bus632->Ib()  = -222.0;
+    bus632->Ic()  = -333.0;
+    bus670->Ia()  = 444.0;
+    bus670->Ib()  = 555.0;
+    bus670->Ic()  = 666.0;
+    bus6321->Ia() = 777.0;
+    bus6321->Ib() = 888.0;
+    bus6321->Ic() = 999.0;
 
-    success                    *= system->evaluateResidual() == 0;
-    const double normal_enable  = system->getSignal(0)->read();
-    const double fault_enable   = system->getSignal(1)->read();
-    success                    *= normal_enable == 1.0;
-    success                    *= fault_enable == 0.0;
+    device->y().getData()[0] = 13.0;
+    device->y().getData()[1] = -17.0;
+    device->y().getData()[2] = 19.0;
+    fault->y().getData()[0]  = -13.0;
+    fault->y().getData()[1]  = 17.0;
+    fault->y().getData()[2]  = -19.0;
+    system->y().setDataUpdated();
+
+    success *= system->evaluateResidual() == 0;
+    success *= system->getSignal(0)->read() == 1.0;
 
     for (std::size_t phase = 0; phase < 3; ++phase)
     {
@@ -1129,10 +1149,12 @@ namespace
                                  + line1->y().getData()[phase]
                                  + line2->y().getData()[3 + phase]
                                  - line2->y().getData()[phase]
-                                 + fault_enable * fault->y().getData()[phase];
+                                 - device->y().getData()[phase];
       const double expected670 = line2->y().getData()[6 + phase]
                                  + line2->y().getData()[phase]
-                                 + normal_enable * load->y().getData()[phase];
+                                 + load->y().getData()[phase];
+      const double expected6321 = device->y().getData()[phase]
+                                  + fault->y().getData()[phase];
       success *= isEqual(bus650->getResidual().getData()[phase],
                          expected650,
                          1.0e-13);
@@ -1142,13 +1164,16 @@ namespace
       success *= isEqual(bus670->getResidual().getData()[phase],
                          expected670,
                          1.0e-13);
+      success *= isEqual(bus6321->getResidual().getData()[phase],
+                         expected6321,
+                         1.0e-13);
     }
 
-    const std::array<double, 9> first_pass{
-        bus650->Ia(), bus650->Ib(), bus650->Ic(), bus632->Ia(), bus632->Ib(), bus632->Ic(), bus670->Ia(), bus670->Ib(), bus670->Ic()};
+    const std::array<double, 12> first_pass{
+        bus650->Ia(), bus650->Ib(), bus650->Ic(), bus632->Ia(), bus632->Ib(), bus632->Ic(), bus670->Ia(), bus670->Ib(), bus670->Ic(), bus6321->Ia(), bus6321->Ib(), bus6321->Ic()};
     success *= system->evaluateResidual() == 0;
-    const std::array<double, 9> second_pass{
-        bus650->Ia(), bus650->Ib(), bus650->Ic(), bus632->Ia(), bus632->Ib(), bus632->Ic(), bus670->Ia(), bus670->Ib(), bus670->Ic()};
+    const std::array<double, 12> second_pass{
+        bus650->Ia(), bus650->Ib(), bus650->Ic(), bus632->Ia(), bus632->Ib(), bus632->Ic(), bus670->Ia(), bus670->Ib(), bus670->Ic(), bus6321->Ia(), bus6321->Ib(), bus6321->Ic()};
     for (std::size_t entry = 0; entry < first_pass.size(); ++entry)
     {
       success *= isEqual(second_pass[entry], first_pass[entry], 1.0e-14);

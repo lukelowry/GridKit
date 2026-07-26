@@ -96,7 +96,7 @@ def study_configuration(study):
         }
     if study == "fault":
         return {
-            "title": "Balanced RLC gated three-phase fault-load injection",
+            "title": "Balanced RLC switched three-phase fault",
             "voltage_prefix": "Bus_mid_v",
             "voltage_label": "Fault-bus voltage",
             "current_prefix": "LoadZ_fault_2_i",
@@ -106,7 +106,7 @@ def study_configuration(study):
         }
     if study == "slg_fault":
         return {
-            "title": "Balanced RLC gated phase-a fault-load injection",
+            "title": "Balanced RLC switched phase-a-to-ground fault",
             "voltage_prefix": "Bus_mid_v",
             "voltage_label": "Fault-bus voltage",
             "current_prefix": "LoadZ_phase_a_ground_fault_2_i",
@@ -119,28 +119,12 @@ def study_configuration(study):
             "title": "Balanced RLC load rejection",
             "voltage_prefix": "Bus_load_v",
             "voltage_label": "Load-bus voltage",
-            "current_prefix": "LoadZ_load_3_i",
-            "current_label": "Load current into bus",
+            "current_prefix": "LoadZ_rejected_load_3_i",
+            "current_label": "Rejected-branch current into bus",
             "event_label": "Load rejected",
             "event_color": "tab:orange",
         }
     raise RuntimeError(f"unsupported study: {study}")
-
-
-def gate_injected_current(study, times, values, event_on, event_off):
-    gated = []
-    for phase_values in values:
-        injected = []
-        for time, value in zip(times, phase_values):
-            if study == "steady":
-                enabled = True
-            elif study == "load_rejection":
-                enabled = time <= event_on or time > event_off
-            else:
-                enabled = event_on < time <= event_off
-            injected.append(value if enabled else 0.0)
-        gated.append(injected)
-    return gated
 
 
 def main():
@@ -173,15 +157,8 @@ def main():
     configuration = study_configuration(args.study)
     voltage = read_phase_values(headers, rows, configuration["voltage_prefix"])
     source = read_phase_values(headers, rows, "VoltageSource_source_1_i")
-    internal_current = read_phase_values(
+    branch_current = read_phase_values(
         headers, rows, configuration["current_prefix"]
-    )
-    injected_current = gate_injected_current(
-        args.study,
-        times,
-        internal_current,
-        args.event_on,
-        args.event_off,
     )
 
     figure, axes = plt.subplots(4, 1, figsize=(11, 10), sharex=True)
@@ -201,8 +178,8 @@ def main():
         axes[2].plot(times, source[phase], label=f"source i{label}")
         axes[3].plot(
             times,
-            injected_current[phase],
-            label=f"injected i{label}",
+            branch_current[phase],
+            label=f"branch i{label}",
         )
 
     for axis in axes:

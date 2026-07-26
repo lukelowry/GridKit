@@ -244,8 +244,15 @@ namespace
       success   *= bus->Vbp() == 0.0;
       success   *= bus->Vcp() == 0.0;
 
-      success *= bus->voltageClass() == EMT::BusVoltageClass::differential;
-      success *= bus->tag()[0] && bus->tag()[1] && bus->tag()[2];
+      // The terminal bus behind the fault switch carries only algebraic
+      // branches, so its voltage is algebraic.
+      const bool differential  = bus_data.bus_id != 6321;
+      success                 *= bus->voltageClass()
+                 == (differential ? EMT::BusVoltageClass::differential
+                                  : EMT::BusVoltageClass::algebraic);
+      success *= bus->tag()[0] == differential
+                 && bus->tag()[1] == differential
+                 && bus->tag()[2] == differential;
 
       bus->evaluateResidual();
       bus->Ia() += 1.25;

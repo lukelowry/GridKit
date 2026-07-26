@@ -12,14 +12,14 @@
     {
       "time": 0.05,
       "type": "signal_set",
-      "signal_id": 1,
-      "value": 1.0
+      "signal_id": 0,
+      "value": 0.0
     },
     {
       "time": 0.1,
       "type": "signal_set",
-      "signal_id": 1,
-      "value": 0.0
+      "signal_id": 0,
+      "value": 1.0
     }
   ]
 }

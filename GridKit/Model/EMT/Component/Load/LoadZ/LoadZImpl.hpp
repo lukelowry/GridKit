@@ -40,6 +40,14 @@ namespace GridKit
         L_           = z.E;
         z_dynamic_   = z.dynamic;
       }
+
+      // The current is differential for a nonsingular L and algebraic for
+      // L = 0. Verification rejects every other L.
+      current_differential_ = !Detail::zero(L_);
+      if (!current_differential_ && Detail::positiveDefinite(R_))
+      {
+        G_ = Detail::inverse(R_);
+      }
     }
 
     template <typename scalar_type, typename index_type>
@@ -96,21 +104,14 @@ namespace GridKit
         Log::error() << "EMT::LoadZ: R must be finite, symmetric, and positive semidefinite\n";
         ++status;
       }
-      if (!Detail::positiveDefinite(L_))
+      if (current_differential_ && !Detail::positiveDefinite(L_))
       {
-        Log::error() << "EMT::LoadZ: L must be finite, symmetric, and positive definite\n";
+        Log::error() << "EMT::LoadZ: a nonzero L must be finite, symmetric, and positive definite\n";
         ++status;
       }
-
-      static constexpr auto enable = LoadZExternalVariables::enable;
-      if (!signals_.template isAttached<enable>())
+      if (!current_differential_ && !Detail::positiveDefinite(R_))
       {
-        Log::error() << "EMT::LoadZ: enable signal is not attached\n";
-        ++status;
-      }
-      else if (!signals_.template isLinked<enable>())
-      {
-        Log::error() << "EMT::LoadZ: enable signal is attached but not linked\n";
+        Log::error() << "EMT::LoadZ: R must be positive definite when L is zero\n";
         ++status;
       }
       return status;
@@ -130,7 +131,10 @@ namespace GridKit
     void LoadZ<scalar_type, index_type>::appendInitialStateVariables(
         std::vector<InitialStateVariable>& variables) const
     {
-      variables.push_back({"i", std::nullopt, 0});
+      if (current_differential_)
+      {
+        variables.push_back({"i", std::nullopt, 0});
+      }
     }
 
     template <typename scalar_type, typename index_type>
@@ -139,16 +143,17 @@ namespace GridKit
     {
       if (bus_ != nullptr)
       {
-        contributions.push_back({bus_->busID(), {}, {}});
+        contributions.push_back(
+            {bus_->busID(), {}, G_, current_differential_});
       }
     }
 
     template <typename scalar_type, typename index_type>
     int LoadZ<scalar_type, index_type>::tagDifferentiable()
     {
-      tag_[0] = true;
-      tag_[1] = true;
-      tag_[2] = true;
+      tag_[0] = current_differential_;
+      tag_[1] = current_differential_;
+      tag_[2] = current_differential_;
       return 0;
     }
 
@@ -188,12 +193,11 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     __attribute__((always_inline)) inline int LoadZ<scalar_type, index_type>::evaluateBusResidual(
         const ScalarT* y,
-        ScalarT        enable,
         ScalarT*       h)
     {
-      h[0] = enable * y[0];
-      h[1] = enable * y[1];
-      h[2] = enable * y[2];
+      h[0] = y[0];
+      h[1] = y[1];
+      h[2] = y[2];
       return 0;
     }
 
@@ -204,29 +208,15 @@ namespace GridKit
       wb_[1] = bus_->Vb();
       wb_[2] = bus_->Vc();
 
-      ScalarT enable{1.0};
-      if (signals_.template isAttached<LoadZExternalVariables::enable>())
-      {
-        enable = signals_.template readExternalVariable<LoadZExternalVariables::enable>();
-      }
-
       const auto* y  = y_.getData();
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
       evaluateInternalResidual(y, yp, wb_.data(), f);
-      evaluateBusResidual(bus_->differentiatedKCL() ? yp : y,
-                          enable,
-                          h_.data());
+      evaluateBusResidual(bus_->differentiatedKCL() ? yp : y, h_.data());
 
       bus_->accumulateCurrent(h_[0], h_[1], h_[2]);
       f_.setDataUpdated();
       return 0;
-    }
-
-    template <typename scalar_type, typename index_type>
-    auto LoadZ<scalar_type, index_type>::getSignals() -> SignalsT&
-    {
-      return signals_;
     }
 
     template <typename scalar_type, typename index_type>

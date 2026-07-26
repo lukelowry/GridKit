@@ -116,32 +116,32 @@ None.
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$w_q$ | $[u]$ | Real memory state | $w_q \in \mathbb{R}$, $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
-$v_q$ | $[u]$ | Imaginary memory state | $v_q \in \mathbb{R}$, $q \in \mathcal{Q}_\mathrm{c}$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$w_q$ | $[u]$ | `w` | Real memory state | $w_q \in \mathbb{R}$, $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
+$v_q$ | $[u]$ | `v` | Imaginary memory state | $v_q \in \mathbb{R}$, $q \in \mathcal{Q}_\mathrm{c}$
 
 The documented real realization has order $Q$.
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{y}$ | $[y]$ | Output vector | $\mathbf{y} \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{y}$ | $[y]$ | — | Output vector | $\mathbf{y} \in \mathbb{R}^N$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{u}$ | $[u]$ | Input vector | Differential-input configuration, $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{u}$ | $[u]$ | — | Input vector | Differential-input configuration, $\mathbf{u} \in \mathbb{R}^K$
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{u}$ | $[u]$ | Input vector | Algebraic-input configuration, $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{u}$ | $[u]$ | — | Input vector | Algebraic-input configuration, $\mathbf{u} \in \mathbb{R}^K$
 
 ## Model Ports
 
@@ -193,23 +193,7 @@ None.
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{u}$ | — | Consistent solve | Owned by the connected model
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$w_q$ | `w` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
-$v_q$ | `v` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{c}$
-$\mathbf{y}$ | — | Consistent solve | Output vector
-
-### Output Initialization
-
-None.
+None beyond the EMT initialization contract.
 
 ## Monitors
 

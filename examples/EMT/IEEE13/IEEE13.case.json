@@ -4,7 +4,7 @@
     "format_revision": 1,
     "case_name": "IEEE13",
     "case_description": "Full IEEE 13-node feeder graph projected onto the currently implemented fixed-ABC EMT model subset",
-    "case_comments": "This is explicitly not an exact IEEE 13-node benchmark model. It retains every feeder bus and branch in the published 650-632-670-671 topology that can be connected with the available components. The 650 regulator and RG60 internal node are contracted into the source connection; the 115/4.16-kV substation transformer ratio is collapsed into a 4.16-kV source with its published 1-percent R and 8-percent X series impedance; the 633-634 4.16/0.48-kV transformer is a unity-ratio three-phase series LineLumped proxy with a 1-percent symmetric mutual completion and loads referred to 4.16 kV. The projected transformer has zero shunt capacitance, so bus 634 is algebraic under the assembled derivative classification. Configurations 603 and 604 repeat the mean published two-phase self term and published mutual term across ABC; 605 scales those 603 mutual-to-self ratios to its published scalar self data; 607 scales the full 606 coupling pattern to its published scalar self data. The closed 671-692 switch is represented by a one-metre configuration-601 LineLumped jumper. Constant-P and constant-I loads and delta connections are replaced by nominal-voltage grounded-wye RL equivalents; unloaded projected phases use finite open-circuit impedances; capacitors at 675 and 611 are omitted because no supported component can represent them. There are no regulator taps, transformer ratio, capacitor, phase-selective, PQ, or constant-current dynamics. Published IEEE PES topology/load data and current EPRI OpenDSS line matrices are used where the fixed-ABC lane can represent them."
+    "case_comments": "This is explicitly not an exact IEEE 13-node benchmark model. It retains every feeder bus and branch in the published 650-632-670-671 topology that can be connected with the available components. The 650 regulator and RG60 internal node are contracted into the source connection; the 115/4.16-kV substation transformer ratio is collapsed into a 4.16-kV source with its published 1-percent R and 8-percent X series impedance; the 633-634 4.16/0.48-kV transformer is a unity-ratio three-phase series LineLumped proxy with a 1-percent symmetric mutual completion and loads referred to 4.16 kV. The projected transformer has zero shunt capacitance, so bus 634 is algebraic under the assembled derivative classification. The fault is a purely resistive load on its own terminal bus behind a three-phase Switch. Configurations 603 and 604 repeat the mean published two-phase self term and published mutual term across ABC; 605 scales those 603 mutual-to-self ratios to its published scalar self data; 607 scales the full 606 coupling pattern to its published scalar self data. The closed 671-692 switch is represented by a one-metre configuration-601 LineLumped jumper. Constant-P and constant-I loads and delta connections are replaced by nominal-voltage grounded-wye RL equivalents; unloaded projected phases use finite open-circuit impedances; capacitors at 675 and 611 are omitted because no supported component can represent them. There are no regulator taps, transformer ratio, capacitor, phase-selective, PQ, or constant-current dynamics. Published IEEE PES topology/load data and current EPRI OpenDSS line matrices are used where the fixed-ABC lane can represent them."
   },
   "buses": [
     {
@@ -118,37 +118,31 @@
       "mon": [
         "v"
       ]
+    },
+    {
+      "number": 6711,
+      "class": "bus",
+      "name": "671_fault",
+      "mon": [
+        "v"
+      ]
     }
   ],
   "signals": [
     {
       "signal_id": 0,
-      "name": "normal_load_enable"
-    },
-    {
-      "signal_id": 1,
-      "name": "fault_load_enable"
+      "name": "fault_load_open"
     }
   ],
   "devices": [
     {
       "class": "ConstantSignalSource",
-      "id": "normal_load_enable_source",
+      "id": "fault_load_open_source",
       "ports": {
         "sr": 0
       },
       "params": {
         "Sr": 1.0
-      }
-    },
-    {
-      "class": "ConstantSignalSource",
-      "id": "fault_load_enable_source",
-      "ports": {
-        "sr": 1
-      },
-      "params": {
-        "Sr": 0.0
       }
     },
     {
@@ -1468,8 +1462,7 @@
       "class": "LoadZ",
       "id": "load_671_delta_to_wye_projection",
       "ports": {
-        "bus": 671,
-        "enable": 0
+        "bus": 671
       },
       "params": {
         "N": 3
@@ -1519,8 +1512,7 @@
       "class": "LoadZ",
       "id": "load_634_referred_to_4kv_projection",
       "ports": {
-        "bus": 634,
-        "enable": 0
+        "bus": 634
       },
       "params": {
         "N": 3
@@ -1570,8 +1562,7 @@
       "class": "LoadZ",
       "id": "load_645_phase_projection",
       "ports": {
-        "bus": 645,
-        "enable": 0
+        "bus": 645
       },
       "params": {
         "N": 3
@@ -1621,8 +1612,7 @@
       "class": "LoadZ",
       "id": "load_646_delta_to_wye_projection",
       "ports": {
-        "bus": 646,
-        "enable": 0
+        "bus": 646
       },
       "params": {
         "N": 3
@@ -1672,8 +1662,7 @@
       "class": "LoadZ",
       "id": "load_692_current_to_rl_projection",
       "ports": {
-        "bus": 692,
-        "enable": 0
+        "bus": 692
       },
       "params": {
         "N": 3
@@ -1723,8 +1712,7 @@
       "class": "LoadZ",
       "id": "load_675_pq_to_rl_projection",
       "ports": {
-        "bus": 675,
-        "enable": 0
+        "bus": 675
       },
       "params": {
         "N": 3
@@ -1774,8 +1762,7 @@
       "class": "LoadZ",
       "id": "load_611_current_to_rl_projection",
       "ports": {
-        "bus": 611,
-        "enable": 0
+        "bus": 611
       },
       "params": {
         "N": 3
@@ -1825,8 +1812,7 @@
       "class": "LoadZ",
       "id": "load_652_z_phase_projection",
       "ports": {
-        "bus": 652,
-        "enable": 0
+        "bus": 652
       },
       "params": {
         "N": 3
@@ -1876,8 +1862,7 @@
       "class": "LoadZ",
       "id": "load_670_pq_to_rl_projection",
       "ports": {
-        "bus": 670,
-        "enable": 0
+        "bus": 670
       },
       "params": {
         "N": 3
@@ -1924,11 +1909,26 @@
       }
     },
     {
+      "class": "Switch",
+      "id": "fault_671_switch",
+      "ports": {
+        "bus1": 671,
+        "bus2": 6711,
+        "open": 0
+      },
+      "params": {
+        "N": 3
+      },
+      "mon": [
+        "open",
+        "i12"
+      ]
+    },
+    {
       "class": "LoadZ",
       "id": "fault_671",
       "ports": {
-        "bus": 671,
-        "enable": 1
+        "bus": 6711
       },
       "params": {
         "N": 3
@@ -1954,19 +1954,19 @@
           ],
           "E": [
             [
-              0.00026525823848649226,
+              0.0,
               0.0,
               0.0
             ],
             [
               0.0,
-              0.00026525823848649226,
+              0.0,
               0.0
             ],
             [
               0.0,
               0.0,
-              0.00026525823848649226
+              0.0
             ]
           ],
           "poles": [],

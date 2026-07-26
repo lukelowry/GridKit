@@ -106,32 +106,32 @@ None.
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{w}_q$ | $\mathrm{s}[u]$ | Real memory states | $\mathbf{w}_q \in \mathbb{R}^K$, $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
-$\mathbf{v}_q$ | $\mathrm{s}[u]$ | Imaginary memory states | $\mathbf{v}_q \in \mathbb{R}^K$, $q \in \mathcal{Q}_\mathrm{c}$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{w}_q$ | $\mathrm{s}[u]$ | `w` | Real memory states | $\mathbf{w}_q \in \mathbb{R}^K$, $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
+$\mathbf{v}_q$ | $\mathrm{s}[u]$ | `v` | Imaginary memory states | $\mathbf{v}_q \in \mathbb{R}^K$, $q \in \mathcal{Q}_\mathrm{c}$
 
 The documented real realization has order $KQ$.
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{y}$ | $[y]$ | Output vector | $\mathbf{y} \in \mathbb{R}^N$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{y}$ | $[y]$ | — | Output vector | $\mathbf{y} \in \mathbb{R}^N$
 
 ### External Variables
 
 #### Differential
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{u}$ | $[u]$ | Input vector | Differential-input configuration, $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{u}$ | $[u]$ | — | Input vector | Differential-input configuration, $\mathbf{u} \in \mathbb{R}^K$
 
 #### Algebraic
 
-Symbol | Units | Description | Note
------- | ----- | ----------- | ----
-$\mathbf{u}$ | $[u]$ | Input vector | Algebraic-input configuration, $\mathbf{u} \in \mathbb{R}^K$
+Symbol | Units | JSON | Description | Note
+------ | ----- | ---- | ----------- | ----
+$\mathbf{u}$ | $[u]$ | — | Input vector | Algebraic-input configuration, $\mathbf{u} \in \mathbb{R}^K$
 
 ## Model Ports
 
@@ -184,23 +184,7 @@ None.
 
 ## Initialization
 
-### Input Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{u}$ | — | Consistent solve | Owned by the connected model
-
-### Internal Initialization
-
-Symbol | JSON | Source | Note
------- | ---- | ------ | ----
-$\mathbf{w}_q$ | `w` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
-$\mathbf{v}_q$ | `v` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{c}$
-$\mathbf{y}$ | — | Consistent solve | Output vector
-
-### Output Initialization
-
-None.
+None beyond the EMT initialization contract.
 
 ## Monitors
 

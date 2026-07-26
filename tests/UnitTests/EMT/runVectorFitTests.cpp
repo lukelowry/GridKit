@@ -242,11 +242,11 @@ namespace
     success *= model->size() == 3;
     success *= initializesLocalStateToZero(*model);
     success *= !model->tag()[0] && !model->tag()[1] && !model->tag()[2];
+    success *= system->getSignal(4)->read() == 0.0;
     success *= system->getSignal(5)->read() == 0.0;
     success *= system->getSignal(6)->read() == 0.0;
-    success *= system->getSignal(7)->read() == 0.0;
-    success *= system->getSignal(5)->derivativeLinked();
-    success *= system->getSignal(5)->readDerivative() == 0.0;
+    success *= system->getSignal(4)->derivativeLinked();
+    success *= system->getSignal(4)->readDerivative() == 0.0;
 
     return success.report(__func__);
   }

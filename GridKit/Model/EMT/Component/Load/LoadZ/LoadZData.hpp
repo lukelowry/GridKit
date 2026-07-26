@@ -28,7 +28,6 @@ namespace GridKit
 
     enum class LoadZSignalInputs : size_t
     {
-      enable,
       SIZE
     };
 

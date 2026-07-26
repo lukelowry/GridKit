@@ -19,7 +19,10 @@ namespace GridKit
   {
     template <typename scalar_type, typename index_type>
     class SignalNode;
-  }
+
+    template <typename scalar_type, typename index_type>
+    class ConstantSignalSource;
+  } // namespace PhasorDynamics
 
   namespace EMT
   {
@@ -58,6 +61,7 @@ namespace GridKit
       using BusT       = Bus<ScalarT, IdxT>;
       using SignalT    = PhasorDynamics::SignalNode<ScalarT, IdxT>;
       using ComponentT = PhasorDynamics::Component<ScalarT, IdxT>;
+      using SourceT    = PhasorDynamics::ConstantSignalSource<ScalarT, IdxT>;
       using MonitorT   = Model::VariableMonitorController<ScalarT>;
 
       SystemModel();
@@ -88,6 +92,9 @@ namespace GridKit
       void addComponent(ComponentT* component);
       void addComponent(ComponentT* component, const std::string& component_id);
 
+      /// Retarget the constant source that owns `signal_id`
+      void setSignalSourceValue(IdxT signal_id, RealT value);
+
       BusT*       getBus(IdxT bus_id);
       SignalT*    getSignal(IdxT signal_id);
       ComponentT* getComponent(IdxT gridkit_component_id);
@@ -105,6 +112,7 @@ namespace GridKit
       std::map<IdxT, IdxT>        gridkit_bus_indices_;
       std::map<IdxT, IdxT>        gridkit_signal_indices_;
       std::map<std::string, IdxT> gridkit_component_indices_;
+      std::map<IdxT, SourceT*>    constant_source_owners_;
 
       bool                      owns_components_{false};
       IdxT                      jacobian_entry_count_{0};

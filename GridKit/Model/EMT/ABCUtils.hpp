@@ -20,6 +20,21 @@ namespace GridKit
                + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
       }
 
+      template <typename T>
+      ABCMatrix<T> inverse(const ABCMatrix<T>& A)
+      {
+        const T det = determinant(A);
+        return {{{(A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det,
+                  (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det,
+                  (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det},
+                 {(A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det,
+                  (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det,
+                  (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det},
+                 {(A[1][0] * A[2][1] - A[1][1] * A[2][0]) / det,
+                  (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det,
+                  (A[0][0] * A[1][1] - A[0][1] * A[1][0]) / det}}};
+      }
+
       template <typename RealT>
       bool finite(const ABCVector<RealT>& x)
       {
@@ -91,6 +106,22 @@ namespace GridKit
           }
         }
         return scale;
+      }
+
+      template <typename RealT>
+      bool zero(const ABCMatrix<RealT>& A)
+      {
+        for (const auto& row : A)
+        {
+          for (const auto value : row)
+          {
+            if (value != RealT{0.0})
+            {
+              return false;
+            }
+          }
+        }
+        return true;
       }
 
       template <typename RealT>

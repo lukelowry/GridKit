@@ -10,8 +10,6 @@ if(GRIDKIT_ENABLE_ENZYME)
       PUBLIC
       GridKit::phasor_dynamics_core
       PUBLIC
-      GridKit::phasor_dynamics_signal
-      PUBLIC
       GridKit::emt_bus
       PRIVATE
       ClangEnzymeFlags
@@ -43,7 +41,5 @@ gridkit_add_library(
   LINK_LIBRARIES
     PUBLIC
     GridKit::phasor_dynamics_core
-    PUBLIC
-    GridKit::phasor_dynamics_signal_dependency_tracking
     PUBLIC
     GridKit::emt_bus_dependency_tracking)

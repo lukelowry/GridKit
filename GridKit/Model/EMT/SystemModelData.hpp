@@ -10,6 +10,7 @@
 #include <GridKit/Model/EMT/Component/Line/LineLumped/LineLumpedData.hpp>
 #include <GridKit/Model/EMT/Component/Load/LoadZ/LoadZData.hpp>
 #include <GridKit/Model/EMT/Component/Source/VoltageSource/VoltageSourceData.hpp>
+#include <GridKit/Model/EMT/Component/Switch/SwitchData.hpp>
 #include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitData.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalNode/SignalNodeData.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalSource/ConstantSignalSourceData.hpp>
@@ -27,6 +28,7 @@ namespace GridKit::EMT
     using LineLumpedDataT    = LineLumpedData<RealT, IdxT>;
     using LoadZDataT         = LoadZData<RealT, IdxT>;
     using VoltageSourceDataT = VoltageSourceData<RealT, IdxT>;
+    using SwitchDataT        = SwitchData<RealT, IdxT>;
     using VectorFitDataT     = VectorFitData<RealT, IdxT>;
     using SignalDataT        = PhasorDynamics::SignalNodeData<RealT, IdxT>;
     using ConstantSourceDataT =
@@ -43,6 +45,7 @@ namespace GridKit::EMT
     std::vector<LineLumpedDataT>     line_lumped;
     std::vector<LoadZDataT>          loadz;
     std::vector<VoltageSourceDataT>  voltage_source;
+    std::vector<SwitchDataT>         switches;
     std::vector<VectorFitDataT>      vector_fit;
     std::vector<ConstantSourceDataT> constant_source;
     std::vector<SignalDataT>         signal;

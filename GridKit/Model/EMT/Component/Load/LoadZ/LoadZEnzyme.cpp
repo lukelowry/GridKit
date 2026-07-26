@@ -33,14 +33,7 @@ namespace GridKit
       Enzyme::Sparse::DfDwb<ModelT, Function::InternalResidual>::eval(
           this, 3, 3, residual_indices_.data(), bus_->getVariableIndices().data(), y_.getData(), yp_.getData(), wb_.data(), J_rows_buffer_, J_cols_buffer_, J_vals_buffer_, nnz_);
 
-      ScalarT enable{1.0};
-      if (signals_.template isAttached<LoadZExternalVariables::enable>())
-      {
-        enable = signals_.template readExternalVariable<LoadZExternalVariables::enable>();
-      }
-      const RealT kcl_scale = bus_->differentiatedKCL()
-                                  ? alpha_ * static_cast<RealT>(enable)
-                                  : static_cast<RealT>(enable);
+      const RealT kcl_scale = bus_->differentiatedKCL() ? alpha_ : RealT{1.0};
 
       J_rows_buffer_[nnz_] = bus_->getResidualIndex(0);
       J_cols_buffer_[nnz_] = variable_indices_[0];
