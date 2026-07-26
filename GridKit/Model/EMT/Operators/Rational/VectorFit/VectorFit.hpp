@@ -3,6 +3,7 @@
 #include <complex>
 #include <vector>
 
+#include <GridKit/Model/EMT/InitialStateLayout.hpp>
 #include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitData.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
@@ -29,7 +30,8 @@ namespace GridKit
 
     template <typename scalar_type, typename index_type>
     class VectorFit final
-      : public PhasorDynamics::Component<scalar_type, index_type>
+      : public PhasorDynamics::Component<scalar_type, index_type>,
+        public InitialStateLayout
     {
       using ComponentT = PhasorDynamics::Component<scalar_type, index_type>;
 
@@ -60,7 +62,7 @@ namespace GridKit
                                                           VectorFitInternalVariables,
                                                           VectorFitExternalVariables>;
 
-      VectorFit(const ModelDataT& data, RealT omega0);
+      explicit VectorFit(const ModelDataT& data);
       ~VectorFit();
 
       int setGridKitComponentID(IdxT) override final;
@@ -71,6 +73,9 @@ namespace GridKit
       int setAbsoluteTolerance(RealT) override final;
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
+
+      void appendInitialStateVariables(
+          std::vector<InitialStateVariable>&) const override;
 
       SignalsT& getSignals()
       {
@@ -117,9 +122,8 @@ namespace GridKit
       bool has_poles_{false};
       bool has_residues_{false};
 
-      RealT omega0_{0.0};
-      IdxT  pole_count_{0};
-      IdxT  output_offset_{0};
+      IdxT pole_count_{0};
+      IdxT output_offset_{0};
 
       SignalsT signals_{};
 

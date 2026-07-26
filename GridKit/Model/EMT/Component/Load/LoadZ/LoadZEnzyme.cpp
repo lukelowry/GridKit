@@ -32,18 +32,21 @@ namespace GridKit
       {
         enable = signals_.template readExternalVariable<LoadZExternalVariables::enable>();
       }
+      const RealT kcl_scale = bus_->differentiatedKCL()
+                                  ? alpha_ * static_cast<RealT>(enable)
+                                  : static_cast<RealT>(enable);
 
       J_rows_buffer_[nnz_] = bus_->getResidualIndex(0);
       J_cols_buffer_[nnz_] = variable_indices_[0];
-      J_vals_buffer_[nnz_] = static_cast<RealT>(enable);
+      J_vals_buffer_[nnz_] = kcl_scale;
       ++nnz_;
       J_rows_buffer_[nnz_] = bus_->getResidualIndex(1);
       J_cols_buffer_[nnz_] = variable_indices_[1];
-      J_vals_buffer_[nnz_] = static_cast<RealT>(enable);
+      J_vals_buffer_[nnz_] = kcl_scale;
       ++nnz_;
       J_rows_buffer_[nnz_] = bus_->getResidualIndex(2);
       J_cols_buffer_[nnz_] = variable_indices_[2];
-      J_vals_buffer_[nnz_] = static_cast<RealT>(enable);
+      J_vals_buffer_[nnz_] = kcl_scale;
       ++nnz_;
 
       this->constructCoo();

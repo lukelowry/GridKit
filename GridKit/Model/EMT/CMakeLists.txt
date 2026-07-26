@@ -38,6 +38,8 @@ gridkit_add_library(
   SOURCES ${_system_model_source} SystemModelData.cpp
   HEADERS SystemModel.hpp
           SystemModelData.hpp
+          BusVoltageContribution.hpp
+          InitialStateLayout.hpp
           ComponentLibrary.hpp
           ComponentData.hpp
   LINK_LIBRARIES

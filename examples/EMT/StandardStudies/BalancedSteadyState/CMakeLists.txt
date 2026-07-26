@@ -1,3 +1,4 @@
 gridkit_example_add_file(BalancedSteadyState.case.json)
+gridkit_example_add_file(BalancedSteadyState.initial.json)
 gridkit_example_add_file(BalancedSteadyState.solver.json)
 gridkit_example_add_file(BalancedSteadyState.png)

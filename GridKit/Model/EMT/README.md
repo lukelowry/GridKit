@@ -25,35 +25,61 @@ and reusable operators in instantaneous phase coordinates.
   rows. Ports and monitors may expose either without changing ownership.
 - Equation headings follow the assembled DAE row classification; connected
   models may add derivative terms to a residual that contains none locally.
+- Case data lists model parameters under `params` and each submodel instance
+  under `submodels` by its JSON name. A submodel block carries that submodel's
+  own parameters, so a rational submodel block is a
+  [VectorFit](Operators/Rational/VectorFit/README.md) parameter set.
 
 ## Initialization
 
-For sinusoidal steady-state initialization at angular frequency $\omega_0$,
-define $s_0 = \mathrm{j}\omega_0$. Bold uppercase $\mathbf{V}$ and $\mathbf{I}$
-denote physical RMS voltage and current phasors; hats denote RMS phasors
-of other quantities. In particular,
+RMS/phasor conversion, when used, is an external responsibility. EMT
+initialization receives only real-valued, instantaneous time-domain data.
 
 ```math
-\mathbf{v}(t)
-  = \sqrt{2}\,\mathrm{Re}
-    \left(\mathbf{V}e^{s_0t}\right),
-\qquad \mathbf{V} \in \mathbb{C}^N.
+\mathbf{F}
+\left(t_0,\mathbf{y}_\mathrm{d},\mathbf{y}_\mathrm{a},
+\dot{\mathbf{y}}_\mathrm{d};\mathbf{q}\right)=\mathbf{0},
 ```
 
-The assembled phase-domain network is first solved at $s=s_0$. Each dynamic
-submodel then initializes its internal states from its solved input phasor. At
-$t=0$,
+where $\mathbf{q}$ contains discrete inputs. The initial-state provider supplies
+the differential states $\mathbf{y}_\mathrm{d}$ and any required delay history.
+The consistent DAE solve preserves those states and determines the algebraic
+variables $\mathbf{y}_\mathrm{a}$ and differential-state derivatives
+$\dot{\mathbf{y}}_\mathrm{d}$.
 
-```math
-\begin{aligned}
-\mathbf{v}(0)
-  &=
-  \sqrt{2}\,\mathrm{Re}(\mathbf{V}) \\
-\left.\dfrac{\mathrm{d}\mathbf{v}}{\mathrm{d}t}\right|_{t=0}
-  &=
-  \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}).
-\end{aligned}
-```
+After a discrete event, all commands at the event time are applied atomically.
+The same consistent solve preserves the differential states across the event
+and recomputes the algebraic variables and differential-state derivatives. It
+fails if the new configuration has no finite consistent solution.
+
+### Initial-State File
+
+A JSON document paired with the case supplies the initial state.
+
+Key | Description
+--- | -----------
+`format_version`, `format_revision` | File format identifiers
+`case_name` | Matches the system model
+`time` | Initial time $t_0$ [sec]
+`buses` | Entries of `id` and `variables`
+`components` | Entries of `id`, `variables`, and `submodels`
+
+Each variable value matches the dimension listed for it under Model Variables,
+and submodel states nest under `submodels` by submodel instance name. Every
+differential variable in the assembled system is supplied exactly once;
+supplying an algebraic variable is an error.
+
+Each model documents its own variables in an Internal Initialization table.
+Models whose initialization data are not DAE variables, such as delay
+prehistory, state the requirement in prose instead. The `Source` column takes
+one of the following values.
+
+Source | Meaning
+------ | -------
+Initial state | Read from the initial-state file under the listed JSON name
+Consistent solve | Determined by the consistent DAE solve
+Connected bus | Supplied by the connected EMT bus
+Signal source | Supplied by the connected signal before the consistent solve
 
 ## Contents
 

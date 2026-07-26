@@ -4,7 +4,9 @@
 #include <vector>
 
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/BusVoltageContribution.hpp>
 #include <GridKit/Model/EMT/Component/Line/LineLumped/LineLumpedData.hpp>
+#include <GridKit/Model/EMT/InitialStateLayout.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
 
@@ -16,7 +18,10 @@ namespace GridKit
     class SystemModel;
 
     template <typename scalar_type, typename index_type>
-    class LineLumped final : public PhasorDynamics::Component<scalar_type, index_type>
+    class LineLumped final
+      : public PhasorDynamics::Component<scalar_type, index_type>,
+        public BusVoltageContributor<scalar_type, index_type>,
+        public InitialStateLayout
     {
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
       using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
@@ -44,7 +49,7 @@ namespace GridKit
       using ModelDataT = LineLumpedData<RealT, IdxT>;
       using MonitorT   = Model::VariableMonitor<LineLumped, LineLumpedData>;
 
-      LineLumped(BusT* bus1, BusT* bus2, const ModelDataT&, RealT omega0);
+      LineLumped(BusT* bus1, BusT* bus2, const ModelDataT&);
       ~LineLumped() override;
 
       int setGridKitComponentID(IdxT) override final;
@@ -55,6 +60,11 @@ namespace GridKit
       int setAbsoluteTolerance(RealT) override final;
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
+
+      void appendBusVoltageContributions(
+          std::vector<BusVoltageContribution<ScalarT, IdxT>>& contributions) const override;
+      void appendInitialStateVariables(
+          std::vector<InitialStateVariable>&) const override;
 
       const Model::VariableMonitorBase* getMonitor() const override;
 
@@ -81,7 +91,6 @@ namespace GridKit
 
       BusT* bus1_{nullptr};
       BusT* bus2_{nullptr};
-      RealT omega0_{0.0};
       RealT dx_{0.0};
 
       ABCMatrix<RealT> Rp_{};

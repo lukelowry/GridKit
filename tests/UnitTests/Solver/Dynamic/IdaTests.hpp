@@ -1,4 +1,5 @@
 #include <cmath>
+#include <stdexcept>
 
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
@@ -291,7 +292,7 @@ namespace GridKit
       VectorT fB_;
       VectorT gB_;
 
-      GridKit::LinearAlgebra::CsrMatrix<RealT, IdxT>* csr_jac_;
+      GridKit::LinearAlgebra::CsrMatrix<RealT, IdxT>* csr_jac_{nullptr};
 
       VectorT param_;
       VectorT param_up_;
@@ -368,6 +369,119 @@ namespace GridKit
 
     private:
       RealT t_{};
+    };
+
+    template <class ScalarT, typename IdxT>
+    class ConsistentStateEvaluator : public NullEvaluator<ScalarT, IdxT>
+    {
+    protected:
+      using NullEvaluator<ScalarT, IdxT>::allocated_;
+      using NullEvaluator<ScalarT, IdxT>::csr_jac_;
+      using NullEvaluator<ScalarT, IdxT>::f_;
+      using NullEvaluator<ScalarT, IdxT>::tag_;
+      using NullEvaluator<ScalarT, IdxT>::y_;
+      using NullEvaluator<ScalarT, IdxT>::yp_;
+
+    public:
+      using RealT = typename NullEvaluator<ScalarT, IdxT>::RealT;
+
+      ~ConsistentStateEvaluator() override
+      {
+        delete csr_jac_;
+      }
+
+      IdxT size() override
+      {
+        return 2;
+      }
+
+      int allocate() override
+      {
+        if (!allocated_)
+        {
+          NullEvaluator<ScalarT, IdxT>::allocate();
+          auto* rows    = new IdxT[3]{0, 1, 3};
+          auto* columns = new IdxT[3]{0, 0, 1};
+          auto* values  = new RealT[3]{0.0, -2.0, 1.0};
+          csr_jac_      = new GridKit::LinearAlgebra::CsrMatrix<RealT, IdxT>(
+              2, 2, 3, &rows, &columns, &values);
+        }
+        return 0;
+      }
+
+      int initialize() override
+      {
+        ++initialize_calls_;
+        return NullEvaluator<ScalarT, IdxT>::initialize();
+      }
+
+      int tagDifferentiable() override
+      {
+        tag_ = {true, false};
+        return 0;
+      }
+
+      int evaluateResidual() override
+      {
+        auto*       f  = f_.getData();
+        const auto* y  = y_.getData();
+        const auto* yp = yp_.getData();
+
+        f[0] = yp[0] - command_;
+        f[1] = y[1] - RealT{2.0} * y[0] - command_;
+        f_.setDataUpdated();
+        return 0;
+      }
+
+      bool hasJacobian() override
+      {
+        return true;
+      }
+
+      int evaluateJacobian() override
+      {
+        auto* values = csr_jac_->getValues();
+        values[0]    = alpha_;
+        values[1]    = RealT{-2.0};
+        values[2]    = RealT{1.0};
+        return 0;
+      }
+
+      void updateTime([[maybe_unused]] RealT t, RealT alpha) override
+      {
+        alpha_ = alpha;
+      }
+
+      void seed(RealT differential_state, RealT algebraic_guess)
+      {
+        if (!allocated_)
+        {
+          this->allocate();
+        }
+        auto* y  = y_.getData();
+        auto* yp = yp_.getData();
+        y[0]     = differential_state;
+        y[1]     = algebraic_guess;
+        yp[0]    = RealT{0.0};
+        yp[1]    = RealT{0.0};
+        y_.setDataUpdated();
+        yp_.setDataUpdated();
+      }
+
+      void setCommand(RealT command)
+      {
+        command_ = command;
+      }
+
+      int initializeCalls() const
+      {
+        return initialize_calls_;
+      }
+
+    private:
+      RealT command_{0.0};
+      RealT alpha_{0.0};
+      int   initialize_calls_{0};
     };
   } // namespace Model
 
@@ -500,6 +614,61 @@ namespace GridKit
         const auto suppressed_steps   = countSteps(true);
 
         success *= (suppressed_steps < unsuppressed_steps);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome consistentStartAndRestart()
+      {
+        TestStatus success = true;
+
+        Model::ConsistentStateEvaluator<ScalarT, IdxT> model;
+        model.seed(2.0, -100.0);
+        model.setCommand(1.0);
+
+        Ida<ScalarT, IdxT> ida(&model);
+        ida.setTolerance(1.0e-9, 1.0e-11);
+        ida.configureSimulationFromCurrentState();
+
+        bool rejected_nonforward_target{false};
+        try
+        {
+          ida.startSimulation(0.0, 0.0);
+        }
+        catch (const std::invalid_argument&)
+        {
+          rejected_nonforward_target = true;
+        }
+        success *= rejected_nonforward_target;
+        success *= (model.initializeCalls() == 0);
+
+        ida.startSimulation(0.0, 0.1);
+        success *= isEqual(model.y().getData()[0], 2.0, 1.0e-10);
+        success *= isEqual(model.y().getData()[1], 5.0, 1.0e-10);
+        success *= isEqual(model.yp().getData()[0], 1.0, 1.0e-10);
+
+        ida.runSimulation(0.1);
+        const auto state_at_event = model.y().getData()[0];
+
+        model.setCommand(-2.0);
+        bool rejected_mismatched_restart{false};
+        try
+        {
+          ida.restartSimulation(0.11, 0.2);
+        }
+        catch (const std::invalid_argument&)
+        {
+          rejected_mismatched_restart = true;
+        }
+        success *= rejected_mismatched_restart;
+
+        ida.restartSimulation(0.1, 0.2);
+        success *= isEqual(model.y().getData()[0], state_at_event, 1.0e-9);
+        success *= isEqual(model.y().getData()[1],
+                           2.0 * state_at_event - 2.0,
+                           1.0e-9);
+        success *= isEqual(model.yp().getData()[0], -2.0, 1.0e-9);
+        success *= (model.initializeCalls() == 0);
 
         return success.report(__func__);
       }

@@ -133,43 +133,20 @@ None.
 
 ### Input Initialization
 
-```math
-\begin{aligned}
-\widehat{\mathbf{u}}
-  &\leftarrow \text{RMS input phasor} \\
-\mathbf{u}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\widehat{\mathbf{u}}) \\
-\dfrac{\mathrm{d}\mathbf{u}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\widehat{\mathbf{u}}).
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{u}$ | — | Consistent solve | Owned by the connected model
 
 ### Internal Initialization
 
-The input-factor output phasor is
-
-```math
-\widehat{\mathbf{w}}
-  = \mathbf{G}^\mathrm{in}(s_0)\widehat{\mathbf{u}}.
-```
-
-The input factor initializes from $\widehat{\mathbf{u}}$. The modal delay
-bank initializes from $\widehat{\mathbf{w}}$ and provides
-$\widehat{\mathbf{z}}$; the output factor initializes from
-$\widehat{\mathbf{z}}$.
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `input`, `output` | Initial state | Rational-factor memory states
+Modal prehistory | `delays` | Initial state | See [Delay](../Delay/README.md)
 
 ### Output Initialization
 
-```math
-\begin{aligned}
-\widehat{\mathbf{y}}
-  &= \mathbf{G}^\mathrm{out}(s_0)\widehat{\mathbf{z}} \\
-\mathbf{y}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\widehat{\mathbf{y}}) \\
-\dfrac{\mathrm{d}\mathbf{y}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\widehat{\mathbf{y}}).
-\end{aligned}
-```
+Evaluated from the wiring equations after the consistent solve.
 
 ## Monitors
 

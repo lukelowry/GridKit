@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 
 #include <GridKit/Model/EMT/ABCUtils.hpp>
@@ -11,12 +12,8 @@ namespace GridKit
   namespace EMT
   {
     template <typename scalar_type, typename index_type>
-    Bus<scalar_type, index_type>::Bus(const ModelDataT& data, RealT omega0)
+    Bus<scalar_type, index_type>::Bus(const ModelDataT& data)
       : bus_id_(data.bus_id),
-        omega0_(omega0),
-        Va0_(data.Va0),
-        Vb0_(data.Vb0),
-        Vc0_(data.Vc0),
         monitor_(std::make_unique<MonitorT>("Bus_" + data.name,
                                             data.monitored_variables))
     {
@@ -31,6 +28,37 @@ namespace GridKit
     auto Bus<scalar_type, index_type>::busID() const -> IdxT
     {
       return bus_id_;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::setVoltageClass(BusVoltageClass voltage_class)
+    {
+      voltage_class_ = voltage_class;
+    }
+
+    template <typename scalar_type, typename index_type>
+    auto Bus<scalar_type, index_type>::voltageClass() const -> BusVoltageClass
+    {
+      return voltage_class_;
+    }
+
+    template <typename scalar_type, typename index_type>
+    bool Bus<scalar_type, index_type>::differentiatedKCL() const
+    {
+      return kcl_differentiation_required_ && !original_kcl_validation_;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::setKCLDifferentiationRequired(
+        bool required)
+    {
+      kcl_differentiation_required_ = required;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::setOriginalKCLValidation(bool active)
+    {
+      original_kcl_validation_ = active;
     }
 
     template <typename scalar_type, typename index_type>
@@ -88,6 +116,22 @@ namespace GridKit
     }
 
     template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::accumulateCurrent(const ScalarT& ia,
+                                                         const ScalarT& ib,
+                                                         const ScalarT& ic)
+    {
+      const ABCVector<ScalarT> current{ia, ib, ic};
+      auto*                    residual = f_.getData();
+      for (std::size_t phase = 0; phase < current.size(); ++phase)
+      {
+        residual[phase] += current[phase];
+        current_scale_[phase] +=
+            std::abs(Detail::scalarValue<RealT>(current[phase]));
+      }
+      f_.setDataUpdated();
+    }
+
+    template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::setGridKitComponentID(IdxT component_id)
     {
       gridkit_component_id_ = component_id;
@@ -118,14 +162,6 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::verify() const
     {
-      const bool finite_phasors = std::isfinite(Va0_.real()) && std::isfinite(Va0_.imag())
-                                  && std::isfinite(Vb0_.real()) && std::isfinite(Vb0_.imag())
-                                  && std::isfinite(Vc0_.real()) && std::isfinite(Vc0_.imag());
-      if (!(omega0_ > RealT{0.0}) || !std::isfinite(omega0_) || !finite_phasors)
-      {
-        Log::error() << "EMT::Bus: invalid angular frequency or initial phasor\n";
-        return 1;
-      }
       return 0;
     }
 
@@ -134,18 +170,31 @@ namespace GridKit
     {
       auto* y  = y_.getData();
       auto* yp = yp_.getData();
-      Detail::initializeSinusoid<ScalarT>(Va0_, Vb0_, Vc0_, omega0_, y, yp);
+      y[0]     = ScalarT{0.0};
+      y[1]     = ScalarT{0.0};
+      y[2]     = ScalarT{0.0};
+      yp[0]    = ScalarT{0.0};
+      yp[1]    = ScalarT{0.0};
+      yp[2]    = ScalarT{0.0};
       y_.setDataUpdated();
       yp_.setDataUpdated();
       return 0;
     }
 
     template <typename scalar_type, typename index_type>
+    void Bus<scalar_type, index_type>::appendInitialStateVariables(
+        std::vector<InitialStateVariable>& variables) const
+    {
+      variables.push_back({"v", std::nullopt, 0});
+    }
+
+    template <typename scalar_type, typename index_type>
     int Bus<scalar_type, index_type>::tagDifferentiable()
     {
-      tag_[0] = true;
-      tag_[1] = true;
-      tag_[2] = true;
+      const bool differential = voltage_class_ == BusVoltageClass::differential;
+      tag_[0]                 = differential;
+      tag_[1]                 = differential;
+      tag_[2]                 = differential;
       return 0;
     }
 
@@ -162,6 +211,7 @@ namespace GridKit
       Ia() = ScalarT{0.0};
       Ib() = ScalarT{0.0};
       Ic() = ScalarT{0.0};
+      current_scale_.fill(RealT{0.0});
       f_.setDataUpdated();
       return 0;
     }

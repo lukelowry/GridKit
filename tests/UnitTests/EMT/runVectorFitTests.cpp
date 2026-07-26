@@ -65,6 +65,28 @@ namespace
     }
   };
 
+  bool initializesLocalStateToZero(VectorFitT& model)
+  {
+    for (std::size_t index = 0; index < model.size(); ++index)
+    {
+      model.y().getData()[index]  = 1.0;
+      model.yp().getData()[index] = -1.0;
+    }
+    if (model.initialize() != 0)
+    {
+      return false;
+    }
+    for (std::size_t index = 0; index < model.size(); ++index)
+    {
+      if (model.y().getData()[index] != 0.0
+          || model.yp().getData()[index] != 0.0)
+      {
+        return false;
+      }
+    }
+    return true;
+  }
+
   EMT::VectorFitData<double, std::size_t> runtimePoleData()
   {
     EMT::VectorFitData<double, std::size_t> data;
@@ -196,10 +218,9 @@ namespace
 
   bool verificationFails(
       const EMT::VectorFitData<double, std::size_t>& data,
-      double                                         omega0,
       bool                                           link_derivatives = true)
   {
-    VectorFitT    model(data, omega0);
+    VectorFitT    model(data);
     SignalHarness signals;
     signals.connect(model, link_derivatives);
     return model.allocate() == 0 && model.verify() != 0;
@@ -219,11 +240,11 @@ namespace
     }
 
     success *= model->size() == 3;
-    success *= residualInfinityNorm(*model) < 1.0e-13;
+    success *= initializesLocalStateToZero(*model);
     success *= !model->tag()[0] && !model->tag()[1] && !model->tag()[2];
-    success *= isEqual(system->getSignal(5)->read(), 0.95, 1.0e-13);
-    success *= isEqual(system->getSignal(6)->read(), -0.475, 1.0e-13);
-    success *= isEqual(system->getSignal(7)->read(), 0.35, 1.0e-13);
+    success *= system->getSignal(5)->read() == 0.0;
+    success *= system->getSignal(6)->read() == 0.0;
+    success *= system->getSignal(7)->read() == 0.0;
     success *= system->getSignal(5)->derivativeLinked();
     success *= system->getSignal(5)->readDerivative() == 0.0;
 
@@ -232,24 +253,18 @@ namespace
 
   TestOutcome runtimePolesAndAnalyticJacobian()
   {
-    TestStatus success       = true;
-    const auto fixture_data  = loadFixtureData();
-    success                 *= isThreeBusMutuallyCoupled(fixture_data);
-    auto fixture_system      = makeFixtureSystem(fixture_data);
-    success                 *= fixture_system->getBus(650) != nullptr;
-
-    auto          data = runtimePoleData();
-    VectorFitT    model(data, fixture_data.omega0);
+    TestStatus    success = true;
+    auto          data    = runtimePoleData();
+    VectorFitT    model(data);
     SignalHarness signals;
     signals.connect(model);
 
     success *= model.allocate() == 0;
     success *= model.verify() == 0;
     success *= model.tagDifferentiable() == 0;
-    success *= model.initialize() == 0;
+    success *= initializesLocalStateToZero(model);
     model.updateTime(0.0, 7.0);
     success *= model.evaluateResidual() == 0;
-    success *= residualInfinityNorm(model) < 1.0e-10;
     success *= model.size() == 12;
     for (std::size_t state = 0; state < 9; ++state)
     {
@@ -258,6 +273,22 @@ namespace
     success *= !model.tag()[9] && !model.tag()[10] && !model.tag()[11];
     success *= signals.output_a.linked();
     success *= signals.output_a.derivativeLinked();
+
+    std::vector<EMT::InitialStateVariable> initial_state_layout;
+    model.appendInitialStateVariables(initial_state_layout);
+    success *= initial_state_layout.size() == 3;
+    if (initial_state_layout.size() == 3)
+    {
+      success *= initial_state_layout[0].name == "w";
+      success *= initial_state_layout[0].index == 0;
+      success *= initial_state_layout[0].local_offset == 0;
+      success *= initial_state_layout[1].name == "w";
+      success *= initial_state_layout[1].index == 1;
+      success *= initial_state_layout[1].local_offset == 3;
+      success *= initial_state_layout[2].name == "v";
+      success *= initial_state_layout[2].index == 1;
+      success *= initial_state_layout[2].local_offset == 6;
+    }
 
     success *= jacobianMatchesFiniteDifference(model, signals, 7.0);
     success *= jacobianMatchesFiniteDifference(model, signals, 29.0);
@@ -270,15 +301,13 @@ namespace
     TestStatus success       = true;
     const auto fixture_data  = loadFixtureData();
     success                 *= isThreeBusMutuallyCoupled(fixture_data);
-    auto fixture_system      = makeFixtureSystem(fixture_data);
-    success                 *= fixture_system->getBus(670) != nullptr;
 
     auto bad_pole_conjugate = runtimePoleData();
     auto poles              = std::get<std::vector<std::complex<double>>>(
         bad_pole_conjugate.parameters.at(EMT::VectorFitParameters::poles));
     poles[2]                                                        = {-21.0, -30.0};
     bad_pole_conjugate.parameters[EMT::VectorFitParameters::poles]  = poles;
-    success                                                        *= verificationFails(bad_pole_conjugate, fixture_data.omega0);
+    success                                                        *= verificationFails(bad_pole_conjugate);
 
     auto bad_count = runtimePoleData();
     auto residues  = std::get<
@@ -286,7 +315,7 @@ namespace
         bad_count.parameters.at(EMT::VectorFitParameters::residues));
     residues.pop_back();
     bad_count.parameters[EMT::VectorFitParameters::residues]  = residues;
-    success                                                  *= verificationFails(bad_count, fixture_data.omega0);
+    success                                                  *= verificationFails(bad_count);
 
     auto lone_complex = runtimePoleData();
     poles             = std::get<std::vector<std::complex<double>>>(
@@ -298,7 +327,7 @@ namespace
     poles[0]                                                     = {-20.0, 30.0};
     lone_complex.parameters[EMT::VectorFitParameters::poles]     = poles;
     lone_complex.parameters[EMT::VectorFitParameters::residues]  = residues;
-    success                                                     *= verificationFails(lone_complex, fixture_data.omega0);
+    success                                                     *= verificationFails(lone_complex);
 
     auto bad_residue_conjugate = runtimePoleData();
     residues                   = std::get<std::vector<EMT::ABCMatrix<std::complex<double>>>>(
@@ -306,8 +335,7 @@ namespace
             EMT::VectorFitParameters::residues));
     residues[2][0][0]                                                     = {0.5, -0.1};
     bad_residue_conjugate.parameters[EMT::VectorFitParameters::residues]  = residues;
-    success                                                              *= verificationFails(bad_residue_conjugate,
-                                 fixture_data.omega0);
+    success                                                              *= verificationFails(bad_residue_conjugate);
 
     auto complex_residue_on_real_pole = runtimePoleData();
     poles                             = std::get<std::vector<std::complex<double>>>(
@@ -321,32 +349,26 @@ namespace
     residues[0][0][0]                                                            = {2.0, 0.25};
     complex_residue_on_real_pole.parameters[EMT::VectorFitParameters::poles]     = poles;
     complex_residue_on_real_pole.parameters[EMT::VectorFitParameters::residues]  = residues;
-    success                                                                     *= verificationFails(complex_residue_on_real_pole,
-                                 fixture_data.omega0);
+    success                                                                     *= verificationFails(complex_residue_on_real_pole);
 
-    success *= verificationFails(runtimePoleData(),
-                                 fixture_data.omega0,
-                                 false);
+    success *= verificationFails(runtimePoleData(), false);
 
     auto q_zero_with_E = fixture_data.vector_fit[0];
     auto E             = std::get<EMT::ABCMatrix<double>>(
         q_zero_with_E.parameters.at(EMT::VectorFitParameters::E));
     E[0][0]                                                = 0.1;
     q_zero_with_E.parameters[EMT::VectorFitParameters::E]  = E;
-    success                                               *= verificationFails(q_zero_with_E,
-                                 fixture_data.omega0,
-                                 false);
+    success                                               *= verificationFails(q_zero_with_E, false);
 
     auto          q_zero_without_E = fixture_data.vector_fit[0];
-    VectorFitT    algebraic(q_zero_without_E, fixture_data.omega0);
+    VectorFitT    algebraic(q_zero_without_E);
     SignalHarness derivative_free_signals;
     derivative_free_signals.connect(algebraic, false);
     success *= algebraic.allocate() == 0;
     success *= algebraic.verify() == 0;
-    success *= algebraic.initialize() == 0;
+    success *= initializesLocalStateToZero(algebraic);
     algebraic.updateTime(0.0, 13.0);
     success *= algebraic.evaluateResidual() == 0;
-    success *= residualInfinityNorm(algebraic) < 1.0e-13;
     success *= !derivative_free_signals.input_a.derivativeLinked();
 
     return success.report(__func__);

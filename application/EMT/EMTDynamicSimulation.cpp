@@ -25,34 +25,68 @@ int main(int argc, const char* argv[])
 
     GridKit::EMT::SystemModel<ScalarT, IdxT> system(study.model_data);
     system.allocate();
+    system.initialize();
+    GridKit::EMT::applyInitialState(system, study.initial_state);
 
     AnalysisManager::Sundials::Ida<ScalarT, IdxT> ida(&system);
     ida.setTolerance(study.rel_tol, study.abs_tol);
     ida.setFixedStep(study.dt_fixed);
     ida.setMaxSteps(study.max_steps);
     ida.setSuppressAlgebraicErrors(study.suppress_algebraic_errors);
-    if (ida.configureSimulation() != 0)
+    if (ida.configureSimulationFromCurrentState() != 0)
     {
       return 1;
     }
 
     const auto start = std::clock();
-    if (ida.initializeSimulation(0.0, false) != 0)
+
+    std::size_t event_index{0};
+    while (event_index < study.events.size()
+           && study.events[event_index].time == study.initial_time)
+    {
+      const auto& event = study.events[event_index];
+      system.getSignal(event.signal_id)->init(event.value);
+      ++event_index;
+    }
+
+    const double first_target = event_index < study.events.size()
+                                    ? study.events[event_index].time
+                                    : study.tmax;
+    if (system.validateInitialState() != 0)
+    {
+      return 1;
+    }
+    if (ida.startSimulation(study.initial_time, first_target) != 0)
     {
       return 1;
     }
 
     long int internal_steps{0};
-    for (const auto& event : study.events)
+    while (event_index < study.events.size())
     {
-      if (ida.runSimulation(event.time, study.dt_monitor) != 0)
+      const double event_time = study.events[event_index].time;
+      if (ida.runSimulation(event_time, study.dt_monitor) != 0)
       {
         return 1;
       }
       internal_steps += ida.getStats().num_steps_;
 
-      system.getSignal(event.signal_id)->init(event.value);
-      if (ida.initializeSimulation(event.time) != 0)
+      do
+      {
+        const auto& event = study.events[event_index];
+        system.getSignal(event.signal_id)->init(event.value);
+        ++event_index;
+      } while (event_index < study.events.size()
+               && study.events[event_index].time == event_time);
+
+      const double next_target = event_index < study.events.size()
+                                     ? study.events[event_index].time
+                                     : study.tmax;
+      if (system.validateInitialState() != 0)
+      {
+        return 1;
+      }
+      if (ida.restartSimulation(event_time, next_target) != 0)
       {
         return 1;
       }

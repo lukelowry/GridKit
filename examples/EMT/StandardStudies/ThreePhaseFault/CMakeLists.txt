@@ -1,3 +1,4 @@
 gridkit_example_add_file(ThreePhaseFault.case.json)
+gridkit_example_add_file(ThreePhaseFault.initial.json)
 gridkit_example_add_file(ThreePhaseFault.solver.json)
 gridkit_example_add_file(ThreePhaseFault.png)

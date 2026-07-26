@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 
 #include <GridKit/Model/EMT/ABCUtils.hpp>
+#include <GridKit/Model/EMT/BusVoltageContribution.hpp>
 #include <GridKit/Model/EMT/ComponentLibrary.hpp>
 #include <GridKit/Model/EMT/SystemModel.hpp>
 #include <GridKit/Model/EMT/SystemModelData.hpp>
@@ -26,7 +29,7 @@ namespace GridKit::EMT
   template <typename scalar_type, typename index_type>
   SystemModel<scalar_type, index_type>::SystemModel(
       const SystemModelData<RealT, IdxT>& data)
-    : omega0_(data.omega0), monitor_(std::make_unique<MonitorT>(time_))
+    : monitor_(std::make_unique<MonitorT>(time_))
   {
     time_            = RealT{0.0};
     alpha_           = RealT{0.0};
@@ -34,7 +37,7 @@ namespace GridKit::EMT
 
     for (const auto& bus_data : data.bus)
     {
-      addBus(new BusT(bus_data, omega0_));
+      addBus(new BusT(bus_data));
     }
 
     for (const auto& signal_data : data.signal)
@@ -68,14 +71,15 @@ namespace GridKit::EMT
                 ConstantSignalSourceInternalVariables::SIMAG>(
                 getSignal(signal_id));
       }
-      addComponent(source);
+      addComponent(source, source_data.disambiguation_string);
     }
 
     for (const auto& source_data : data.voltage_source)
     {
       const auto bus_id = source_data.buses.at(VoltageSourceBuses::bus);
       addComponent(new VoltageSource<ScalarT, IdxT>(getBus(bus_id),
-                                                    source_data));
+                                                    source_data),
+                   source_data.disambiguation_string);
     }
 
     for (const auto& line_data : data.line_lumped)
@@ -84,28 +88,26 @@ namespace GridKit::EMT
       const auto bus2_id = line_data.buses.at(LineLumpedBuses::bus2);
       addComponent(new LineLumped<ScalarT, IdxT>(getBus(bus1_id),
                                                  getBus(bus2_id),
-                                                 line_data,
-                                                 omega0_));
+                                                 line_data),
+                   line_data.disambiguation_string);
     }
 
     for (const auto& load_data : data.loadz)
     {
       const auto bus_id    = load_data.buses.at(LoadZBuses::bus);
       auto*      load      = new LoadZ<ScalarT, IdxT>(getBus(bus_id),
-                                            load_data,
-                                            omega0_);
+                                            load_data);
       const auto signal_id = load_data.signal_inputs.at(
           LoadZSignalInputs::enable);
       load->getSignals()
           .template attachSignalNode<LoadZExternalVariables::enable>(
               getSignal(signal_id));
-      addComponent(load);
+      addComponent(load, load_data.disambiguation_string);
     }
 
     for (const auto& vector_fit_data : data.vector_fit)
     {
-      auto* vector_fit = new VectorFit<ScalarT, IdxT>(vector_fit_data,
-                                                      omega0_);
+      auto* vector_fit = new VectorFit<ScalarT, IdxT>(vector_fit_data);
       vector_fit->getSignals()
           .template attachSignalNode<VectorFitExternalVariables::input_a>(
               getSignal(vector_fit_data.signal_inputs.at(
@@ -130,7 +132,7 @@ namespace GridKit::EMT
           .template assignSignalNode<VectorFitInternalVariables::out_c>(
               getSignal(vector_fit_data.signal_outputs.at(
                   VectorFitSignalOutputs::out_c)));
-      addComponent(vector_fit);
+      addComponent(vector_fit, vector_fit_data.disambiguation_string);
     }
 
     for (const auto& sink : data.monitor_sink)
@@ -238,7 +240,7 @@ namespace GridKit::EMT
       offset += component->size();
     }
 
-    if (offset != size_ || verify() != 0)
+    if (offset != size_ || classifyBusVoltages() != 0 || verify() != 0)
     {
       throw std::runtime_error("EMT SystemModel verification failed");
     }
@@ -248,7 +250,6 @@ namespace GridKit::EMT
 
     if (hasJacobian())
     {
-      initialize();
       evaluateResidual();
       evaluateJacobian();
     }
@@ -270,50 +271,98 @@ namespace GridKit::EMT
       errors += component->verify();
     }
 
-    std::map<const BusT*, ABCMatrix<RealT>> aggregate_bus_capacitance;
+    return errors;
+  }
+
+  template <typename scalar_type, typename index_type>
+  int SystemModel<scalar_type, index_type>::classifyBusVoltages()
+  {
+    std::map<IdxT, ABCMatrix<RealT>> derivative_gram;
+    std::map<IdxT, ABCMatrix<RealT>> algebraic_gram;
+    std::map<IdxT, std::size_t>      connection_count;
     for (const auto* bus : buses_)
     {
-      aggregate_bus_capacitance.emplace(bus, ABCMatrix<RealT>{});
+      derivative_gram.emplace(bus->busID(), ABCMatrix<RealT>{});
+      algebraic_gram.emplace(bus->busID(), ABCMatrix<RealT>{});
+      connection_count.emplace(bus->busID(), 0);
     }
+
+    std::vector<BusVoltageContribution<ScalarT, IdxT>> contributions;
     for (const auto* component : components_)
     {
-      const auto* line =
-          dynamic_cast<const LineLumped<ScalarT, IdxT>*>(component);
-      if (line == nullptr)
+      const auto* contributor =
+          dynamic_cast<const BusVoltageContributor<ScalarT, IdxT>*>(component);
+      if (contributor != nullptr)
       {
-        continue;
-      }
-
-      const auto bus1 = aggregate_bus_capacitance.find(line->bus1_);
-      const auto bus2 = aggregate_bus_capacitance.find(line->bus2_);
-      if (bus1 == aggregate_bus_capacitance.end()
-          || bus2 == aggregate_bus_capacitance.end())
-      {
-        Log::error()
-            << "EMT::SystemModel: LineLumped references a bus outside the system\n";
-        ++errors;
-        continue;
-      }
-
-      for (std::size_t row = 0; row < 3; ++row)
-      {
-        for (std::size_t column = 0; column < 3; ++column)
-        {
-          const auto terminal_capacitance =
-              RealT{0.5} * line->C_[row][column];
-          bus1->second[row][column] += terminal_capacitance;
-          bus2->second[row][column] += terminal_capacitance;
-        }
+        contributor->appendBusVoltageContributions(contributions);
       }
     }
-    for (const auto& [bus, capacitance] : aggregate_bus_capacitance)
+
+    for (const auto& contribution : contributions)
     {
-      if (!Detail::positiveDefinite(capacitance))
+      const auto derivative_entry = derivative_gram.find(contribution.bus_id);
+      const auto algebraic_entry  = algebraic_gram.find(contribution.bus_id);
+      if (derivative_entry == derivative_gram.end()
+          || algebraic_entry == algebraic_gram.end())
       {
-        Log::error()
-            << "EMT::SystemModel: bus " << bus->busID()
-            << " requires full-rank aggregate incident capacitance because "
-               "its ABC voltages are differential variables\n";
+        Log::error() << "EMT::SystemModel: voltage contribution references "
+                        "unknown bus "
+                     << contribution.bus_id << '\n';
+        return 1;
+      }
+
+      if (!Detail::accumulateNormalizedRowGram(
+              derivative_entry->second,
+              contribution.derivative_block)
+          || !Detail::accumulateNormalizedRowGram(
+              algebraic_entry->second,
+              contribution.algebraic_block))
+      {
+        Log::error() << "EMT::SystemModel: equation contribution for bus "
+                     << contribution.bus_id << " must be finite\n";
+        return 1;
+      }
+      ++connection_count.at(contribution.bus_id);
+    }
+
+    int errors = 0;
+    for (auto* bus : buses_)
+    {
+      const auto rank = Detail::matrixRank(derivative_gram.at(bus->busID()));
+      if (rank == 0)
+      {
+        const auto algebraic_rank = Detail::matrixRank(
+            algebraic_gram.at(bus->busID()));
+        if (algebraic_rank == 0
+            && connection_count.at(bus->busID()) == 0)
+        {
+          Log::error() << "EMT::SystemModel: bus " << bus->busID()
+                       << " has no connected current equation\n";
+          ++errors;
+        }
+        else if (algebraic_rank == 0 || algebraic_rank == 3)
+        {
+          bus->setVoltageClass(BusVoltageClass::algebraic);
+          bus->setKCLDifferentiationRequired(algebraic_rank == 0);
+        }
+        else
+        {
+          Log::error() << "EMT::SystemModel: bus " << bus->busID()
+                       << " has unsupported algebraic bus-voltage rank "
+                       << algebraic_rank << '\n';
+          ++errors;
+        }
+      }
+      else if (rank == 3)
+      {
+        bus->setVoltageClass(BusVoltageClass::differential);
+        bus->setKCLDifferentiationRequired(false);
+      }
+      else
+      {
+        Log::error() << "EMT::SystemModel: bus " << bus->busID()
+                     << " has unsupported bus-voltage derivative rank "
+                     << rank << '\n';
         ++errors;
       }
     }
@@ -334,6 +383,57 @@ namespace GridKit::EMT
     y_.setDataUpdated();
     yp_.setDataUpdated();
     return 0;
+  }
+
+  template <typename scalar_type, typename index_type>
+  int SystemModel<scalar_type, index_type>::validateInitialState()
+  {
+    for (auto* bus : buses_)
+    {
+      bus->setOriginalKCLValidation(true);
+    }
+
+    if (evaluateResidual() != 0)
+    {
+      for (auto* bus : buses_)
+      {
+        bus->setOriginalKCLValidation(false);
+      }
+      return 1;
+    }
+
+    int errors{0};
+    for (auto* bus : buses_)
+    {
+      if (!bus->kcl_differentiation_required_)
+      {
+        continue;
+      }
+
+      const auto* kcl = bus->getResidual().getData();
+      for (std::size_t phase = 0; phase < 3; ++phase)
+      {
+        const RealT value     = Detail::scalarValue<RealT>(kcl[phase]);
+        const RealT tolerance = RealT{1024.0}
+                                * std::numeric_limits<RealT>::epsilon()
+                                * std::max(RealT{1.0},
+                                           bus->current_scale_[phase]);
+        if (!std::isfinite(value) || std::abs(value) > tolerance)
+        {
+          Log::error() << "EMT::SystemModel: initial state violates KCL at "
+                          "algebraic bus "
+                       << bus->busID() << '\n';
+          ++errors;
+          break;
+        }
+      }
+    }
+
+    for (auto* bus : buses_)
+    {
+      bus->setOriginalKCLValidation(false);
+    }
+    return errors;
   }
 
   template <typename scalar_type, typename index_type>
@@ -619,6 +719,22 @@ namespace GridKit::EMT
   }
 
   template <typename scalar_type, typename index_type>
+  void SystemModel<scalar_type, index_type>::addComponent(
+      ComponentT*        component,
+      const std::string& component_id)
+  {
+    if (component_id.empty()
+        || gridkit_component_indices_.contains(component_id))
+    {
+      throw std::invalid_argument("Empty or duplicate EMT component ID");
+    }
+
+    addComponent(component);
+    gridkit_component_indices_[component_id] =
+        component->getGridKitComponentID();
+  }
+
+  template <typename scalar_type, typename index_type>
   typename SystemModel<scalar_type, index_type>::BusT*
   SystemModel<scalar_type, index_type>::getBus(IdxT bus_id)
   {
@@ -642,5 +758,13 @@ namespace GridKit::EMT
       IdxT gridkit_component_id)
   {
     return components_.at(gridkit_component_id);
+  }
+
+  template <typename scalar_type, typename index_type>
+  typename SystemModel<scalar_type, index_type>::ComponentT*
+  SystemModel<scalar_type, index_type>::getComponent(
+      const std::string& component_id)
+  {
+    return getComponent(gridkit_component_indices_.at(component_id));
   }
 } // namespace GridKit::EMT

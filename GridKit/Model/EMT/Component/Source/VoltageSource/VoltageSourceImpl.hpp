@@ -118,30 +118,28 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int VoltageSource<scalar_type, index_type>::initialize()
     {
-      if (bus_ == nullptr)
-      {
-        return 1;
-      }
-
-      const auto va = Detail::phasor<ScalarT, RealT>(
-          bus_->Va(), bus_->Vap(), omega_);
-      const auto vb = Detail::phasor<ScalarT, RealT>(
-          bus_->Vb(), bus_->Vbp(), omega_);
-      const auto vc = Detail::phasor<ScalarT, RealT>(
-          bus_->Vc(), bus_->Vcp(), omega_);
-      const auto          ea = std::polar(E_[0], phi_[0]);
-      const auto          eb = std::polar(E_[1], phi_[1]);
-      const auto          ec = std::polar(E_[2], phi_[2]);
-      std::complex<RealT> ia;
-      std::complex<RealT> ib;
-      std::complex<RealT> ic;
-      Detail::solveImpedance(Rs_, Ls_, omega_, ea - va, eb - vb, ec - vc, ia, ib, ic);
-
-      Detail::initializeSinusoid<ScalarT>(ia, ib, ic, omega_, y_.getData(), yp_.getData());
-      Detail::initializeSinusoid<ScalarT>(ea, eb, ec, omega_, y_.getData() + 3, yp_.getData() + 3);
+      std::fill_n(y_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
+      std::fill_n(yp_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
       y_.setDataUpdated();
       yp_.setDataUpdated();
       return 0;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void VoltageSource<scalar_type, index_type>::appendInitialStateVariables(
+        std::vector<InitialStateVariable>& variables) const
+    {
+      variables.push_back({"i", std::nullopt, 0});
+    }
+
+    template <typename scalar_type, typename index_type>
+    void VoltageSource<scalar_type, index_type>::appendBusVoltageContributions(
+        std::vector<BusVoltageContribution<ScalarT, IdxT>>& contributions) const
+    {
+      if (bus_ != nullptr)
+      {
+        contributions.push_back({bus_->busID(), {}, {}});
+      }
     }
 
     template <typename scalar_type, typename index_type>
@@ -219,12 +217,9 @@ namespace GridKit
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
       evaluateInternalResidual(y, yp, wb_.data(), f);
-      evaluateBusResidual(y, h_.data());
+      evaluateBusResidual(bus_->differentiatedKCL() ? yp : y, h_.data());
 
-      bus_->Ia() += h_[0];
-      bus_->Ib() += h_[1];
-      bus_->Ic() += h_[2];
-      bus_->getResidual().setDataUpdated();
+      bus_->accumulateCurrent(h_[0], h_[1], h_[2]);
       f_.setDataUpdated();
       return 0;
     }

@@ -4,41 +4,25 @@
     "format_revision": 1,
     "case_name": "ThreeBusAdaptive",
     "case_description": "Fixed-ABC EMT three-bus excerpt of the IEEE 13-node feeder",
-    "case_comments": "Buses 650, 632, and 670 with full configuration-601 line matrices",
-    "omega0": 376.99111843077515
+    "case_comments": "Buses 650, 632, and 670 with full configuration-601 line matrices"
   },
   "buses": [
     {
       "number": 650,
       "class": "bus",
       "name": "650",
-      "init": {
-        "va": [2401.357455418130, -0.575082843587],
-        "vb": [-1202.010920435835, -2077.514240889735],
-        "vc": [-1196.085190317123, 2079.455978249789]
-      },
       "mon": ["v"]
     },
     {
       "number": 632,
       "class": "bus",
       "name": "632",
-      "init": {
-        "va": [2406.356039904896, -0.106367800225],
-        "vb": [-1197.886946392529, -2069.122498784018],
-        "vc": [-1176.087717528194, 2075.950888714196]
-      },
       "mon": ["v"]
     },
     {
       "number": 670,
       "class": "bus",
       "name": "670",
-      "init": {
-        "va": [2408.022731081427, 0.050053647491],
-        "vb": [-1196.511350912631, -2066.323643362251],
-        "vc": [-1169.418475880734, 2074.781600261118]
-      },
       "mon": ["v"]
     }
   ],

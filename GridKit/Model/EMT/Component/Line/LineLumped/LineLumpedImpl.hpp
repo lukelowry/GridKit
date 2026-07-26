@@ -13,11 +13,9 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     LineLumped<scalar_type, index_type>::LineLumped(BusT*             bus1,
                                                     BusT*             bus2,
-                                                    const ModelDataT& data,
-                                                    RealT             omega0)
+                                                    const ModelDataT& data)
       : bus1_(bus1),
         bus2_(bus2),
-        omega0_(omega0),
         monitor_(std::make_unique<MonitorT>(data))
     {
       size_ = 9;
@@ -75,6 +73,27 @@ namespace GridKit
     }
 
     template <typename scalar_type, typename index_type>
+    void LineLumped<scalar_type, index_type>::appendBusVoltageContributions(
+        std::vector<BusVoltageContribution<ScalarT, IdxT>>& contributions) const
+    {
+      if (bus1_ != nullptr)
+      {
+        contributions.push_back({bus1_->busID(), C_, G_});
+      }
+      if (bus2_ != nullptr)
+      {
+        contributions.push_back({bus2_->busID(), C_, G_});
+      }
+    }
+
+    template <typename scalar_type, typename index_type>
+    void LineLumped<scalar_type, index_type>::appendInitialStateVariables(
+        std::vector<InitialStateVariable>& variables) const
+    {
+      variables.push_back({"i12", std::nullopt, 0});
+    }
+
+    template <typename scalar_type, typename index_type>
     int LineLumped<scalar_type, index_type>::allocate()
     {
       if (!allocated_)
@@ -106,10 +125,9 @@ namespace GridKit
         Log::error() << "EMT::LineLumped: two distinct, non-null buses are required\n";
         ++status;
       }
-      if (!(dx_ > RealT{0.0}) || !std::isfinite(dx_)
-          || !(omega0_ > RealT{0.0}) || !std::isfinite(omega0_))
+      if (!(dx_ > RealT{0.0}) || !std::isfinite(dx_))
       {
-        Log::error() << "EMT::LineLumped: dx and omega0 must be finite and positive\n";
+        Log::error() << "EMT::LineLumped: dx must be finite and positive\n";
         ++status;
       }
       if (!Detail::positiveSemidefinite(Rp_))
@@ -138,51 +156,8 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int LineLumped<scalar_type, index_type>::initialize()
     {
-      if (bus1_ == nullptr || bus2_ == nullptr)
-      {
-        return 1;
-      }
-
-      const auto v1a = Detail::phasor<ScalarT, RealT>(
-          bus1_->Va(), bus1_->Vap(), omega0_);
-      const auto v1b = Detail::phasor<ScalarT, RealT>(
-          bus1_->Vb(), bus1_->Vbp(), omega0_);
-      const auto v1c = Detail::phasor<ScalarT, RealT>(
-          bus1_->Vc(), bus1_->Vcp(), omega0_);
-      const auto v2a = Detail::phasor<ScalarT, RealT>(
-          bus2_->Va(), bus2_->Vap(), omega0_);
-      const auto v2b = Detail::phasor<ScalarT, RealT>(
-          bus2_->Vb(), bus2_->Vbp(), omega0_);
-      const auto v2c = Detail::phasor<ScalarT, RealT>(
-          bus2_->Vc(), bus2_->Vcp(), omega0_);
-
-      std::complex<RealT> i12a;
-      std::complex<RealT> i12b;
-      std::complex<RealT> i12c;
-      Detail::solveImpedance(R_, L_, omega0_, v1a - v2a, v1b - v2b, v1c - v2c, i12a, i12b, i12c);
-
-      std::complex<RealT> yv1a;
-      std::complex<RealT> yv1b;
-      std::complex<RealT> yv1c;
-      std::complex<RealT> yv2a;
-      std::complex<RealT> yv2b;
-      std::complex<RealT> yv2c;
-      Detail::multiplyAdmittance(G_, C_, omega0_, v1a, v1b, v1c, yv1a, yv1b, yv1c);
-      Detail::multiplyAdmittance(G_, C_, omega0_, v2a, v2b, v2c, yv2a, yv2b, yv2c);
-
-      Detail::initializeSinusoid<ScalarT>(i12a, i12b, i12c, omega0_, y_.getData(), yp_.getData());
-      Detail::initializeSinusoid<ScalarT>(-RealT{0.5} * yv1a,
-                                          -RealT{0.5} * yv1b,
-                                          -RealT{0.5} * yv1c,
-                                          omega0_,
-                                          y_.getData() + 3,
-                                          yp_.getData() + 3);
-      Detail::initializeSinusoid<ScalarT>(-RealT{0.5} * yv2a,
-                                          -RealT{0.5} * yv2b,
-                                          -RealT{0.5} * yv2c,
-                                          omega0_,
-                                          y_.getData() + 6,
-                                          yp_.getData() + 6);
+      std::fill_n(y_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
+      std::fill_n(yp_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
       y_.setDataUpdated();
       yp_.setDataUpdated();
       return 0;
@@ -309,17 +284,29 @@ namespace GridKit
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
       evaluateInternalResidual(y, yp, wb_.data(), wbp_.data(), f);
-      evaluateBus1Residual(y, h_.data());
-      evaluateBus2Residual(y, h_.data() + 3);
+      if (bus1_->differentiatedKCL())
+      {
+        h_[0] = -yp[0];
+        h_[1] = -yp[1];
+        h_[2] = -yp[2];
+      }
+      else
+      {
+        evaluateBus1Residual(y, h_.data());
+      }
+      if (bus2_->differentiatedKCL())
+      {
+        h_[3] = yp[0];
+        h_[4] = yp[1];
+        h_[5] = yp[2];
+      }
+      else
+      {
+        evaluateBus2Residual(y, h_.data() + 3);
+      }
 
-      bus1_->Ia() += h_[0];
-      bus1_->Ib() += h_[1];
-      bus1_->Ic() += h_[2];
-      bus2_->Ia() += h_[3];
-      bus2_->Ib() += h_[4];
-      bus2_->Ic() += h_[5];
-      bus1_->getResidual().setDataUpdated();
-      bus2_->getResidual().setDataUpdated();
+      bus1_->accumulateCurrent(h_[0], h_[1], h_[2]);
+      bus2_->accumulateCurrent(h_[3], h_[4], h_[5]);
       f_.setDataUpdated();
       return 0;
     }

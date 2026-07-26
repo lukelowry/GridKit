@@ -85,33 +85,25 @@ None.
 
 ### Input Initialization
 
-```math
-\mathbf{I}_e
-  \leftarrow \text{connected-device RMS current phasor},
-  \quad e \in \mathcal{E}.
-```
+None. Connected components contribute their residual equations to the
+assembled system; they do not initialize the bus.
 
 ### Internal Initialization
 
-The assembled harmonic network provides the bus-voltage phasor and satisfies
-current balance:
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{v}$ | `v` | Initial state | Differential bus
+$\mathbf{v}$ | — | Consistent solve | Algebraic bus, `v` is not supplied
+
+The solve determines $\mathrm{d}\mathbf{v}/\mathrm{d}t$, and current balance is
+an initialization invariant:
 
 ```math
-\mathbf{V} \leftarrow \text{solved bus RMS voltage phasor},
-\qquad
-\sum_{e \in \mathcal{E}}\mathbf{I}_e=\mathbf{0}.
+\sum_{e \in \mathcal{E}}\mathbf{i}_e=\mathbf{0}.
 ```
 
-At $t=0$,
-
-```math
-\begin{aligned}
-\mathbf{v}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}) \\
-\dfrac{\mathrm{d}\mathbf{v}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}).
-\end{aligned}
-```
+For an algebraic bus connected only through dynamic current branches, the
+runtime model uses differentiated KCL to keep the assembled DAE index one.
 
 ### Output Initialization
 

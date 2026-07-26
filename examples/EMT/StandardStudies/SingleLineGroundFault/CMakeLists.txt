@@ -1,3 +1,4 @@
 gridkit_example_add_file(SingleLineGroundFault.case.json)
+gridkit_example_add_file(SingleLineGroundFault.initial.json)
 gridkit_example_add_file(SingleLineGroundFault.solver.json)
 gridkit_example_add_file(SingleLineGroundFault.png)

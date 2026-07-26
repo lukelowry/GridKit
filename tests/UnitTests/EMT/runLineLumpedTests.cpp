@@ -12,7 +12,7 @@ namespace
   using namespace GridKit::Testing::EMTTest;
   using LineT = EMT::LineLumped<double, std::size_t>;
 
-  TestOutcome initializationAndExplicitMutualTerms()
+  TestOutcome zeroInitializationAndExplicitMutualTerms()
   {
     TestStatus success  = true;
     const auto data     = loadFixtureData();
@@ -28,8 +28,22 @@ namespace
     }
 
     success *= line1->size() == 9 && line2->size() == 9;
-    success *= residualInfinityNorm(*line1) < 1.0e-9;
-    success *= residualInfinityNorm(*line2) < 1.0e-9;
+    for (std::size_t index = 0; index < line1->size(); ++index)
+    {
+      line1->y().getData()[index]  = 1.0;
+      line1->yp().getData()[index] = -1.0;
+      line2->y().getData()[index]  = 2.0;
+      line2->yp().getData()[index] = -2.0;
+    }
+    success *= line1->initialize() == 0;
+    success *= line2->initialize() == 0;
+    for (std::size_t index = 0; index < line1->size(); ++index)
+    {
+      success *= line1->y().getData()[index] == 0.0;
+      success *= line1->yp().getData()[index] == 0.0;
+      success *= line2->y().getData()[index] == 0.0;
+      success *= line2->yp().getData()[index] == 0.0;
+    }
     success *= line1->tag()[0] && line1->tag()[1] && line1->tag()[2];
     success *= !line1->tag()[3] && !line1->tag()[8];
 
@@ -144,7 +158,7 @@ namespace
 int main()
 {
   GridKit::Testing::TestingResults result;
-  result += initializationAndExplicitMutualTerms();
+  result += zeroInitializationAndExplicitMutualTerms();
   result += derivativeBusJacobian();
   return result.summary();
 }

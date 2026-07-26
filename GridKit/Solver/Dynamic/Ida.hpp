@@ -54,6 +54,7 @@ namespace AnalysisManager
       ~Ida();
 
       int configureSimulation();
+      int configureSimulationFromCurrentState();
       int configureLinearSolver();
 #ifdef GRIDKIT_ENABLE_SUNDIALS_SPARSE
       int configureLinearSolverSparse();
@@ -61,6 +62,8 @@ namespace AnalysisManager
       int configureLinearSolverDense();
       int getDefaultInitialCondition();
       int initializeSimulation(RealT t0, bool findConsistent = true);
+      int startSimulation(RealT t0, RealT first_target);
+      int restartSimulation(RealT event_time, RealT next_target);
 
       int runSimulation(RealT tf, RealT dt_monitor = 0, std::optional<std::function<void(RealT)>> step_callback = {});
       int deleteSimulation();
@@ -181,6 +184,8 @@ namespace AnalysisManager
       int   getMonitorStepCount(RealT tf, RealT dt_monitor) const;
       RealT getMonitorTime(RealT tf, RealT dt_monitor, int step, int nsteps) const;
       void  updateModelState(RealT t);
+      int   configureSimulation(bool initialize_model);
+      int   establishConsistentState(RealT t0, RealT next_target);
 
     private:
       static constexpr ScalarT DEFAULT_REL_TOL = 1e-5;
@@ -193,6 +198,7 @@ namespace AnalysisManager
       SUNLinearSolver linearSolverB_{};
 
       RealT t_init_{};
+      RealT current_time_{};
 
       N_Vector yy_{};  ///< Solution vector
       N_Vector yp_{};  ///< Solution derivatives vector
@@ -213,6 +219,8 @@ namespace AnalysisManager
       RealT abs_tol_override_{};
       IdxT  max_steps_{};
       bool  suppress_alg_{false};
+      bool  simulation_started_{false};
+      bool  current_time_valid_{false};
 
       RealT backward_time_step_{};
       RealT backward_rel_tol_{DEFAULT_REL_TOL};

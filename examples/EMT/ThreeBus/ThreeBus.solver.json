@@ -1,5 +1,6 @@
 {
   "system_model_file": "ThreeBus.case.json",
+  "initial_state_file": "ThreeBus.initial.json",
   "max_steps": 100000,
   "suppress_algebraic_errors": true,
   "dt_monitor": 0.0001,

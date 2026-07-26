@@ -1,7 +1,8 @@
 # VoltageSource Model
 
 `VoltageSource` represents an $N$-phase sinusoidal EMT voltage source connected
-to the EMT bus through terminal admittance.
+to the EMT bus through a series terminal impedance. Current $\mathbf{i}$ is
+injected from the source into the EMT bus.
 
 ## Block Diagram
 
@@ -41,11 +42,19 @@ Define the phase-index set
 
 Symbol | Description | Type | Order | JSON | Inputs | Outputs
 ------ | ----------- | ---- | ----- | ---- | ------ | -------
-$\mathbf{y}$ | Terminal admittance | [VectorFit](../../../Operators/Rational/VectorFit/README.md) | $NQ_{\mathbf{y}}$ | `Y` | $\mathbb{R}^N$ | $\mathbb{R}^N$
+$\mathbf{z}$ | Series terminal impedance | [VectorFit](../../../Operators/Rational/VectorFit/README.md) | $NQ_{\mathbf{z}}$ | `Z` | $\mathbb{R}^N$ | $\mathbb{R}^N$
 
 ### Submodel Validation
 
-None.
+The current is differential for a nonsingular linear coefficient and algebraic
+when the coefficient is zero. Partially singular coefficients are not
+supported.
+
+```math
+\mathbf{E}^{\mathbf{z}}=\mathbf{0}
+\qquad \text{or} \qquad
+\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N.
+```
 
 ## Model Variables
 
@@ -53,13 +62,16 @@ None.
 
 #### Differential
 
-None.
+Symbol | Units | Description | Note
+------ | ----- | ----------- | ----
+$\mathbf{i}$ | [A] | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$
 
 #### Algebraic
 
 Symbol | Units | Description | Note
 ------ | ----- | ----------- | ----
 $\mathbf{e}$ | [V] | Source voltage vector | $\mathbf{e} \in \mathbb{R}^N$
+$\mathbf{i}$ | [A] | Current injection from source into EMT bus | $\mathbf{i} \in \mathbb{R}^N$, $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
 
 ### External Variables
 
@@ -84,7 +96,11 @@ $\mathbf{i}$ | `i` | Output | [A] | Current injection at source port | $\mathbf{
 
 ### Differential Equations
 
-None.
+For $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$,
+
+```math
+0 = \mathbf{z}[\mathbf{i}] + \mathbf{v} - \mathbf{e}
+```
 
 ### Algebraic Equations
 
@@ -93,61 +109,32 @@ None.
 \quad n \in \mathcal{N}
 ```
 
+For $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$, the current residual is algebraic.
+
 ### Wiring
 
-```math
-\mathbf{i} \leftarrow \mathbf{y}[\mathbf{e} - \mathbf{v}]
-```
+None.
 
 ## Initialization
 
 ### Input Initialization
 
-```math
-\begin{aligned}
-\mathbf{V}
-  &\leftarrow \text{solved terminal RMS voltage phasor} \\
-\mathbf{v}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}) \\
-\dfrac{\mathrm{d}\mathbf{v}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}).
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{v}$ | — | Connected bus | Terminal voltage at $t_0$
 
 ### Internal Initialization
 
-Sinusoidal steady-state initialization requires $\omega=\omega_0$. Define the
-source-voltage phasor by
-
-```math
-V_n^\mathrm{s}=E_ne^{\mathrm{j}\phi_n},
-\quad n \in \mathcal{N}.
-```
-
-The terminal-admittance submodel initializes from
-$\mathbf{V}^\mathrm{s}-\mathbf{V}$. At $t=0$,
-
-```math
-\begin{aligned}
-\mathbf{e}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}^\mathrm{s}) \\
-\dfrac{\mathrm{d}\mathbf{e}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}^\mathrm{s}).
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{i}$ | `i` | Initial state | $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$, solve determines $\mathrm{d}\mathbf{i}/\mathrm{d}t$
+$\mathbf{i}$ | — | Consistent solve | $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
+$\mathbf{e}$ | — | Consistent solve | $e_n(t_0)=\sqrt{2}E_n\cos(\omega t_0+\phi_n)$
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Z` | Initial state | Impedance memory states
 
 ### Output Initialization
 
-```math
-\begin{aligned}
-\mathbf{I}
-  &= \mathbf{Y}(s_0)(\mathbf{V}^\mathrm{s}-\mathbf{V}) \\
-\mathbf{i}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}) \\
-\dfrac{\mathrm{d}\mathbf{i}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}).
-\end{aligned}
-```
+None.
 
 ## Monitors
 
@@ -158,8 +145,17 @@ Monitor | Units | Description | Note
 
 ## Development
 
-The initial three-phase formulation realizes the terminal admittance as a
-series resistance and inductance, with $\mathbf{i}$ as a differential variable.
+The initial three-phase formulation fixes $N=3$ and requires
+$Q_{\mathbf{z}}=0$, so the series terminal impedance reduces to a resistance
+and inductance and $\mathbf{i}$ is a differential variable.
+
+### Derived Parameters
+
+```math
+\mathbf{R}_\mathrm{s} = \mathbf{D}^{\mathbf{z}},
+\qquad
+\mathbf{L}_\mathrm{s} = \mathbf{E}^{\mathbf{z}}
+```
 
 ### Differential Equations
 

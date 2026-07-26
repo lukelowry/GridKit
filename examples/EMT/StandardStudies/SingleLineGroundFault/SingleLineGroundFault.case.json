@@ -4,41 +4,25 @@
     "format_revision": 1,
     "case_name": "SingleLineGroundFault",
     "case_description": "Balanced fixed-ABC source-line-load EMT single-line-to-ground fault study",
-    "case_comments": "Three buses with transposed full mutual line matrices derived by averaging IEEE configuration 601 phase entries; includes disabled three-phase-to-ground and phase-a-to-ground fault loads, with finite open-circuit impedances on phases b and c of the phase-selective fault",
-    "omega0": 376.99111843077515
+    "case_comments": "Three buses with transposed full mutual line matrices derived by averaging IEEE configuration 601 phase entries; includes disabled three-phase-to-ground and phase-a-to-ground fault loads, with finite open-circuit impedances on phases b and c of the phase-selective fault"
   },
   "buses": [
     {
       "number": 1,
       "class": "bus",
       "name": "source",
-      "init": {
-        "va": [2399.6178214935953, -3.37274675443195],
-        "vb": [-1202.7297951166672, -2076.44361941011],
-        "vc": [-1196.8880263769274, 2079.816366164542]
-      },
       "mon": ["v"]
     },
     {
       "number": 2,
       "class": "bus",
       "name": "mid",
-      "init": {
-        "va": [2391.9737720425387, -11.225199205894231],
-        "vb": [-1205.7081936961163, -2065.8974521719774],
-        "vc": [-1186.265578346423, 2077.122651377875]
-      },
       "mon": ["v"]
     },
     {
       "number": 3,
       "class": "bus",
       "name": "load",
-      "init": {
-        "va": [2388.151187592296, -15.15124812210318],
-        "vb": [-1207.1969595689322, -2060.623972471852],
-        "vc": [-1180.9542280233645, 2075.7752205939582]
-      },
       "mon": ["v"]
     }
   ],

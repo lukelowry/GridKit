@@ -12,10 +12,8 @@ namespace GridKit
   {
     template <typename scalar_type, typename index_type>
     LoadZ<scalar_type, index_type>::LoadZ(BusT*             bus,
-                                          const ModelDataT& data,
-                                          RealT             omega0)
+                                          const ModelDataT& data)
       : bus_(bus),
-        omega0_(omega0),
         monitor_(std::make_unique<MonitorT>(data))
     {
       size_ = 3;
@@ -78,11 +76,6 @@ namespace GridKit
         Log::error() << "EMT::LoadZ: bus is null\n";
         ++status;
       }
-      if (!(omega0_ > RealT{0.0}) || !std::isfinite(omega0_))
-      {
-        Log::error() << "EMT::LoadZ: omega0 must be finite and positive\n";
-        ++status;
-      }
       if (!Detail::positiveSemidefinite(R_))
       {
         Log::error() << "EMT::LoadZ: R must be finite, symmetric, and positive semidefinite\n";
@@ -111,26 +104,28 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int LoadZ<scalar_type, index_type>::initialize()
     {
-      if (bus_ == nullptr)
-      {
-        return 1;
-      }
-
-      const auto va = Detail::phasor<ScalarT, RealT>(
-          bus_->Va(), bus_->Vap(), omega0_);
-      const auto vb = Detail::phasor<ScalarT, RealT>(
-          bus_->Vb(), bus_->Vbp(), omega0_);
-      const auto vc = Detail::phasor<ScalarT, RealT>(
-          bus_->Vc(), bus_->Vcp(), omega0_);
-      std::complex<RealT> ia;
-      std::complex<RealT> ib;
-      std::complex<RealT> ic;
-      Detail::solveImpedance(R_, L_, omega0_, -va, -vb, -vc, ia, ib, ic);
-
-      Detail::initializeSinusoid<ScalarT>(ia, ib, ic, omega0_, y_.getData(), yp_.getData());
+      std::fill_n(y_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
+      std::fill_n(yp_.getData(), static_cast<std::size_t>(size_), ScalarT{0.0});
       y_.setDataUpdated();
       yp_.setDataUpdated();
       return 0;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void LoadZ<scalar_type, index_type>::appendInitialStateVariables(
+        std::vector<InitialStateVariable>& variables) const
+    {
+      variables.push_back({"i", std::nullopt, 0});
+    }
+
+    template <typename scalar_type, typename index_type>
+    void LoadZ<scalar_type, index_type>::appendBusVoltageContributions(
+        std::vector<BusVoltageContribution<ScalarT, IdxT>>& contributions) const
+    {
+      if (bus_ != nullptr)
+      {
+        contributions.push_back({bus_->busID(), {}, {}});
+      }
     }
 
     template <typename scalar_type, typename index_type>
@@ -204,12 +199,11 @@ namespace GridKit
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
       evaluateInternalResidual(y, yp, wb_.data(), f);
-      evaluateBusResidual(y, enable, h_.data());
+      evaluateBusResidual(bus_->differentiatedKCL() ? yp : y,
+                          enable,
+                          h_.data());
 
-      bus_->Ia() += h_[0];
-      bus_->Ib() += h_[1];
-      bus_->Ic() += h_[2];
-      bus_->getResidual().setDataUpdated();
+      bus_->accumulateCurrent(h_[0], h_[1], h_[2]);
       f_.setDataUpdated();
       return 0;
     }

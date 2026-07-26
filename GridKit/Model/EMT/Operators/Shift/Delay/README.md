@@ -160,47 +160,26 @@ and third-order derivative accuracy in the knot spacing.
 
 ### Input Initialization
 
-```math
-\begin{aligned}
-\widehat{\mathbf{u}}
-  &\leftarrow \text{RMS input phasor} \\
-\mathbf{u}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\widehat{\mathbf{u}}) \\
-\dfrac{\mathrm{d}\mathbf{u}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\widehat{\mathbf{u}}).
-\end{aligned}
-```
+The external history provider supplies $\mathbf{u}(t)$ and
+$\mathrm{d}\mathbf{u}/\mathrm{d}t$ over
+$t \in [t_0-\tau_{\max},t_0]$.
 
 ### Internal Initialization
 
-The analytic prehistory is
-
-```math
-\begin{aligned}
-\mathbf{u}(t)
-  &= \sqrt{2}\,\mathrm{Re}
-     \left(\widehat{\mathbf{u}}e^{s_0t}\right) \\
-\dfrac{\mathrm{d}\mathbf{u}}{\mathrm{d}t}(t)
-  &= \sqrt{2}\,\mathrm{Re}
-     \left(s_0\widehat{\mathbf{u}}e^{s_0t}\right),
-  \qquad t \le 0.
-\end{aligned}
-```
-
-Only $t \in [-\tau_{\max},0]$ is needed. It matches the initialized input in
-value and slope at $t=0$, avoiding delay-induced startup transients under a
-consistent sinusoidal initialization.
+The supplied prehistory seeds the history record. Its endpoint value and
+derivative must match the initialized input at $t_0$. The delay does not
+synthesize prehistory.
 
 ### Output Initialization
 
 ```math
 \begin{aligned}
-\widehat{\mathbf{y}}
-  &= \mathbf{D}_{\boldsymbol{\tau}}(s_0)\,\widehat{\mathbf{u}} \\
-\mathbf{y}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\widehat{\mathbf{y}}) \\
+\mathbf{y}(t_0)
+  &\leftarrow \mathbf{u}(t_0-\boldsymbol{\tau}) \\
 \dfrac{\mathrm{d}\mathbf{y}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\widehat{\mathbf{y}}).
+  &\leftarrow
+  \dfrac{\mathrm{d}\mathbf{u}}{\mathrm{d}t}
+  (t_0-\boldsymbol{\tau}).
 \end{aligned}
 ```
 

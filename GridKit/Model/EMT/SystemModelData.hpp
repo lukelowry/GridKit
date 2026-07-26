@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <istream>
-#include <numbers>
 #include <optional>
 #include <string>
 #include <vector>
@@ -39,8 +38,6 @@ namespace GridKit::EMT
     std::string                   case_name;
     std::string                   case_description;
     std::string                   case_comments;
-
-    RealT omega0{2.0 * std::numbers::pi_v<RealT> * 60.0};
 
     std::vector<BusDataT>            bus;
     std::vector<LineLumpedDataT>     line_lumped;

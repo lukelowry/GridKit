@@ -61,8 +61,8 @@ $\mathbf{z}$ | Per-unit-length series impedance | [VectorFit](../../../Operators
 $\mathbf{y}_1$ | Per-unit-length shunt admittance at terminal 1 | [VectorFit](../../../Operators/Rational/VectorFit/README.md) | $KQ_{\mathbf{y}}$ | `Yp` | $\mathbb{R}^K$ | $\mathbb{R}^K$
 $\mathbf{y}_2$ | Per-unit-length shunt admittance at terminal 2 | [VectorFit](../../../Operators/Rational/VectorFit/README.md) | $KQ_{\mathbf{y}}$ | `Yp` | $\mathbb{R}^K$ | $\mathbb{R}^K$
 
-`Yp` provides one coefficient set; the two terminal instances maintain
-independent states.
+`Yp` provides one coefficient set; the terminal instances `Yp1` and `Yp2`
+maintain independent states.
 
 ### Submodel Validation
 
@@ -150,68 +150,22 @@ $\mathbf{i}_2$ | `i2` | Output | [A] | Current injection at terminal 2 | $\mathb
 
 ### Input Initialization
 
-```math
-\begin{aligned}
-\mathbf{V}_r
-  &\leftarrow \text{solved terminal RMS voltage phasor} \\
-\mathbf{v}_r
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}_r) \\
-\dfrac{\mathrm{d}\mathbf{v}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}_r),
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0$
 
 ### Internal Initialization
 
-The current phasors satisfy
-
-```math
-\begin{aligned}
-\mathbf{0}
-  &= \Delta x\,\mathbf{Z}(s_0)\mathbf{I}_{12}
-     + \mathbf{P}_\phi^\mathsf T(\mathbf{V}_2-\mathbf{V}_1) \\
-\mathbf{I}_r^\mathrm{sh}
-  &= -\dfrac{\Delta x}{2}\mathbf{Y}(s_0)
-     \mathbf{P}_\phi^\mathsf T\mathbf{V}_r,
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
-
-Initialization requires $\mathbf{Z}(s_0)$ to be nonsingular. The series-
-impedance submodel initializes from $\mathbf{I}_{12}$, and each shunt-
-admittance submodel initializes from
-$\mathbf{P}_\phi^\mathsf T\mathbf{V}_r$. At $t=0$,
-
-```math
-\begin{aligned}
-\mathbf{i}_{12}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_{12}) \\
-\dfrac{\mathrm{d}\mathbf{i}_{12}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_{12}) \\
-\mathbf{i}_r^\mathrm{sh}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_r^\mathrm{sh}) \\
-\dfrac{\mathrm{d}\mathbf{i}_r^\mathrm{sh}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_r^\mathrm{sh}),
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{i}_{12}$ | `i12` | Initial state | Solve determines $\mathrm{d}\mathbf{i}_{12}/\mathrm{d}t$
+$\mathbf{i}_1^\mathrm{sh}$, $\mathbf{i}_2^\mathrm{sh}$ | — | Consistent solve | Shunt currents
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Zp` | Initial state | Series-impedance memory states
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yp1`, `Yp2` | Initial state | Terminal shunt-admittance memory states
 
 ### Output Initialization
 
-```math
-\begin{aligned}
-\mathbf{I}_1
-  &= \mathbf{P}_\phi(\mathbf{I}_1^\mathrm{sh}-\mathbf{I}_{12}) \\
-\mathbf{I}_2
-  &= \mathbf{P}_\phi(\mathbf{I}_2^\mathrm{sh}+\mathbf{I}_{12}) \\
-\mathbf{i}_r
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_r) \\
-\dfrac{\mathrm{d}\mathbf{i}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_r),
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
+Evaluated from the wiring equations after the consistent solve.
 
 ## Monitors
 
@@ -224,12 +178,18 @@ Monitor | Units | Description | Note
 ## Development
 
 The initial three-phase formulation is a subset of the generalized formulation
-above.
+above. It fixes $N=K=3$ with an identity conductor mapping and requires
+$Q_{\mathbf{z}}=Q_{\mathbf{y}}=0$, so each submodel block reduces to its
+constant and linear coefficients.
 
 ### Derived Parameters
 
 ```math
 \begin{aligned}
+\mathbf{R}' &= \mathbf{D}^{\mathbf{z}}, \qquad
+\mathbf{L}' = \mathbf{E}^{\mathbf{z}}, \qquad
+\mathbf{G}' = \mathbf{D}^{\mathbf{y}}, \qquad
+\mathbf{C}' = \mathbf{E}^{\mathbf{y}} \\
 \mathbf{R} &= \Delta x\,\mathbf{R}' \\
 \mathbf{L} &= \Delta x\,\mathbf{L}' \\
 \mathbf{G} &= \Delta x\,\mathbf{G}' \\

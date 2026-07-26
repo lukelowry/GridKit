@@ -105,61 +105,24 @@ position.
 
 ### Input Initialization
 
-The connected signal source supplies `open` before the harmonic network is
-solved.
-
-```math
-\begin{aligned}
-\mathbf{V}_r
-  &\leftarrow \text{solved terminal RMS voltage phasor} \\
-\mathbf{v}_r
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}_r) \\
-\dfrac{\mathrm{d}\mathbf{v}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}_r),
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0$
+$\mathrm{open}$ | — | Signal source | Applied before the consistent solve
 
 ### Internal Initialization
 
-The assembled harmonic network supplies the switch-current phasor subject to
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{i}_{12}$ | — | Consistent solve | Subject to the commanded position
 
-```math
-\begin{cases}
-\mathbf{I}_{12} = \mathbf{0}, & \text{open}, \\
-\mathbf{V}_2-\mathbf{V}_1 = \mathbf{0}, & \text{closed}.
-\end{cases}
-```
-
-The closed-position current cannot be recovered locally from the zero terminal-
-voltage difference. At $t=0$,
-
-```math
-\begin{aligned}
-\mathbf{I}_{12}
-  &\leftarrow \text{solved switch RMS current phasor} \\
-\mathbf{i}_{12}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_{12}) \\
-\dfrac{\mathrm{d}\mathbf{i}_{12}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_{12}).
-\end{aligned}
-```
+Differential states owned by the connected network are preserved. Closing
+fails if the preserved states are incompatible with the closed-position
+constraint.
 
 ### Output Initialization
 
-```math
-\begin{aligned}
-\mathbf{I}_1
-  &= -\mathbf{I}_{12} \\
-\mathbf{I}_2
-  &= \mathbf{I}_{12} \\
-\mathbf{i}_r
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}_r) \\
-\dfrac{\mathrm{d}\mathbf{i}_r}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}_r),
-  \quad r \in \{1,2\}.
-\end{aligned}
-```
+Evaluated from the wiring equations after the consistent solve.
 
 ## Monitors
 

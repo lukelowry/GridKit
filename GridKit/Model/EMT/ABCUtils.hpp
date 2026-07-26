@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <limits>
 
 #include <GridKit/Model/EMT/ComponentData.hpp>
@@ -21,14 +20,6 @@ namespace GridKit
                + A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
       }
 
-      template <typename T>
-      T determinant(T a00, T a01, T a02, T a10, T a11, T a12, T a20, T a21, T a22)
-      {
-        return a00 * (a11 * a22 - a12 * a21)
-               - a01 * (a10 * a22 - a12 * a20)
-               + a02 * (a10 * a21 - a11 * a20);
-      }
-
       template <typename RealT>
       bool finite(const ABCVector<RealT>& x)
       {
@@ -39,6 +30,53 @@ namespace GridKit
       bool finite(const ABCMatrix<RealT>& A)
       {
         return finite(A[0]) && finite(A[1]) && finite(A[2]);
+      }
+
+      template <typename RealT, typename ScalarT>
+      RealT scalarValue(const ScalarT& value)
+      {
+        if constexpr (requires { value.getValue(); })
+        {
+          return static_cast<RealT>(value.getValue());
+        }
+        else
+        {
+          return static_cast<RealT>(value);
+        }
+      }
+
+      template <typename RealT>
+      bool accumulateNormalizedRowGram(ABCMatrix<RealT>&       gram,
+                                       const ABCMatrix<RealT>& block)
+      {
+        if (!finite(block))
+        {
+          return false;
+        }
+
+        for (std::size_t equation = 0; equation < 3; ++equation)
+        {
+          RealT row_scale{0.0};
+          for (const auto value : block[equation])
+          {
+            row_scale = std::max(row_scale, std::abs(value));
+          }
+          if (row_scale == RealT{0.0})
+          {
+            continue;
+          }
+
+          for (std::size_t row = 0; row < 3; ++row)
+          {
+            const auto normalized_value = block[equation][row] / row_scale;
+            for (std::size_t column = 0; column < 3; ++column)
+            {
+              gram[row][column] +=
+                  normalized_value * (block[equation][column] / row_scale);
+            }
+          }
+        }
+        return true;
       }
 
       template <typename RealT>
@@ -105,82 +143,52 @@ namespace GridKit
       }
 
       template <typename RealT>
-      void solveImpedance(const ABCMatrix<RealT>& R,
-                          const ABCMatrix<RealT>& L,
-                          RealT                   omega,
-                          std::complex<RealT>     ba,
-                          std::complex<RealT>     bb,
-                          std::complex<RealT>     bc,
-                          std::complex<RealT>&    xa,
-                          std::complex<RealT>&    xb,
-                          std::complex<RealT>&    xc)
+      std::size_t matrixRank(ABCMatrix<RealT> A)
       {
-        const std::complex<RealT> s0{RealT{0.0}, omega};
-        const auto                a00 = R[0][0] + s0 * L[0][0];
-        const auto                a01 = R[0][1] + s0 * L[0][1];
-        const auto                a02 = R[0][2] + s0 * L[0][2];
-        const auto                a10 = R[1][0] + s0 * L[1][0];
-        const auto                a11 = R[1][1] + s0 * L[1][1];
-        const auto                a12 = R[1][2] + s0 * L[1][2];
-        const auto                a20 = R[2][0] + s0 * L[2][0];
-        const auto                a21 = R[2][1] + s0 * L[2][1];
-        const auto                a22 = R[2][2] + s0 * L[2][2];
-        const auto                det = determinant(a00, a01, a02, a10, a11, a12, a20, a21, a22);
+        const RealT scale = matrixScale(A);
+        if (!finite(A) || scale == RealT{0.0})
+        {
+          return 0;
+        }
 
-        xa = determinant(ba, a01, a02, bb, a11, a12, bc, a21, a22)
-             / det;
-        xb = determinant(a00, ba, a02, a10, bb, a12, a20, bc, a22)
-             / det;
-        xc = determinant(a00, a01, ba, a10, a11, bb, a20, a21, bc)
-             / det;
-      }
+        for (auto& row : A)
+        {
+          for (auto& value : row)
+          {
+            value /= scale;
+          }
+        }
 
-      template <typename RealT>
-      void multiplyAdmittance(const ABCMatrix<RealT>& G,
-                              const ABCMatrix<RealT>& C,
-                              RealT                   omega,
-                              std::complex<RealT>     xa,
-                              std::complex<RealT>     xb,
-                              std::complex<RealT>     xc,
-                              std::complex<RealT>&    ya,
-                              std::complex<RealT>&    yb,
-                              std::complex<RealT>&    yc)
-      {
-        const std::complex<RealT> s0{RealT{0.0}, omega};
-        ya = (G[0][0] + s0 * C[0][0]) * xa
-             + (G[0][1] + s0 * C[0][1]) * xb
-             + (G[0][2] + s0 * C[0][2]) * xc;
-        yb = (G[1][0] + s0 * C[1][0]) * xa
-             + (G[1][1] + s0 * C[1][1]) * xb
-             + (G[1][2] + s0 * C[1][2]) * xc;
-        yc = (G[2][0] + s0 * C[2][0]) * xa
-             + (G[2][1] + s0 * C[2][1]) * xb
-             + (G[2][2] + s0 * C[2][2]) * xc;
-      }
+        const RealT tolerance = RealT{128.0}
+                                * std::numeric_limits<RealT>::epsilon();
+        std::size_t rank{0};
+        for (std::size_t column = 0; column < 3 && rank < 3; ++column)
+        {
+          std::size_t pivot = rank;
+          for (std::size_t row = rank + 1; row < 3; ++row)
+          {
+            if (std::abs(A[row][column]) > std::abs(A[pivot][column]))
+            {
+              pivot = row;
+            }
+          }
+          if (std::abs(A[pivot][column]) <= tolerance)
+          {
+            continue;
+          }
 
-      template <typename ScalarT, typename RealT>
-      void initializeSinusoid(std::complex<RealT> phasor_a,
-                              std::complex<RealT> phasor_b,
-                              std::complex<RealT> phasor_c,
-                              RealT               omega,
-                              ScalarT*            y,
-                              ScalarT*            yp)
-      {
-        const RealT sqrt_two = std::sqrt(RealT{2.0});
-        y[0]                 = sqrt_two * phasor_a.real();
-        y[1]                 = sqrt_two * phasor_b.real();
-        y[2]                 = sqrt_two * phasor_c.real();
-        yp[0]                = -sqrt_two * omega * phasor_a.imag();
-        yp[1]                = -sqrt_two * omega * phasor_b.imag();
-        yp[2]                = -sqrt_two * omega * phasor_c.imag();
-      }
-
-      template <typename ScalarT, typename RealT>
-      std::complex<RealT> phasor(ScalarT value, ScalarT derivative, RealT omega)
-      {
-        const RealT sqrt_two = std::sqrt(RealT{2.0});
-        return {static_cast<RealT>(value) / sqrt_two,
-                -static_cast<RealT>(derivative) / (sqrt_two * omega)};
+          std::swap(A[rank], A[pivot]);
+          for (std::size_t row = rank + 1; row < 3; ++row)
+          {
+            const RealT factor = A[row][column] / A[rank][column];
+            for (std::size_t entry = column; entry < 3; ++entry)
+            {
+              A[row][entry] -= factor * A[rank][entry];
+            }
+          }
+          ++rank;
+        }
+        return rank;
       }
     } // namespace Detail
   } // namespace EMT

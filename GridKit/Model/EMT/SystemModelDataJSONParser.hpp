@@ -297,17 +297,12 @@ namespace GridKit::EMT
 
     const auto& header = input.at("header");
     validateKeys(header,
-                 {"format_version", "format_revision", "case_name", "case_description", "case_comments", "omega0"},
-                 {"case_name", "omega0"},
+                 {"format_version", "format_revision", "case_name", "case_description", "case_comments"},
+                 {"case_name"},
                  "EMT header");
     model.case_name        = header.at("case_name").get<std::string>();
     model.case_description = header.value("case_description", std::string{});
     model.case_comments    = header.value("case_comments", std::string{});
-    model.omega0           = realValue<RealT>(header.at("omega0"), "omega0");
-    if (model.omega0 <= RealT{0.0})
-    {
-      throw std::runtime_error("omega0 must be positive");
-    }
     if (header.contains("format_version"))
     {
       model.format_version = unsignedShortValue(
@@ -359,22 +354,16 @@ namespace GridKit::EMT
     for (const auto& raw_bus : input.at("buses"))
     {
       validateKeys(raw_bus,
-                   {"number", "class", "name", "init", "mon"},
-                   {"number", "class", "name", "init"},
+                   {"number", "class", "name", "mon"},
+                   {"number", "class", "name"},
                    "bus");
       if (raw_bus.at("class").get<std::string>() != "bus")
       {
         throw std::runtime_error("EMT buses must use class bus");
       }
-      const auto& initial = raw_bus.at("init");
-      validateKeys(initial, {"va", "vb", "vc"}, {"va", "vb", "vc"}, "bus init");
-
       typename SystemModelData<RealT, IdxT>::BusDataT bus;
       raw_bus.at("number").get_to(bus.bus_id);
       raw_bus.at("name").get_to(bus.name);
-      bus.Va0 = complexValue<RealT>(initial.at("va"), "bus va");
-      bus.Vb0 = complexValue<RealT>(initial.at("vb"), "bus vb");
-      bus.Vc0 = complexValue<RealT>(initial.at("vc"), "bus vc");
       if (!bus_ids.insert(bus.bus_id).second)
       {
         throw std::runtime_error("Duplicate EMT bus id");
@@ -700,17 +689,6 @@ namespace GridKit::EMT
                                                   "VectorFit residue"));
         }
         validateVectorFitPairs(poles, residues);
-        const std::complex<RealT> initialization_frequency{
-            RealT{0.0}, model.omega0};
-        for (const auto pole : poles)
-        {
-          if (approximatelyEqual(std::abs(initialization_frequency - pole),
-                                 RealT{0.0}))
-          {
-            throw std::runtime_error(
-                "VectorFit pole coincides with the initialization frequency");
-          }
-        }
         data.parameters[VectorFitParameters::poles]    = poles;
         data.parameters[VectorFitParameters::residues] = residues;
         ports.at("input_a").get_to(
@@ -818,14 +796,6 @@ namespace GridKit::EMT
     {
       requireBus(source.buses.at(VoltageSourceBuses::bus),
                  source.disambiguation_string);
-      const auto omega = std::get<RealT>(
-          source.parameters.at(VoltageSourceParameters::omega));
-      if (!approximatelyEqual(omega, model.omega0))
-      {
-        throw std::runtime_error(
-            source.disambiguation_string
-            + " omega must equal the EMT case omega0");
-      }
     }
 
     std::set<IdxT> signal_owners;

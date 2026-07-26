@@ -82,7 +82,7 @@ namespace
              {0.0010, 0.0015, 0.030}}};
   }
 
-  TestOutcome initializationAndInjectionGate()
+  TestOutcome zeroInitializationAndInjectionGate()
   {
     TestStatus success  = true;
     const auto data     = loadFixtureData();
@@ -98,16 +98,34 @@ namespace
     }
 
     success *= normal_load->size() == 3 && fault_load->size() == 3;
-    success *= residualInfinityNorm(*normal_load) < 1.0e-9;
-    success *= residualInfinityNorm(*fault_load) < 1.0e-8;
+    for (std::size_t index = 0; index < normal_load->size(); ++index)
+    {
+      normal_load->y().getData()[index]  = 1.0;
+      normal_load->yp().getData()[index] = -1.0;
+      fault_load->y().getData()[index]   = 2.0;
+      fault_load->yp().getData()[index]  = -2.0;
+    }
+    success *= normal_load->initialize() == 0;
+    success *= fault_load->initialize() == 0;
+    for (std::size_t index = 0; index < normal_load->size(); ++index)
+    {
+      success *= normal_load->y().getData()[index] == 0.0;
+      success *= normal_load->yp().getData()[index] == 0.0;
+      success *= fault_load->y().getData()[index] == 0.0;
+      success *= fault_load->yp().getData()[index] == 0.0;
+    }
     success *= normal_load->tag()[0] && normal_load->tag()[1]
                && normal_load->tag()[2];
 
-    auto*        bus    = system->getBus(632);
-    auto*        enable = system->getSignal(1);
-    const double ia     = fault_load->y().getData()[0];
-    const double ib     = fault_load->y().getData()[1];
-    const double ic     = fault_load->y().getData()[2];
+    auto* bus                    = system->getBus(632);
+    auto* enable                 = system->getSignal(1);
+    fault_load->y().getData()[0] = 0.70;
+    fault_load->y().getData()[1] = -1.10;
+    fault_load->y().getData()[2] = 1.40;
+    fault_load->y().setDataUpdated();
+    const double ia = fault_load->y().getData()[0];
+    const double ib = fault_load->y().getData()[1];
+    const double ic = fault_load->y().getData()[2];
 
     enable->init(0.0);
     bus->evaluateResidual();
@@ -120,7 +138,6 @@ namespace
     success *= isEqual(bus->Ia(), ia, 1.0e-13);
     success *= isEqual(bus->Ib(), ib, 1.0e-13);
     success *= isEqual(bus->Ic(), ic, 1.0e-13);
-    success *= residualInfinityNorm(*fault_load) < 1.0e-8;
 
     enable->init(0.0);
     bus->evaluateResidual();
@@ -135,7 +152,7 @@ namespace
     const auto L                                     = coupledInductance();
     coupled_data.parameters[EMT::LoadZParameters::R] = R;
     coupled_data.parameters[EMT::LoadZParameters::L] = L;
-    LoadT coupled_load(system->getBus(670), coupled_data, data.omega0);
+    LoadT coupled_load(system->getBus(670), coupled_data);
     coupled_load.getSignals()
         .template attachSignalNode<EMT::LoadZExternalVariables::enable>(
             system->getSignal(0));
@@ -241,7 +258,7 @@ namespace
 int main()
 {
   GridKit::Testing::TestingResults result;
-  result += initializationAndInjectionGate();
+  result += zeroInitializationAndInjectionGate();
   result += gateKeepsFixedJacobianPattern();
   return result.summary();
 }

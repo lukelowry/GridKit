@@ -2,7 +2,7 @@
 
 #include <map>
 #include <memory>
-#include <numbers>
+#include <string>
 #include <vector>
 
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
@@ -69,6 +69,7 @@ namespace GridKit
       int  verify() const override;
       int  initialize() override;
       bool hasJacobian() override;
+      int  validateInitialState();
 
       void initializeMonitor();
       void startMonitor() override;
@@ -85,24 +86,27 @@ namespace GridKit
       void addBus(BusT* bus);
       void addSignal(SignalT* signal);
       void addComponent(ComponentT* component);
+      void addComponent(ComponentT* component, const std::string& component_id);
 
       BusT*       getBus(IdxT bus_id);
       SignalT*    getSignal(IdxT signal_id);
       ComponentT* getComponent(IdxT gridkit_component_id);
+      ComponentT* getComponent(const std::string& component_id);
 
     private:
       using ComponentT::setSystemBase;
+
+      int classifyBusVoltages();
 
       std::vector<BusT*>       buses_;
       std::vector<SignalT*>    signals_;
       std::vector<ComponentT*> components_;
 
-      std::map<IdxT, IdxT> gridkit_bus_indices_;
-      std::map<IdxT, IdxT> gridkit_signal_indices_;
+      std::map<IdxT, IdxT>        gridkit_bus_indices_;
+      std::map<IdxT, IdxT>        gridkit_signal_indices_;
+      std::map<std::string, IdxT> gridkit_component_indices_;
 
-      bool  owns_components_{false};
-      RealT omega0_{2.0 * std::numbers::pi_v<RealT> * 60.0};
-
+      bool                      owns_components_{false};
       std::unique_ptr<MonitorT> monitor_;
       std::size_t               monitored_bus_count_{0};
       std::size_t               monitored_component_count_{0};

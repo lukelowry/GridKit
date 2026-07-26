@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 
 #include <idas/idas.h>
 #include <idas/idas_ls.h>
@@ -58,6 +59,25 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::configureSimulation()
     {
+      return configureSimulation(true);
+    }
+
+    /**
+     * @brief Configure IDA from state already stored in the model.
+     *
+     * This path does not call the model's initialize() method. It is intended
+     * for callers that assemble an initial state explicitly before configuring
+     * the solver.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::configureSimulationFromCurrentState()
+    {
+      return configureSimulation(false);
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::configureSimulation(bool initialize_model)
+    {
       int retval = 0;
 
       // Allocate solution vectors
@@ -66,8 +86,12 @@ namespace AnalysisManager
       yp_ = N_VClone(yy_);
       checkAllocation((void*) yp_, "N_VClone");
 
-      // get intial conditions
-      this->getDefaultInitialCondition();
+      if (initialize_model)
+      {
+        model_->initialize();
+      }
+      copyVec(model_->y(), yy_);
+      copyVec(model_->yp(), yp_);
 
       // Create vectors to store restart initial condition
       yy0_ = N_VClone(yy_);
@@ -228,7 +252,8 @@ namespace AnalysisManager
     {
       int retval = 0;
 
-      t_init_ = t0;
+      t_init_             = t0;
+      simulation_started_ = true;
 
       // Need to reinitialize IDA to set to get correct initial conditions
       retval = IDAReInit(solver_, t0, yy_, yp_);
@@ -253,6 +278,73 @@ namespace AnalysisManager
       }
 
       return retval;
+    }
+
+    /**
+     * @brief Establish a consistent DAE state while preserving differential
+     * state values supplied by the model.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::establishConsistentState(RealT t0,
+                                                     RealT next_target)
+    {
+      if (!std::isfinite(t0) || !std::isfinite(next_target)
+          || next_target <= t0)
+      {
+        throw std::invalid_argument(
+            "IDA consistent-state target must be finite and later than its initial time");
+      }
+
+      copyVec(model_->y(), yy_);
+      copyVec(model_->yp(), yp_);
+
+      int retval = IDAReInit(solver_, t0, yy_, yp_);
+      checkOutput(retval, "IDAReInit");
+
+      retval = IDACalcIC(solver_, IDA_YA_YDP_INIT, next_target);
+      checkOutput(retval, "IDACalcIC");
+
+      retval = IDAGetConsistentIC(solver_, yy_, yp_);
+      checkOutput(retval, "IDAGetConsistentIC");
+
+      t_init_ = t0;
+      updateModelState(t0);
+      return retval;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::startSimulation(RealT t0, RealT first_target)
+    {
+      if (simulation_started_)
+      {
+        throw std::logic_error("IDA simulation has already started");
+      }
+
+      const int status    = establishConsistentState(t0, first_target);
+      simulation_started_ = true;
+      return status;
+    }
+
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::restartSimulation(RealT event_time,
+                                              RealT next_target)
+    {
+      if (!simulation_started_)
+      {
+        throw std::logic_error("IDA simulation must be started before restart");
+      }
+      const RealT time_tolerance = RealT{64.0}
+                                   * std::numeric_limits<RealT>::epsilon()
+                                   * std::max({std::abs(event_time),
+                                               std::abs(current_time_),
+                                               RealT{1.0}});
+      if (!current_time_valid_
+          || std::abs(event_time - current_time_) > time_tolerance)
+      {
+        throw std::invalid_argument(
+            "IDA restart time must match the current solution time");
+      }
+      return establishConsistentState(event_time, next_target);
     }
 
     /**
@@ -298,6 +390,8 @@ namespace AnalysisManager
       copyVec(yy_, model_->y());
       copyVec(yp_, model_->yp());
       model_->updateTime(t, 0.0);
+      current_time_       = t;
+      current_time_valid_ = true;
     }
 
     /**
@@ -359,6 +453,8 @@ namespace AnalysisManager
       SUNLinSolFree(linearSolver_);
       SUNMatDestroy(JacobianMat_);
       IDAFree(&solver_);
+      simulation_started_ = false;
+      current_time_valid_ = false;
       return 0;
     }
 

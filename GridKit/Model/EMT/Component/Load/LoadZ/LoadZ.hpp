@@ -3,7 +3,9 @@
 #include <memory>
 
 #include <GridKit/Model/EMT/Bus/Bus.hpp>
+#include <GridKit/Model/EMT/BusVoltageContribution.hpp>
 #include <GridKit/Model/EMT/Component/Load/LoadZ/LoadZData.hpp>
+#include <GridKit/Model/EMT/InitialStateLayout.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
@@ -24,7 +26,9 @@ namespace GridKit
     };
 
     template <typename scalar_type, typename index_type>
-    class LoadZ final : public PhasorDynamics::Component<scalar_type, index_type>
+    class LoadZ final : public PhasorDynamics::Component<scalar_type, index_type>,
+                        public BusVoltageContributor<scalar_type, index_type>,
+                        public InitialStateLayout
     {
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
       using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
@@ -56,7 +60,7 @@ namespace GridKit
                                                           LoadZInternalVariables,
                                                           LoadZExternalVariables>;
 
-      LoadZ(BusT*, const ModelDataT&, RealT omega0);
+      LoadZ(BusT*, const ModelDataT&);
       ~LoadZ() override;
 
       int setGridKitComponentID(IdxT) override final;
@@ -67,6 +71,11 @@ namespace GridKit
       int setAbsoluteTolerance(RealT) override final;
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
+
+      void appendInitialStateVariables(
+          std::vector<InitialStateVariable>&) const override;
+      void appendBusVoltageContributions(
+          std::vector<BusVoltageContribution<ScalarT, IdxT>>&) const override;
 
       SignalsT&                         getSignals();
       const Model::VariableMonitorBase* getMonitor() const override;
@@ -86,9 +95,7 @@ namespace GridKit
       void initializeParameters(const ModelDataT&);
       void initializeMonitor();
 
-      BusT* bus_{nullptr};
-      RealT omega0_{0.0};
-
+      BusT*            bus_{nullptr};
       ABCMatrix<RealT> R_{};
       ABCMatrix<RealT> L_{};
 

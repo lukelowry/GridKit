@@ -321,8 +321,6 @@ namespace
     success *= parserRejectsAfter([](Json& input)
                                   { input["buses"][0]["unexpected"] = 1; });
     success *= parserRejectsAfter([](Json& input)
-                                  { input["buses"][0]["init"]["unexpected"] = 1; });
-    success *= parserRejectsAfter([](Json& input)
                                   { input["signals"][0]["unexpected"] = 1; });
     success *= parserRejectsAfter([](Json& input)
                                   { input["devices"][0]["unexpected"] = 1; });
@@ -396,10 +394,8 @@ namespace
       auto& ports = findDevice(input, "vectorfit_identity")["ports"];
       ports["out_b"] = ports["out_a"]; });
 
-    success *= parserRejectsAfter([](Json& input)
+    success *= parserAcceptsAfter([](Json& input)
                                   { findDevice(input, "source_650")["params"]["omega"] = 377.0; });
-    success *= parserRejectsAfter([](Json& input)
-                                  { input["header"]["omega0"] = -1.0; });
     success *= parserRejectsAfter([](Json& input)
                                   { input["header"]["format_version"] = 0.1; });
     success *= parserRejectsAfter([](Json& input)
@@ -498,12 +494,6 @@ namespace
     success            *= isThreeBusMutuallyCoupled(data);
 
     success *= parserRejectsAfter([](Json& input)
-                                  { input["buses"][0]["init"]["va"] = Json::array({1.0}); });
-    success *= parserRejectsAfter([](Json& input)
-                                  { input["buses"][0]["init"]["va"][1] = "not-a-number"; });
-    success *= parserRejectsReplacement("2401.357455418130", "1e309");
-
-    success *= parserRejectsAfter([](Json& input)
                                   {
       setValidVectorFitPoles(input);
       findDevice(input, "vectorfit_identity")["params"]["poles"][0]
@@ -570,7 +560,7 @@ namespace
       residue[0][0] = Json::array({1.0, 0.2});
       params["poles"] = Json::array({Json::array({-10.0, 0.0})});
       params["residues"] = Json::array({residue}); });
-    success *= parserRejectsAfter([](Json& input)
+    success *= parserAcceptsAfter([](Json& input)
                                   {
       auto& params = findDevice(input, "vectorfit_identity")["params"];
       params["poles"] = Json::array({
@@ -601,15 +591,19 @@ namespace
   TestOutcome studyParserRules()
   {
     TestStatus success = true;
-    Json       input{
-              {"system_model_file", std::filesystem::path{EMT_TEST_FIXTURE}.string()},
-              {"dt_fixed", 0.000025},
-              {"max_steps", 100000},
-              {"suppress_algebraic_errors", true},
-              {"dt_monitor", 0.0001},
-              {"tmax", 0.2},
-              {"output_file", "resolved.csv"},
-              {"events", Json::array({{{"time", 0.1}, {"type", "signal_set"}, {"signal_id", 1}, {"value", 0.0}}, {{"time", 0.05}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 1.0}}})}};
+    const auto initial_state_file =
+        std::filesystem::path{EMT_IEEE13_TEST_FIXTURE}.parent_path().parent_path()
+        / "ThreeBus" / "ThreeBus.initial.json";
+    Json input{
+        {"system_model_file", std::filesystem::path{EMT_TEST_FIXTURE}.string()},
+        {"initial_state_file", initial_state_file.string()},
+        {"dt_fixed", 0.000025},
+        {"max_steps", 100000},
+        {"suppress_algebraic_errors", true},
+        {"dt_monitor", 0.0001},
+        {"tmax", 0.2},
+        {"output_file", "resolved.csv"},
+        {"events", Json::array({{{"time", 0.1}, {"type", "signal_set"}, {"signal_id", 1}, {"value", 0.0}}, {{"time", 0.05}, {"type", "signal_set"}, {"signal_id", 0}, {"value", 1.0}}})}};
 
     const auto study  = input.get<EMT::StudyData>();
     success          *= study.events.size() == 2;
@@ -694,7 +688,110 @@ namespace
     return success.report(__func__);
   }
 
-  TestOutcome layoutAndInitialization()
+  TestOutcome externalInitialStateContract()
+  {
+    TestStatus success = true;
+    const auto data    = loadFixtureData();
+    const auto initial_state_file =
+        std::filesystem::path{EMT_IEEE13_TEST_FIXTURE}.parent_path().parent_path()
+        / "ThreeBus" / "ThreeBus.initial.json";
+    const auto initial_state =
+        EMT::parseInitialStateData(initial_state_file, data.case_name);
+
+    success *= initial_state.case_name == data.case_name;
+    success *= initial_state.time == 0.0;
+    success *= initial_state.buses.size() == data.bus.size();
+
+    auto system  = makeFixtureSystem(data);
+    success     *= !throws<>([&system, &initial_state]
+                         { EMT::applyInitialState(*system, initial_state); });
+    for (const auto& bus_state : initial_state.buses)
+    {
+      const auto* values = system->getBus(bus_state.bus_id)->y().getData();
+      for (std::size_t phase = 0; phase < 3; ++phase)
+      {
+        success *= values[phase] == bus_state.states.front().value[phase];
+      }
+    }
+    for (const auto& component_state : initial_state.components)
+    {
+      const auto* component  = system->getComponent(component_state.component_id);
+      const auto* layout     = dynamic_cast<const EMT::InitialStateLayout*>(component);
+      success               *= layout != nullptr;
+      std::vector<EMT::InitialStateVariable> variables;
+      if (layout != nullptr)
+      {
+        layout->appendInitialStateVariables(variables);
+      }
+      for (const auto& state : component_state.states)
+      {
+        for (const auto& variable : variables)
+        {
+          if (variable.name != state.variable || variable.index != state.index)
+          {
+            continue;
+          }
+          for (std::size_t phase = 0; phase < 3; ++phase)
+          {
+            success *= component->y().getData()[variable.local_offset + phase]
+                       == state.value[phase];
+          }
+        }
+      }
+    }
+    for (std::size_t index = 0; index < system->size(); ++index)
+    {
+      success *= system->yp().getData()[index] == 0.0;
+    }
+
+    auto missing_state = initial_state;
+    missing_state.buses.pop_back();
+    auto missing_system  = makeFixtureSystem(data);
+    success             *= throws<std::runtime_error>(
+        [&missing_system, &missing_state]
+        { EMT::applyInitialState(*missing_system, missing_state); });
+
+    auto nonfinite_state = initial_state;
+    nonfinite_state.buses.front().states.front().value.front() =
+        std::numeric_limits<double>::infinity();
+    auto nonfinite_system  = makeFixtureSystem(data);
+    success               *= throws<std::runtime_error>(
+        [&nonfinite_system, &nonfinite_state]
+        { EMT::applyInitialState(*nonfinite_system, nonfinite_state); });
+
+    const auto ieee_data = EMT::parseSystemModelData(
+        std::filesystem::path{EMT_IEEE13_TEST_FIXTURE});
+    auto ieee_state = EMT::parseInitialStateData(
+        std::filesystem::path{EMT_IEEE13_TEST_FIXTURE}.parent_path()
+            / "IEEE13.initial.json",
+        ieee_data.case_name);
+    auto ieee_system = std::make_unique<SystemT>(ieee_data);
+    ieee_system->allocate();
+    ieee_system->initialize();
+    EMT::applyInitialState(*ieee_system, ieee_state);
+    success *= ieee_system->getBus(634)->voltageClass()
+               == EMT::BusVoltageClass::algebraic;
+    success *= ieee_system->getBus(634)->differentiatedKCL();
+    success *= ieee_system->validateInitialState() == 0;
+
+    auto* load634 = ieee_system->getComponent(
+        "load_634_referred_to_4kv_projection");
+    load634->y().getData()[0] += 1.0;
+    success                   *= ieee_system->validateInitialState() != 0;
+    success                   *= ieee_system->getBus(634)->differentiatedKCL();
+    load634->y().getData()[0] -= 1.0;
+    success                   *= ieee_system->validateInitialState() == 0;
+
+    ieee_state.buses.push_back(
+        {634, {{"v", std::nullopt, {1.0, 2.0, 3.0}}}});
+    success *= throws<std::runtime_error>(
+        [&ieee_system, &ieee_state]
+        { EMT::applyInitialState(*ieee_system, ieee_state); });
+
+    return success.report(__func__);
+  }
+
+  TestOutcome layoutAndZeroInitialization()
   {
     TestStatus success  = true;
     const auto data     = loadFixtureData();
@@ -714,16 +811,35 @@ namespace
     success              *= system->getBus(650)->y().getData() == system_y;
     success              *= system->getBus(632)->y().getData() == system_y + 3;
     success              *= system->getBus(670)->y().getData() == system_y + 6;
+    for (std::size_t index = 0; index < system->size(); ++index)
+    {
+      success *= system->y().getData()[index] == 0.0;
+      success *= system->yp().getData()[index] == 0.0;
+    }
 
     const std::array<std::size_t, 11> expected_offsets{
         9, 9, 9, 9, 9, 9, 15, 24, 33, 36, 39};
     const std::array<std::size_t, 11> expected_sizes{
         0, 0, 0, 0, 0, 6, 9, 9, 3, 3, 3};
+    const std::array<std::string, 11> expected_component_ids{
+        "normal_load_enable_source",
+        "fault_load_enable_source",
+        "vectorfit_input_a_source",
+        "vectorfit_input_b_source",
+        "vectorfit_input_c_source",
+        "source_650",
+        "line_650_632",
+        "line_632_670",
+        "load_670",
+        "fault_632",
+        "vectorfit_identity"};
     for (std::size_t id = 0; id < componentCount(data); ++id)
     {
       auto* component  = system->getComponent(id);
       success         *= component->getGridKitComponentID() == id;
       success         *= component->size() == expected_sizes[id];
+      success         *= system->getComponent(expected_component_ids[id])
+                 == component;
       if (component->size() == 0)
       {
         continue;
@@ -757,8 +873,8 @@ namespace
     success *= dynamic_cast<LoadZT*>(system->getComponent(8)) != nullptr;
     success *= dynamic_cast<LoadZT*>(system->getComponent(9)) != nullptr;
     success *= dynamic_cast<VectorFitT*>(system->getComponent(10)) != nullptr;
-
-    success *= normalizedResidualInfinityNorm(*system) < 1.0e-9;
+    success *= throws<std::out_of_range>([&system]
+                                         { system->getComponent("unknown"); });
     success *= system->monitoring();
 
     std::vector<bool> expected_tag(system->size(), false);
@@ -780,17 +896,15 @@ namespace
     }
     success *= system->tag() == expected_tag;
 
-    EMT::Bus<double, std::size_t> caller_owned_bus650(data.bus[0], data.omega0);
-    EMT::Bus<double, std::size_t> caller_owned_bus632(data.bus[1], data.omega0);
-    EMT::Bus<double, std::size_t> caller_owned_bus670(data.bus[2], data.omega0);
+    EMT::Bus<double, std::size_t> caller_owned_bus650(data.bus[0]);
+    EMT::Bus<double, std::size_t> caller_owned_bus632(data.bus[1]);
+    EMT::Bus<double, std::size_t> caller_owned_bus670(data.bus[2]);
     LineLumpedT                   caller_owned_line1(&caller_owned_bus650,
                                    &caller_owned_bus632,
-                                   data.line_lumped[0],
-                                   data.omega0);
+                                   data.line_lumped[0]);
     LineLumpedT                   caller_owned_line2(&caller_owned_bus632,
                                    &caller_owned_bus670,
-                                   data.line_lumped[1],
-                                   data.omega0);
+                                   data.line_lumped[1]);
     {
       SystemT caller_owned_system;
       caller_owned_system.addBus(&caller_owned_bus650);
@@ -864,7 +978,7 @@ namespace
     return success.report(__func__);
   }
 
-  TestOutcome ieee13Initialization()
+  TestOutcome ieee13ZeroInitializationAndClassification()
   {
     TestStatus success = true;
     const auto data    = EMT::parseSystemModelData(
@@ -872,7 +986,25 @@ namespace
     auto system  = makeFixtureSystem(data);
     success     *= data.bus.size() == 14;
     success     *= data.line_lumped.size() == 13;
-    success     *= normalizedResidualInfinityNorm(*system) < 1.0e-9;
+    for (std::size_t index = 0; index < system->size(); ++index)
+    {
+      success *= system->y().getData()[index] == 0.0;
+      success *= system->yp().getData()[index] == 0.0;
+    }
+    for (const auto& bus_data : data.bus)
+    {
+      auto* bus = system->getBus(bus_data.bus_id);
+      if (bus_data.bus_id == 634)
+      {
+        success *= bus->voltageClass() == EMT::BusVoltageClass::algebraic;
+        success *= !bus->tag()[0] && !bus->tag()[1] && !bus->tag()[2];
+      }
+      else
+      {
+        success *= bus->voltageClass() == EMT::BusVoltageClass::differential;
+        success *= bus->tag()[0] && bus->tag()[1] && bus->tag()[2];
+      }
+    }
     return success.report(__func__);
   }
 
@@ -883,11 +1015,11 @@ namespace
     success            *= isThreeBusMutuallyCoupled(data);
     auto system         = makeFixtureSystem(data);
 
-    auto* source  = dynamic_cast<VoltageSourceT*>(system->getComponent(5));
-    auto* line1   = dynamic_cast<LineLumpedT*>(system->getComponent(6));
-    auto* line2   = dynamic_cast<LineLumpedT*>(system->getComponent(7));
-    auto* load    = dynamic_cast<LoadZT*>(system->getComponent(8));
-    auto* fault   = dynamic_cast<LoadZT*>(system->getComponent(9));
+    auto* source  = dynamic_cast<VoltageSourceT*>(system->getComponent("source_650"));
+    auto* line1   = dynamic_cast<LineLumpedT*>(system->getComponent("line_650_632"));
+    auto* line2   = dynamic_cast<LineLumpedT*>(system->getComponent("line_632_670"));
+    auto* load    = dynamic_cast<LoadZT*>(system->getComponent("load_670"));
+    auto* fault   = dynamic_cast<LoadZT*>(system->getComponent("fault_632"));
     success      *= source != nullptr && line1 != nullptr && line2 != nullptr;
     success      *= load != nullptr && fault != nullptr;
     if (source == nullptr || line1 == nullptr || line2 == nullptr
@@ -989,8 +1121,9 @@ int main()
   result += parserMatrixAndPhysicalRules();
   result += parserComplexMonitorAndSignalRules();
   result += studyParserRules();
-  result += layoutAndInitialization();
-  result += ieee13Initialization();
+  result += externalInitialStateContract();
+  result += layoutAndZeroInitialization();
+  result += ieee13ZeroInitializationAndClassification();
   result += repeatedAllocationMonitor();
   result += kclResetAndDirectAccumulation();
   result += jacobianAssembly();

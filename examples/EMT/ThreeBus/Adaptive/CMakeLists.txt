@@ -1,3 +1,4 @@
 gridkit_example_add_file(ThreeBusAdaptive.case.json)
+gridkit_example_add_file(ThreeBusAdaptive.initial.json)
 gridkit_example_add_file(ThreeBusAdaptive.solver.json)
 gridkit_example_add_file(ThreeBusAdaptive.png)

@@ -100,35 +100,17 @@ None.
 
 ### Input Initialization
 
-```math
-\begin{aligned}
-\mathbf{V}
-  &\leftarrow \text{solved terminal RMS voltage phasor} \\
-\mathbf{v}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{V}) \\
-\dfrac{\mathrm{d}\mathbf{v}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{V}).
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{v}$ | — | Connected bus | Terminal voltage at $t_0$
 
 ### Internal Initialization
 
-```math
-\mathbf{0}=\mathbf{Z}(s_0)\mathbf{I}+\mathbf{V}.
-```
-
-Initialization requires $\mathbf{Z}(s_0)$ to be nonsingular. The impedance
-submodel initializes from $\mathbf{I}$. For either current classification, at
-$t=0$,
-
-```math
-\begin{aligned}
-\mathbf{i}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(\mathbf{I}) \\
-\dfrac{\mathrm{d}\mathbf{i}}{\mathrm{d}t}
-  &\leftarrow \sqrt{2}\,\mathrm{Re}(s_0\mathbf{I}).
-\end{aligned}
-```
+Symbol | JSON | Source | Note
+------ | ---- | ------ | ----
+$\mathbf{i}$ | `i` | Initial state | $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$, solve determines $\mathrm{d}\mathbf{i}/\mathrm{d}t$
+$\mathbf{i}$ | — | Consistent solve | $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Z` | Initial state | Impedance memory states
 
 ### Output Initialization
 
@@ -142,7 +124,17 @@ Monitor | Units | Description | Note
 
 ## Development
 
-The initial three-phase formulation uses resistance and inductance matrices.
+The initial three-phase formulation fixes $N=3$ and requires
+$Q_{\mathbf{z}}=0$, so the impedance reduces to a resistance and inductance
+and $\mathbf{i}$ is a differential variable.
+
+### Derived Parameters
+
+```math
+\mathbf{R} = \mathbf{D}^{\mathbf{z}},
+\qquad
+\mathbf{L} = \mathbf{E}^{\mathbf{z}}
+```
 
 ### Differential Equations
 
@@ -152,3 +144,9 @@ The initial three-phase formulation uses resistance and inductance matrices.
 + \mathbf{L}\dfrac{\mathrm{d}\mathbf{i}}{\mathrm{d}t}
 + \mathbf{v}
 ```
+
+### Temporary Interface
+
+The implementation carries a required `enable` signal input that gates the bus
+current injection. It is a placeholder for a physical
+[Switch](../../Switch/README.md) and is not part of the model specification.

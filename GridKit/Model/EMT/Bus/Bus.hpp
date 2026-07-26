@@ -3,6 +3,8 @@
 #include <memory>
 
 #include <GridKit/Model/EMT/Bus/BusData.hpp>
+#include <GridKit/Model/EMT/ComponentData.hpp>
+#include <GridKit/Model/EMT/InitialStateLayout.hpp>
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
 
@@ -11,7 +13,17 @@ namespace GridKit
   namespace EMT
   {
     template <typename scalar_type, typename index_type>
-    class Bus final : public PhasorDynamics::Component<scalar_type, index_type>
+    class SystemModel;
+
+    enum class BusVoltageClass
+    {
+      algebraic,
+      differential
+    };
+
+    template <typename scalar_type, typename index_type>
+    class Bus final : public PhasorDynamics::Component<scalar_type, index_type>,
+                      public InitialStateLayout
     {
       using PhasorDynamics::Component<scalar_type, index_type>::abs_tol_;
       using PhasorDynamics::Component<scalar_type, index_type>::allocated_;
@@ -35,10 +47,12 @@ namespace GridKit
       using ModelDataT = BusData<RealT, IdxT>;
       using MonitorT   = Model::VariableMonitor<Bus, BusData>;
 
-      Bus(const ModelDataT&, RealT omega0);
+      explicit Bus(const ModelDataT&);
       ~Bus() override;
 
-      IdxT busID() const;
+      IdxT            busID() const;
+      BusVoltageClass voltageClass() const;
+      bool            differentiatedKCL() const;
 
       ScalarT& Va();
       ScalarT& Vb();
@@ -49,6 +63,7 @@ namespace GridKit
       ScalarT& Ia();
       ScalarT& Ib();
       ScalarT& Ic();
+      void     accumulateCurrent(const ScalarT&, const ScalarT&, const ScalarT&);
 
       int setGridKitComponentID(IdxT) override final;
       int allocate() override final;
@@ -59,16 +74,24 @@ namespace GridKit
       int evaluateResidual() override final;
       int evaluateJacobian() override final;
 
+      void appendInitialStateVariables(
+          std::vector<InitialStateVariable>&) const override;
+
       const Model::VariableMonitorBase* getMonitor() const override;
 
     private:
+      friend class SystemModel<ScalarT, IdxT>;
+
+      void setVoltageClass(BusVoltageClass);
+      void setKCLDifferentiationRequired(bool);
+      void setOriginalKCLValidation(bool);
       void initializeMonitor();
 
       IdxT                      bus_id_{0};
-      RealT                     omega0_{0.0};
-      std::complex<RealT>       Va0_{0.0, 0.0};
-      std::complex<RealT>       Vb0_{0.0, 0.0};
-      std::complex<RealT>       Vc0_{0.0, 0.0};
+      BusVoltageClass           voltage_class_{BusVoltageClass::algebraic};
+      bool                      kcl_differentiation_required_{false};
+      bool                      original_kcl_validation_{false};
+      ABCVector<RealT>          current_scale_{};
       std::unique_ptr<MonitorT> monitor_;
     };
   } // namespace EMT

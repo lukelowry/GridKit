@@ -1,6 +1,5 @@
 #pragma once
 
-#include <complex>
 #include <set>
 #include <string>
 
@@ -24,10 +23,6 @@ namespace GridKit
 
       std::string name;
       IdxT        bus_id{0};
-
-      std::complex<RealT> Va0{0.0, 0.0};
-      std::complex<RealT> Vb0{0.0, 0.0};
-      std::complex<RealT> Vc0{0.0, 0.0};
 
       std::set<MonitorableVariables> monitored_variables;
     };

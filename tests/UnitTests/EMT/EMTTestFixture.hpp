@@ -1,12 +1,9 @@
 #pragma once
 
-#include <algorithm>
-#include <cmath>
 #include <cstddef>
-#include <fstream>
+#include <filesystem>
 #include <memory>
-#include <stdexcept>
-#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include <GridKit/Definitions.hpp>
@@ -69,7 +66,6 @@ namespace GridKit::Testing::EMTTest
     system->tagDifferentiable();
     system->setAbsoluteTolerance(1.0e-8);
     system->initialize();
-    system->evaluateResidual();
     return system;
   }
 
@@ -92,30 +88,6 @@ namespace GridKit::Testing::EMTTest
       }
     }
     return nullptr;
-  }
-
-  template <typename EvaluatorT>
-  RealT residualInfinityNorm(EvaluatorT& evaluator)
-  {
-    RealT       result = 0.0;
-    const auto* values = evaluator.getResidual().getData();
-    for (IdxT row = 0; row < evaluator.size(); ++row)
-    {
-      result = std::max(result, std::abs(values[row]));
-    }
-    return result;
-  }
-
-  template <typename EvaluatorT>
-  RealT normalizedResidualInfinityNorm(EvaluatorT& evaluator)
-  {
-    RealT       state_scale = 1.0;
-    const auto* values      = evaluator.y().getData();
-    for (IdxT index = 0; index < evaluator.size(); ++index)
-    {
-      state_scale = std::max(state_scale, std::abs(values[index]));
-    }
-    return residualInfinityNorm(evaluator) / state_scale;
   }
 
   template <typename ComponentT>

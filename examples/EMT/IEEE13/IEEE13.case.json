@@ -4,28 +4,13 @@
     "format_revision": 1,
     "case_name": "IEEE13",
     "case_description": "Full IEEE 13-node feeder graph projected onto the currently implemented fixed-ABC EMT model subset",
-    "case_comments": "This is explicitly not an exact IEEE 13-node benchmark model. It retains every feeder bus and branch in the published 650-632-670-671 topology that can be connected with the available components. The 650 regulator and RG60 internal node are contracted into the source connection; the 115/4.16-kV substation transformer ratio is collapsed into a 4.16-kV source with its published 1-percent R and 8-percent X series impedance; the 633-634 4.16/0.48-kV transformer is a unity-ratio three-phase series LineLumped proxy with a 1-percent symmetric mutual completion and loads referred to 4.16 kV. Because the fixed-ABC Bus contract makes all bus voltages differential, that proxy uses a full-rank shunt-capacitance regularization equal to the adjacent 632-633 segment's total capacitance; it is not sourced IEEE transformer capacitance. Configurations 603 and 604 repeat the mean published two-phase self term and published mutual term across ABC; 605 scales those 603 mutual-to-self ratios to its published scalar self data; 607 scales the full 606 coupling pattern to its published scalar self data. The closed 671-692 switch is represented by a one-metre configuration-601 LineLumped jumper. Constant-P and constant-I loads and delta connections are replaced by nominal-voltage grounded-wye RL equivalents; unloaded projected phases use finite open-circuit impedances; capacitors at 675 and 611 are omitted because no supported component can represent them. There are no regulator taps, transformer ratio, capacitor, phase-selective, PQ, or constant-current dynamics. Published IEEE PES topology/load data and current EPRI OpenDSS line matrices are used where the fixed-ABC lane can represent them.",
-    "omega0": 376.99111843077515
+    "case_comments": "This is explicitly not an exact IEEE 13-node benchmark model. It retains every feeder bus and branch in the published 650-632-670-671 topology that can be connected with the available components. The 650 regulator and RG60 internal node are contracted into the source connection; the 115/4.16-kV substation transformer ratio is collapsed into a 4.16-kV source with its published 1-percent R and 8-percent X series impedance; the 633-634 4.16/0.48-kV transformer is a unity-ratio three-phase series LineLumped proxy with a 1-percent symmetric mutual completion and loads referred to 4.16 kV. The projected transformer has zero shunt capacitance, so bus 634 is algebraic under the assembled derivative classification. Configurations 603 and 604 repeat the mean published two-phase self term and published mutual term across ABC; 605 scales those 603 mutual-to-self ratios to its published scalar self data; 607 scales the full 606 coupling pattern to its published scalar self data. The closed 671-692 switch is represented by a one-metre configuration-601 LineLumped jumper. Constant-P and constant-I loads and delta connections are replaced by nominal-voltage grounded-wye RL equivalents; unloaded projected phases use finite open-circuit impedances; capacitors at 675 and 611 are omitted because no supported component can represent them. There are no regulator taps, transformer ratio, capacitor, phase-selective, PQ, or constant-current dynamics. Published IEEE PES topology/load data and current EPRI OpenDSS line matrices are used where the fixed-ABC lane can represent them."
   },
   "buses": [
     {
       "number": 650,
       "class": "bus",
       "name": "650",
-      "init": {
-        "va": [
-          2300.4737054925999,
-          -107.20904396371948
-        ],
-        "vb": [
-          -1233.7727735063131,
-          -1964.0939677621632
-        ],
-        "vc": [
-          -1053.754035117182,
-          2040.5073794305595
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -34,20 +19,6 @@
       "number": 632,
       "class": "bus",
       "name": "632",
-      "init": {
-        "va": [
-          2197.7607126797311,
-          -189.43712498279262
-        ],
-        "vb": [
-          -1259.921227496859,
-          -1889.6927327766041
-        ],
-        "vc": [
-          -928.60591485706789,
-          1959.2313164974942
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -56,20 +27,6 @@
       "number": 670,
       "class": "bus",
       "name": "670",
-      "init": {
-        "va": [
-          2167.5955463466921,
-          -221.56439047791238
-        ],
-        "vb": [
-          -1267.7045827757611,
-          -1886.0919330630218
-        ],
-        "vc": [
-          -896.2016938455688,
-          1930.6300084517879
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -78,20 +35,6 @@
       "number": 671,
       "class": "bus",
       "name": "671",
-      "init": {
-        "va": [
-          2104.4488850481684,
-          -286.07200635815741
-        ],
-        "vb": [
-          -1285.9134220312615,
-          -1884.1872781747963
-        ],
-        "vc": [
-          -843.08371529128397,
-          1876.2890097635477
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -100,20 +43,6 @@
       "number": 680,
       "class": "bus",
       "name": "680",
-      "init": {
-        "va": [
-          2104.4490419150675,
-          -286.072083656921
-        ],
-        "vb": [
-          -1285.9135659204273,
-          -1884.1873845523596
-        ],
-        "vc": [
-          -843.08374308112002,
-          1876.2891750601648
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -122,20 +51,6 @@
       "number": 633,
       "class": "bus",
       "name": "633",
-      "init": {
-        "va": [
-          2191.0672522034724,
-          -191.16275690368707
-        ],
-        "vb": [
-          -1259.0707208259703,
-          -1884.874978165655
-        ],
-        "vc": [
-          -926.13849033343843,
-          1954.4444914983644
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -144,20 +59,6 @@
       "number": 634,
       "class": "bus",
       "name": "634",
-      "init": {
-        "va": [
-          2138.148754272469,
-          -211.50192416936758
-        ],
-        "vb": [
-          -1251.4168666859446,
-          -1840.3272905406234
-        ],
-        "vc": [
-          -893.5700159761127,
-          1926.1916492703576
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -166,20 +67,6 @@
       "number": 645,
       "class": "bus",
       "name": "645",
-      "init": {
-        "va": [
-          2200.0360783854362,
-          -184.2188723090791
-        ],
-        "vb": [
-          -1248.8567744999305,
-          -1868.6351557187656
-        ],
-        "vc": [
-          -922.57423973454581,
-          1958.8549484054986
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -188,20 +75,6 @@
       "number": 646,
       "class": "bus",
       "name": "646",
-      "init": {
-        "va": [
-          2201.2244808175988,
-          -183.43291030852006
-        ],
-        "vb": [
-          -1245.8927505778315,
-          -1864.049395630253
-        ],
-        "vc": [
-          -919.13204262968566,
-          1956.2840077909646
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -210,20 +83,6 @@
       "number": 684,
       "class": "bus",
       "name": "684",
-      "init": {
-        "va": [
-          2100.121310002532,
-          -287.30441879519725
-        ],
-        "vb": [
-          -1285.6656963293851,
-          -1885.6616910935566
-        ],
-        "vc": [
-          -839.53739352935986,
-          1870.5173034998531
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -232,20 +91,6 @@
       "number": 611,
       "class": "bus",
       "name": "611",
-      "init": {
-        "va": [
-          2101.8364394821265,
-          -288.12031759349173
-        ],
-        "vb": [
-          -1283.9506085070004,
-          -1886.4775689512776
-        ],
-        "vc": [
-          -834.53871514102298,
-          1865.393811682575
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -254,20 +99,6 @@
       "number": 652,
       "class": "bus",
       "name": "652",
-      "init": {
-        "va": [
-          2088.6478774282627,
-          -282.96597258465067
-        ],
-        "vb": [
-          -1289.31913488651,
-          -1882.8002167892837
-        ],
-        "vc": [
-          -842.49140763913681,
-          1873.3974858277863
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -276,20 +107,6 @@
       "number": 692,
       "class": "bus",
       "name": "692",
-      "init": {
-        "va": [
-          2104.3682375208564,
-          -286.18188145274428
-        ],
-        "vb": [
-          -1285.9340496239167,
-          -1884.235749840833
-        ],
-        "vc": [
-          -843.03728648894662,
-          1876.2001340694374
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -298,20 +115,6 @@
       "number": 675,
       "class": "bus",
       "name": "675",
-      "init": {
-        "va": [
-          2088.1581862636917,
-          -289.0479996263436
-        ],
-        "vb": [
-          -1289.407329516011,
-          -1883.7428689463775
-        ],
-        "vc": [
-          -843.09086464026643,
-          1868.8866968150155
-        ]
-      },
       "mon": [
         "v"
       ]
@@ -863,19 +666,19 @@
         ],
         "Cp": [
           [
-            1.4315067115000004e-09,
-            -2.71707459e-10,
-            -4.2462925000000003e-10
+            0.0,
+            0.0,
+            0.0
           ],
           [
-            -2.71707459e-10,
-            1.3010157945000002e-09,
-            -1.6548107050000001e-10
+            0.0,
+            0.0,
+            0.0
           ],
           [
-            -4.2462925000000003e-10,
-            -1.6548107050000001e-10,
-            1.3625813840000002e-09
+            0.0,
+            0.0,
+            0.0
           ]
         ]
       }

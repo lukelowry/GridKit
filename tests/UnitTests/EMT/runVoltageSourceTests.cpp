@@ -27,7 +27,7 @@ namespace
              {0.0002, 0.0003, 0.0060}}};
   }
 
-  TestOutcome initializationAndExplicitSourceRows()
+  TestOutcome zeroInitializationAndExplicitSourceRows()
   {
     TestStatus success  = true;
     const auto data     = loadFixtureData();
@@ -41,7 +41,17 @@ namespace
     }
 
     success *= source->size() == 6;
-    success *= residualInfinityNorm(*source) < 1.0e-9;
+    for (std::size_t index = 0; index < source->size(); ++index)
+    {
+      source->y().getData()[index]  = 1.0;
+      source->yp().getData()[index] = -1.0;
+    }
+    success *= source->initialize() == 0;
+    for (std::size_t index = 0; index < source->size(); ++index)
+    {
+      success *= source->y().getData()[index] == 0.0;
+      success *= source->yp().getData()[index] == 0.0;
+    }
     success *= source->tag()[0] && source->tag()[1] && source->tag()[2];
     success *= !source->tag()[3] && !source->tag()[4] && !source->tag()[5];
 
@@ -51,16 +61,6 @@ namespace
     const auto& phi = std::get<EMT::ABCVector<double>>(
         source_data.parameters.at(EMT::VoltageSourceParameters::phi));
     const double sqrt_two = std::sqrt(2.0);
-
-    success *= isEqual(source->y().getData()[3],
-                       sqrt_two * E[0] * std::cos(phi[0]),
-                       1.0e-13);
-    success *= isEqual(source->y().getData()[4],
-                       sqrt_two * E[1] * std::cos(phi[1]),
-                       1.0e-13);
-    success *= isEqual(source->y().getData()[5],
-                       sqrt_two * E[2] * std::cos(phi[2]),
-                       1.0e-13);
 
     std::array<double, 6> y{};
     std::array<double, 6> yp{};
@@ -173,7 +173,7 @@ namespace
 int main()
 {
   GridKit::Testing::TestingResults result;
-  result += initializationAndExplicitSourceRows();
+  result += zeroInitializationAndExplicitSourceRows();
   result += jacobianCoupling();
   return result.summary();
 }

@@ -18,6 +18,8 @@
 #include <GridKit/Model/VariableMonitor.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
 
+#include "InitialState.hpp"
+
 namespace GridKit::EMT
 {
   namespace fs = std::filesystem;
@@ -34,15 +36,18 @@ namespace GridKit::EMT
 
   struct StudyData
   {
-    fs::path    system_model_file;
-    double      dt_monitor{0.0};
-    double      tmax{0.0};
-    double      rel_tol{1.0e-7};
-    double      abs_tol{1.0e-9};
-    double      dt_fixed{0.0};
-    std::size_t max_steps{0};
-    bool        suppress_algebraic_errors{false};
-    fs::path    output_file;
+    fs::path         system_model_file;
+    fs::path         initial_state_file;
+    double           initial_time{0.0};
+    double           dt_monitor{0.0};
+    double           tmax{0.0};
+    double           rel_tol{1.0e-7};
+    double           abs_tol{1.0e-9};
+    double           dt_fixed{0.0};
+    std::size_t      max_steps{0};
+    bool             suppress_algebraic_errors{false};
+    fs::path         output_file;
+    InitialStateData initial_state;
 
     std::vector<SignalEvent>             events;
     SystemModelData<double, std::size_t> model_data;
@@ -122,9 +127,9 @@ namespace GridKit::EMT
     j.at("signal_id").get_to(event.signal_id);
     j.at("value").get_to(event.value);
 
-    if (!std::isfinite(event.time) || event.time < 0.0)
+    if (!std::isfinite(event.time))
     {
-      throw std::runtime_error("EMT event time must be finite and nonnegative");
+      throw std::runtime_error("EMT event time must be finite");
     }
     if (!std::isfinite(event.value)
         || (event.value != 0.0 && event.value != 1.0))
@@ -137,6 +142,7 @@ namespace GridKit::EMT
   {
     validateJsonKeys(j,
                      {"system_model_file",
+                      "initial_state_file",
                       "dt_monitor",
                       "tmax",
                       "rel_tol",
@@ -146,9 +152,10 @@ namespace GridKit::EMT
                       "suppress_algebraic_errors",
                       "output_file",
                       "events"},
-                     {"system_model_file", "tmax"},
+                     {"system_model_file", "initial_state_file", "tmax"},
                      "EMT study");
     j.at("system_model_file").get_to(study.system_model_file);
+    j.at("initial_state_file").get_to(study.initial_state_file);
     j.at("tmax").get_to(study.tmax);
     study.dt_monitor  = j.value("dt_monitor", 0.0);
     study.rel_tol     = j.value("rel_tol", 1.0e-7);
@@ -177,7 +184,7 @@ namespace GridKit::EMT
       j.at("events").get_to(study.events);
     }
 
-    if (!std::isfinite(study.tmax) || study.tmax <= 0.0
+    if (!std::isfinite(study.tmax)
         || !std::isfinite(study.dt_monitor) || study.dt_monitor < 0.0
         || !std::isfinite(study.dt_fixed) || study.dt_fixed < 0.0
         || !std::isfinite(study.rel_tol) || study.rel_tol <= 0.0
@@ -218,11 +225,32 @@ namespace GridKit::EMT
     {
       study.system_model_file = input_directory / study.system_model_file;
     }
+    if (!study.initial_state_file.is_absolute())
+    {
+      study.initial_state_file = input_directory / study.initial_state_file;
+    }
     if (!study.output_file.empty() && !study.output_file.is_absolute())
     {
       study.output_file = input_directory / study.output_file;
     }
     study.model_data = parseSystemModelData(study.system_model_file);
+    study.initial_state =
+        parseInitialStateData(study.initial_state_file,
+                              study.model_data.case_name);
+    study.initial_time = study.initial_state.time;
+
+    if (study.initial_time >= study.tmax)
+    {
+      throw std::runtime_error("EMT initial-state time must precede tmax");
+    }
+    for (const auto& event : study.events)
+    {
+      if (event.time < study.initial_time)
+      {
+        throw std::runtime_error(
+            "EMT event must not precede the initial-state time");
+      }
+    }
 
     std::set<std::size_t> load_enable_signals;
     for (const auto& load : study.model_data.loadz)

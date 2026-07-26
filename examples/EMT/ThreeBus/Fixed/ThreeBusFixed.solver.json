@@ -1,5 +1,6 @@
 {
   "system_model_file": "ThreeBusFixed.case.json",
+  "initial_state_file": "ThreeBusFixed.initial.json",
   "dt_fixed": 0.00000001,
   "dt_monitor": 0.0000002,
   "tmax": 0.0003,

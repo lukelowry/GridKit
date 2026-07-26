@@ -17,9 +17,7 @@ namespace GridKit
     using Log = ::GridKit::Utilities::Logger;
 
     template <typename scalar_type, typename index_type>
-    VectorFit<scalar_type, index_type>::VectorFit(const ModelDataT& data,
-                                                  RealT             omega0)
-      : omega0_(omega0)
+    VectorFit<scalar_type, index_type>::VectorFit(const ModelDataT& data)
     {
       initializeParameters(data);
 
@@ -245,12 +243,6 @@ namespace GridKit
         ++errors;
       }
 
-      if (!std::isfinite(omega0_) || omega0_ <= 0.0)
-      {
-        Log::error() << "VectorFit: omega0 must be finite and positive\n";
-        ++errors;
-      }
-
       if (!matrixIsFinite(D_) || !matrixIsFinite(E_))
       {
         Log::error() << "VectorFit: D and E must contain finite values\n";
@@ -263,8 +255,7 @@ namespace GridKit
         ++errors;
       }
 
-      const auto                check_count = std::min(poles_.size(), residues_.size());
-      const std::complex<RealT> s0(0.0, omega0_);
+      const auto check_count = std::min(poles_.size(), residues_.size());
       for (size_t q = 0; q < check_count; ++q)
       {
         if (!std::isfinite(poles_[q].real())
@@ -272,13 +263,6 @@ namespace GridKit
             || !complexMatrixIsFinite(residues_[q]))
         {
           Log::error() << "VectorFit: poles and residues must be finite\n";
-          ++errors;
-        }
-
-        if (approximatelyEqual(std::abs(s0 - poles_[q]), 0.0))
-        {
-          Log::error() << "VectorFit: initialization frequency coincides with pole "
-                       << q << "\n";
           ++errors;
         }
 
@@ -351,171 +335,34 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int VectorFit<scalar_type, index_type>::initialize()
     {
-      static constexpr auto INPUT_A = VectorFitExternalVariables::input_a;
-      static constexpr auto INPUT_B = VectorFitExternalVariables::input_b;
-      static constexpr auto INPUT_C = VectorFitExternalVariables::input_c;
-
-      ws_[0] = signals_.template readExternalVariable<INPUT_A>();
-      ws_[1] = signals_.template readExternalVariable<INPUT_B>();
-      ws_[2] = signals_.template readExternalVariable<INPUT_C>();
-
-      wsp_[0] = ScalarT{0.0};
-      wsp_[1] = ScalarT{0.0};
-      wsp_[2] = ScalarT{0.0};
-
-      if (signals_.template isDerivativeLinked<INPUT_A>())
-      {
-        wsp_[0] = signals_.template readExternalVariableDerivative<INPUT_A>();
-      }
-      if (signals_.template isDerivativeLinked<INPUT_B>())
-      {
-        wsp_[1] = signals_.template readExternalVariableDerivative<INPUT_B>();
-      }
-      if (signals_.template isDerivativeLinked<INPUT_C>())
-      {
-        wsp_[2] = signals_.template readExternalVariableDerivative<INPUT_C>();
-      }
-
-      const RealT               sqrt_two = std::sqrt(static_cast<RealT>(2.0));
-      const std::complex<RealT> s0(0.0, omega0_);
-
-      const std::complex<RealT> ua(
-          static_cast<RealT>(ws_[0]) / sqrt_two,
-          -static_cast<RealT>(wsp_[0]) / (sqrt_two * omega0_));
-      const std::complex<RealT> ub(
-          static_cast<RealT>(ws_[1]) / sqrt_two,
-          -static_cast<RealT>(wsp_[1]) / (sqrt_two * omega0_));
-      const std::complex<RealT> uc(
-          static_cast<RealT>(ws_[2]) / sqrt_two,
-          -static_cast<RealT>(wsp_[2]) / (sqrt_two * omega0_));
-
-      std::vector<std::complex<RealT>> state_phasors(
-          static_cast<size_t>(output_offset_));
-
-      auto* y  = y_.getData();
-      auto* yp = yp_.getData();
-
-      for (IdxT q = 0; q < pole_count_; ++q)
-      {
-        const auto state_offset = static_cast<size_t>(3 * q);
-        const auto pole         = poles_[static_cast<size_t>(q)];
-
-        if (pole_kinds_[static_cast<size_t>(q)] == PoleKind::Real)
-        {
-          const auto denominator = s0 - pole.real();
-
-          state_phasors[state_offset]     = ua / denominator;
-          state_phasors[state_offset + 1] = ub / denominator;
-          state_phasors[state_offset + 2] = uc / denominator;
-
-          y[state_offset]      = ScalarT{sqrt_two * state_phasors[state_offset].real()};
-          y[state_offset + 1]  = ScalarT{sqrt_two * state_phasors[state_offset + 1].real()};
-          y[state_offset + 2]  = ScalarT{sqrt_two * state_phasors[state_offset + 2].real()};
-          yp[state_offset]     = ScalarT{sqrt_two * (s0 * state_phasors[state_offset]).real()};
-          yp[state_offset + 1] = ScalarT{sqrt_two * (s0 * state_phasors[state_offset + 1]).real()};
-          yp[state_offset + 2] = ScalarT{sqrt_two * (s0 * state_phasors[state_offset + 2]).real()};
-          continue;
-        }
-
-        if (q + 1 >= pole_count_)
-        {
-          return 1;
-        }
-
-        const auto shifted_s   = s0 - pole.real();
-        const auto denominator = shifted_s * shifted_s
-                                 + pole.imag() * pole.imag();
-        const auto v_offset = static_cast<size_t>(3 * (q + 1));
-
-        state_phasors[state_offset]     = ua * shifted_s / denominator;
-        state_phasors[state_offset + 1] = ub * shifted_s / denominator;
-        state_phasors[state_offset + 2] = uc * shifted_s / denominator;
-        state_phasors[v_offset]         = pole.imag() * ua / denominator;
-        state_phasors[v_offset + 1]     = pole.imag() * ub / denominator;
-        state_phasors[v_offset + 2]     = pole.imag() * uc / denominator;
-
-        y[state_offset]     = ScalarT{sqrt_two * state_phasors[state_offset].real()};
-        y[state_offset + 1] = ScalarT{sqrt_two * state_phasors[state_offset + 1].real()};
-        y[state_offset + 2] = ScalarT{sqrt_two * state_phasors[state_offset + 2].real()};
-        y[v_offset]         = ScalarT{sqrt_two * state_phasors[v_offset].real()};
-        y[v_offset + 1]     = ScalarT{sqrt_two * state_phasors[v_offset + 1].real()};
-        y[v_offset + 2]     = ScalarT{sqrt_two * state_phasors[v_offset + 2].real()};
-
-        yp[state_offset]     = ScalarT{sqrt_two * (s0 * state_phasors[state_offset]).real()};
-        yp[state_offset + 1] = ScalarT{sqrt_two * (s0 * state_phasors[state_offset + 1]).real()};
-        yp[state_offset + 2] = ScalarT{sqrt_two * (s0 * state_phasors[state_offset + 2]).real()};
-        yp[v_offset]         = ScalarT{sqrt_two * (s0 * state_phasors[v_offset]).real()};
-        yp[v_offset + 1]     = ScalarT{sqrt_two * (s0 * state_phasors[v_offset + 1]).real()};
-        yp[v_offset + 2]     = ScalarT{sqrt_two * (s0 * state_phasors[v_offset + 2]).real()};
-
-        ++q;
-      }
-
-      std::complex<RealT> ya = (D_[0][0] + s0 * E_[0][0]) * ua
-                               + (D_[0][1] + s0 * E_[0][1]) * ub
-                               + (D_[0][2] + s0 * E_[0][2]) * uc;
-      std::complex<RealT> yb = (D_[1][0] + s0 * E_[1][0]) * ua
-                               + (D_[1][1] + s0 * E_[1][1]) * ub
-                               + (D_[1][2] + s0 * E_[1][2]) * uc;
-      std::complex<RealT> yc = (D_[2][0] + s0 * E_[2][0]) * ua
-                               + (D_[2][1] + s0 * E_[2][1]) * ub
-                               + (D_[2][2] + s0 * E_[2][2]) * uc;
-
-      for (IdxT q = 0; q < pole_count_; ++q)
-      {
-        const auto  state_offset = static_cast<size_t>(3 * q);
-        const auto& residue      = residues_[static_cast<size_t>(q)];
-
-        if (pole_kinds_[static_cast<size_t>(q)] == PoleKind::Real)
-        {
-          ya += residue[0][0].real() * state_phasors[state_offset]
-                + residue[0][1].real() * state_phasors[state_offset + 1]
-                + residue[0][2].real() * state_phasors[state_offset + 2];
-          yb += residue[1][0].real() * state_phasors[state_offset]
-                + residue[1][1].real() * state_phasors[state_offset + 1]
-                + residue[1][2].real() * state_phasors[state_offset + 2];
-          yc += residue[2][0].real() * state_phasors[state_offset]
-                + residue[2][1].real() * state_phasors[state_offset + 1]
-                + residue[2][2].real() * state_phasors[state_offset + 2];
-          continue;
-        }
-
-        const auto v_offset  = static_cast<size_t>(3 * (q + 1));
-        ya                  += static_cast<RealT>(2.0)
-              * (residue[0][0].real() * state_phasors[state_offset]
-                 + residue[0][1].real() * state_phasors[state_offset + 1]
-                 + residue[0][2].real() * state_phasors[state_offset + 2]
-                 - residue[0][0].imag() * state_phasors[v_offset]
-                 - residue[0][1].imag() * state_phasors[v_offset + 1]
-                 - residue[0][2].imag() * state_phasors[v_offset + 2]);
-        yb += static_cast<RealT>(2.0)
-              * (residue[1][0].real() * state_phasors[state_offset]
-                 + residue[1][1].real() * state_phasors[state_offset + 1]
-                 + residue[1][2].real() * state_phasors[state_offset + 2]
-                 - residue[1][0].imag() * state_phasors[v_offset]
-                 - residue[1][1].imag() * state_phasors[v_offset + 1]
-                 - residue[1][2].imag() * state_phasors[v_offset + 2]);
-        yc += static_cast<RealT>(2.0)
-              * (residue[2][0].real() * state_phasors[state_offset]
-                 + residue[2][1].real() * state_phasors[state_offset + 1]
-                 + residue[2][2].real() * state_phasors[state_offset + 2]
-                 - residue[2][0].imag() * state_phasors[v_offset]
-                 - residue[2][1].imag() * state_phasors[v_offset + 1]
-                 - residue[2][2].imag() * state_phasors[v_offset + 2]);
-        ++q;
-      }
-
-      const auto out = static_cast<size_t>(output_offset_);
-      y[out]         = ScalarT{sqrt_two * ya.real()};
-      y[out + 1]     = ScalarT{sqrt_two * yb.real()};
-      y[out + 2]     = ScalarT{sqrt_two * yc.real()};
-      yp[out]        = ScalarT{sqrt_two * (s0 * ya).real()};
-      yp[out + 1]    = ScalarT{sqrt_two * (s0 * yb).real()};
-      yp[out + 2]    = ScalarT{sqrt_two * (s0 * yc).real()};
+      std::fill_n(y_.getData(), static_cast<size_t>(size_), ScalarT{0.0});
+      std::fill_n(yp_.getData(), static_cast<size_t>(size_), ScalarT{0.0});
 
       y_.setDataUpdated();
       yp_.setDataUpdated();
       return 0;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void VectorFit<scalar_type, index_type>::appendInitialStateVariables(
+        std::vector<InitialStateVariable>& variables) const
+    {
+      for (IdxT q = 0; q < pole_count_; ++q)
+      {
+        const auto kind = pole_kinds_[static_cast<std::size_t>(q)];
+        if (kind == PoleKind::ComplexSecond)
+        {
+          continue;
+        }
+
+        variables.push_back(
+            {"w", static_cast<std::size_t>(q), static_cast<std::size_t>(3 * q)});
+        if (kind == PoleKind::ComplexFirst)
+        {
+          variables.push_back(
+              {"v", static_cast<std::size_t>(q), static_cast<std::size_t>(3 * (q + 1))});
+        }
+      }
     }
 
     template <typename scalar_type, typename index_type>
