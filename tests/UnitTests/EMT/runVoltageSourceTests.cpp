@@ -79,11 +79,10 @@ namespace
     success *= isEqual(bus->Ib(), source->y().getData()[1], 1.0e-13);
     success *= isEqual(bus->Ic(), source->y().getData()[2], 1.0e-13);
 
-    auto       coupled_data                                   = source_data;
-    const auto Rs                                             = coupledResistance();
-    const auto Ls                                             = coupledInductance();
-    coupled_data.parameters[EMT::VoltageSourceParameters::Rs] = Rs;
-    coupled_data.parameters[EMT::VoltageSourceParameters::Ls] = Ls;
+    auto       coupled_data = source_data;
+    const auto Rs           = coupledResistance();
+    const auto Ls           = coupledInductance();
+    setRationalBlock(coupled_data, EMT::VoltageSourceSubmodels::Z, Rs, Ls);
     SourceT coupled_source(system->getBus(650), coupled_data);
     success *= coupled_source.allocate() == 0;
     success *= coupled_source.verify() == 0;
@@ -130,14 +129,16 @@ namespace
 
   TestOutcome jacobianCoupling()
   {
-    TestStatus success                                                   = true;
-    auto       data                                                      = loadFixtureData();
-    success                                                             *= isThreeBusMutuallyCoupled(data);
-    data.voltage_source[0].parameters[EMT::VoltageSourceParameters::Rs]  = coupledResistance();
-    data.voltage_source[0].parameters[EMT::VoltageSourceParameters::Ls]  = coupledInductance();
-    auto  system                                                         = makeFixtureSystem(data);
-    auto* source                                                         = findComponent<SourceT>(*system, data);
-    success                                                             *= source != nullptr;
+    TestStatus success  = true;
+    auto       data     = loadFixtureData();
+    success            *= isThreeBusMutuallyCoupled(data);
+    setRationalBlock(data.voltage_source[0],
+                     EMT::VoltageSourceSubmodels::Z,
+                     coupledResistance(),
+                     coupledInductance());
+    auto  system  = makeFixtureSystem(data);
+    auto* source  = findComponent<SourceT>(*system, data);
+    success      *= source != nullptr;
     if (source == nullptr)
     {
       return success.report(__func__);

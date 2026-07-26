@@ -80,6 +80,8 @@ namespace GridKit
 
       BusT* bus_{nullptr};
 
+      IdxT             N_{3};
+      bool             z_dynamic_{false};
       ABCVector<RealT> E_{};
       ABCVector<RealT> phi_{};
       RealT            omega_{0.0};

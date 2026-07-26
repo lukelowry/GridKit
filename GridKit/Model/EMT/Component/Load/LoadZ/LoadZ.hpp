@@ -96,6 +96,8 @@ namespace GridKit
       void initializeMonitor();
 
       BusT*            bus_{nullptr};
+      IdxT             N_{3};
+      bool             z_dynamic_{false};
       ABCMatrix<RealT> R_{};
       ABCMatrix<RealT> L_{};
 

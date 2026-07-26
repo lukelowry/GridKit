@@ -166,8 +166,8 @@ $\mathbf{v}_1$, $\mathbf{v}_2$ | — | Connected bus | Terminal voltages at $t_0
 Symbol | JSON | Source | Note
 ------ | ---- | ------ | ----
 $\mathbf{i}_1^\mathrm{ref}$, $\mathbf{i}_2^\mathrm{ref}$ | — | Consistent solve | Reflected currents
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yc1`, `Yc2` | Initial state | Characteristic-admittance memory states
-Propagation states and histories | `H12`, `H21` | Initial state | See [Propagation](../../../Operators/Shift/Propagation/README.md)
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yc1.w`, `Yc1.v`, `Yc2.w`, `Yc2.v` | Initial state | Characteristic-admittance memory states
+Propagation states and histories | `H12.*`, `H21.*` | Initial state | See [Propagation](../../../Operators/Shift/Propagation/README.md)
 
 ### Output Initialization
 

@@ -194,8 +194,8 @@ $\mathbf{u}$ | — | Consistent solve | Owned by the connected model
 
 Symbol | JSON | Source | Note
 ------ | ---- | ------ | ----
-$\mathbf{w}_q$ | `w` | Initial state | One `pole_index` and `value` entry per $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
-$\mathbf{v}_q$ | `v` | Initial state | One `pole_index` and `value` entry per $q \in \mathcal{Q}_\mathrm{c}$
+$\mathbf{w}_q$ | `w` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{r} \cup \mathcal{Q}_\mathrm{c}$
+$\mathbf{v}_q$ | `v` | Initial state | One `index` and `value` entry per $q \in \mathcal{Q}_\mathrm{c}$
 $\mathbf{y}$ | — | Consistent solve | Output vector
 
 ### Output Initialization

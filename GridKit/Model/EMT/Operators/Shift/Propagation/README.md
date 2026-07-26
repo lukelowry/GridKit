@@ -141,8 +141,8 @@ $\mathbf{u}$ | — | Consistent solve | Owned by the connected model
 
 Symbol | JSON | Source | Note
 ------ | ---- | ------ | ----
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `input`, `output` | Initial state | Rational-factor memory states
-Modal prehistory | `delays` | Initial state | See [Delay](../Delay/README.md)
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `input.w`, `input.v`, `output.w`, `output.v` | Initial state | Rational-factor memory states
+Modal prehistory | `delays.*` | Initial state | See [Delay](../Delay/README.md)
 
 ### Output Initialization
 

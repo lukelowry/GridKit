@@ -631,12 +631,15 @@ namespace GridKit::EMT
       {
         map_to_csr_[map_to_sorted[entry]] = map_to_dedup[entry];
       }
+      jacobian_entry_count_ = nnz_with_duplicates;
     }
     else
     {
       auto* values = csr_jac_->getValues();
       std::fill(values, values + csr_jac_->getNnz(), RealT{0.0});
 
+      // The assembly map is built once, so every owner must emit the same
+      // number of entries in the same order on every later evaluation.
       IdxT       counter    = 0;
       const auto accumulate = [&](auto* owner)
       {
@@ -644,6 +647,11 @@ namespace GridKit::EMT
         if (jacobian == nullptr)
         {
           return;
+        }
+        if (jacobian->getNnz() > jacobian_entry_count_ - counter)
+        {
+          throw std::runtime_error(
+              "EMT SystemModel Jacobian sparsity pattern changed after assembly");
         }
         for (IdxT entry = 0; entry < jacobian->getNnz(); ++entry)
         {
@@ -658,6 +666,11 @@ namespace GridKit::EMT
       for (auto* bus : buses_)
       {
         accumulate(bus);
+      }
+      if (counter != jacobian_entry_count_)
+      {
+        throw std::runtime_error(
+            "EMT SystemModel Jacobian sparsity pattern changed after assembly");
       }
     }
     return 0;

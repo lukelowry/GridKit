@@ -62,12 +62,14 @@ Key | Description
 `case_name` | Matches the system model
 `time` | Initial time $t_0$ [sec]
 `buses` | Entries of `id` and `variables`
-`components` | Entries of `id`, `variables`, and `submodels`
+`components` | Entries of `id` and `variables`
 
-Each variable value matches the dimension listed for it under Model Variables,
-and submodel states nest under `submodels` by submodel instance name. Every
-differential variable in the assembled system is supplied exactly once;
-supplying an algebraic variable is an error.
+A `variables` entry is either a plain vector or, for an indexed variable, an
+array of `index` and `value` pairs. Each value matches the dimension listed
+for that variable under Model Variables. A submodel-owned state is named
+`<submodel>.<variable>` after its submodel instance. Every differential
+variable in the assembled system is supplied exactly once; supplying an
+algebraic variable is an error.
 
 Each model documents its own variables in an Internal Initialization table.
 Models whose initialization data are not DAE variables, such as delay

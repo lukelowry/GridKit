@@ -161,6 +161,29 @@ namespace
     return parserAccepts(input);
   }
 
+  /// Physical constraints are owned by `verify()`, which `allocate()` runs.
+  template <typename Mutation>
+  bool systemRejectsAfter(Mutation mutation)
+  {
+    auto input = loadFixtureJson();
+    mutation(input);
+    std::istringstream stream(input.dump());
+    return throws<>(
+        [&stream]
+        {
+          const auto data = EMT::parseSystemModelData(stream);
+          SystemT    system(data);
+          system.allocate();
+        });
+  }
+
+  Json& findSubmodel(Json&              input,
+                     const std::string& device_id,
+                     const std::string& submodel)
+  {
+    return findDevice(input, device_id)["submodels"][submodel];
+  }
+
   TestOutcome fixtureAndParser()
   {
     TestStatus success = true;
@@ -414,15 +437,30 @@ namespace
     const auto data     = loadFixtureData();
     success            *= isThreeBusMutuallyCoupled(data);
 
+    // Submodel coefficient blocks share one schema with the standalone
+    // VectorFit device, so the same shape rules apply to every one of them.
+    const std::vector<std::array<std::string, 3>> coefficient_blocks{
+        {"line_650_632", "Zp", "D"},
+        {"line_650_632", "Zp", "E"},
+        {"line_650_632", "Yp", "D"},
+        {"line_650_632", "Yp", "E"},
+        {"load_670", "Z", "D"},
+        {"load_670", "Z", "E"},
+        {"source_650", "Z", "D"},
+        {"source_650", "Z", "E"}};
+    for (const auto& [device_id, submodel, parameter] : coefficient_blocks)
+    {
+      success *= parserRejectsAfter([&](Json& input)
+                                    { findSubmodel(input, device_id, submodel).erase(parameter); });
+      success *= parserRejectsAfter([&](Json& input)
+                                    { findSubmodel(input, device_id, submodel)[parameter].erase(2); });
+      success *= parserRejectsAfter([&](Json& input)
+                                    { findSubmodel(input, device_id, submodel)[parameter][0].erase(2); });
+      success *= parserRejectsAfter([&](Json& input)
+                                    { findSubmodel(input, device_id, submodel)[parameter][0][0] = "not-a-number"; });
+    }
+
     const std::vector<std::pair<std::string, std::string>> real_matrices{
-        {"line_650_632", "Rp"},
-        {"line_650_632", "Lp"},
-        {"line_650_632", "Gp"},
-        {"line_650_632", "Cp"},
-        {"load_670", "R"},
-        {"load_670", "L"},
-        {"source_650", "Rs"},
-        {"source_650", "Ls"},
         {"vectorfit_identity", "D"},
         {"vectorfit_identity", "E"}};
     for (const auto& [device_id, parameter] : real_matrices)
@@ -439,7 +477,12 @@ namespace
 
     const std::vector<std::pair<std::string, std::string>>
         other_required_parameters{
+            {"line_650_632", "N"},
+            {"line_650_632", "K"},
+            {"line_650_632", "conductors"},
             {"line_650_632", "dx"},
+            {"load_670", "N"},
+            {"source_650", "N"},
             {"source_650", "E"},
             {"source_650", "phi"},
             {"source_650", "omega"},
@@ -451,29 +494,56 @@ namespace
                                     { findDevice(input, device_id)["params"].erase(parameter); });
     }
 
-    const std::vector<std::pair<std::string, std::string>>
-        constrained_matrices{
-            {"line_650_632", "Rp"},
-            {"line_650_632", "Lp"},
-            {"line_650_632", "Gp"},
-            {"line_650_632", "Cp"},
-            {"load_670", "R"},
-            {"load_670", "L"},
-            {"source_650", "Rs"},
-            {"source_650", "Ls"}};
-    for (const auto& [device_id, parameter] : constrained_matrices)
+    // A missing or unknown submodel block is a schema error.
+    const std::vector<std::pair<std::string, std::string>> required_submodels{
+        {"line_650_632", "Zp"},
+        {"line_650_632", "Yp"},
+        {"load_670", "Z"},
+        {"source_650", "Z"}};
+    for (const auto& [device_id, submodel] : required_submodels)
     {
-      success *= parserRejectsAfter([&device_id, &parameter](Json& input)
+      success *= parserRejectsAfter([&device_id, &submodel](Json& input)
+                                    { findDevice(input, device_id)["submodels"].erase(submodel); });
+      success *= parserRejectsAfter([&device_id](Json& input)
+                                    { findDevice(input, device_id)["submodels"]["Unexpected"] = Json::object(); });
+    }
+    success *= parserRejectsAfter([](Json& input)
+                                  { findDevice(input, "vectorfit_identity")["submodels"] = Json::object(); });
+
+    // Physical constraints belong to verify(), which allocate() runs.
+    for (const auto& [device_id, submodel, parameter] : coefficient_blocks)
+    {
+      success *= systemRejectsAfter([&](Json& input)
                                     {
-        auto& matrix = findDevice(input, device_id)["params"][parameter];
+        auto& matrix = findSubmodel(input, device_id, submodel)[parameter];
         matrix[0][1] = matrix[1][0].get<double>() + 1.0; });
-      success *= parserRejectsAfter([&device_id, &parameter](Json& input)
-                                    { findDevice(input, device_id)["params"][parameter][0][0] = -1.0; });
+      success *= systemRejectsAfter([&](Json& input)
+                                    { findSubmodel(input, device_id, submodel)[parameter][0][0] = -1.0; });
     }
 
-    success *= parserRejectsAfter([](Json& input)
+    // Rational dynamics in a submodel are not realizable yet.
+    for (const auto& [device_id, submodel] : required_submodels)
+    {
+      success *= systemRejectsAfter([&device_id, &submodel](Json& input)
+                                    {
+        auto& block = findSubmodel(input, device_id, submodel);
+        block["poles"]    = Json::array({Json::array({-10.0, 0.0})});
+        block["residues"] = Json::array({zeroComplexMatrix()}); });
+    }
+
+    // Dimensions outside the implemented three-phase subset are rejected.
+    success *= systemRejectsAfter([](Json& input)
+                                  { findDevice(input, "load_670")["params"]["N"] = 4; });
+    success *= systemRejectsAfter([](Json& input)
+                                  { findDevice(input, "source_650")["params"]["N"] = 4; });
+    success *= systemRejectsAfter([](Json& input)
+                                  { findDevice(input, "line_650_632")["params"]["K"] = 4; });
+    success *= systemRejectsAfter([](Json& input)
+                                  { findDevice(input, "line_650_632")["params"]["conductors"] = Json::array({1, 3, 2}); });
+
+    success *= systemRejectsAfter([](Json& input)
                                   { findDevice(input, "line_650_632")["params"]["dx"] = 0.0; });
-    success *= parserRejectsAfter([](Json& input)
+    success *= systemRejectsAfter([](Json& input)
                                   { findDevice(input, "source_650")["params"]["E"][0] = -1.0; });
     success *= parserRejectsAfter([](Json& input)
                                   { findDevice(input, "source_650")["params"]["E"].erase(2); });
@@ -920,12 +990,15 @@ namespace
     success *= caller_owned_bus632.busID() == 632;
     success *= caller_owned_bus670.busID() == 670;
 
-    auto rank_deficient_data = data;
-    rank_deficient_data.line_lumped[0]
-        .parameters[EMT::LineLumpedParameters::Cp] =
-        EMT::ABCMatrix<double>{{{2.0e-12, -1.0e-12, -1.0e-12},
-                                {-1.0e-12, 2.0e-12, -1.0e-12},
-                                {-1.0e-12, -1.0e-12, 2.0e-12}}};
+    auto       rank_deficient_data = data;
+    const auto shunt               = rationalBlock(rank_deficient_data.line_lumped[0],
+                                     EMT::LineLumpedSubmodels::Yp);
+    setRationalBlock(rank_deficient_data.line_lumped[0],
+                     EMT::LineLumpedSubmodels::Yp,
+                     shunt.D,
+                     EMT::ABCMatrix<double>{{{2.0e-12, -1.0e-12, -1.0e-12},
+                                             {-1.0e-12, 2.0e-12, -1.0e-12},
+                                             {-1.0e-12, -1.0e-12, 2.0e-12}}});
     success *= throws<>([&rank_deficient_data]
                         {
       SystemT invalid_system(rank_deficient_data);

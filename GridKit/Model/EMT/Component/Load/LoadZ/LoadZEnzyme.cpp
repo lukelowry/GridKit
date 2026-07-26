@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <GridKit/AutomaticDifferentiation/Enzyme/SparseJacobians.hpp>
 
 #include "LoadZImpl.hpp"
@@ -12,11 +14,15 @@ namespace GridKit
       using Function = Enzyme::Sparse::MemberFunctions;
       using ModelT   = LoadZ<ScalarT, IdxT>;
 
+      // Upper bound on emitted entries:
+      // 3 residual rows over 3 local columns for DfDy, DfDyp, and DfDwb,
+      // plus the 3 hand-written bus-injection entries.
+      static constexpr IdxT JACOBIAN_CAPACITY{30};
       if (J_rows_buffer_ == nullptr)
       {
-        J_rows_buffer_ = new IdxT[30];
-        J_cols_buffer_ = new IdxT[30];
-        J_vals_buffer_ = new RealT[30];
+        J_rows_buffer_ = new IdxT[JACOBIAN_CAPACITY];
+        J_cols_buffer_ = new IdxT[JACOBIAN_CAPACITY];
+        J_vals_buffer_ = new RealT[JACOBIAN_CAPACITY];
       }
 
       nnz_ = 0;
@@ -49,6 +55,11 @@ namespace GridKit
       J_vals_buffer_[nnz_] = kcl_scale;
       ++nnz_;
 
+      if (nnz_ > JACOBIAN_CAPACITY)
+      {
+        throw std::runtime_error(
+            "EMT::LoadZ: Jacobian entries exceed the reserved capacity");
+      }
       this->constructCoo();
       return 0;
     }

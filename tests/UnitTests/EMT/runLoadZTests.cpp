@@ -147,11 +147,10 @@ namespace
     success *= isEqual(fault_load->y().getData()[1], ib, 1.0e-15);
     success *= isEqual(fault_load->y().getData()[2], ic, 1.0e-15);
 
-    auto       coupled_data                          = data.loadz[0];
-    const auto R                                     = coupledResistance();
-    const auto L                                     = coupledInductance();
-    coupled_data.parameters[EMT::LoadZParameters::R] = R;
-    coupled_data.parameters[EMT::LoadZParameters::L] = L;
+    auto       coupled_data = data.loadz[0];
+    const auto R            = coupledResistance();
+    const auto L            = coupledInductance();
+    setRationalBlock(coupled_data, EMT::LoadZSubmodels::Z, R, L);
     LoadT coupled_load(system->getBus(670), coupled_data);
     coupled_load.getSignals()
         .template attachSignalNode<EMT::LoadZExternalVariables::enable>(
@@ -186,20 +185,18 @@ namespace
 
   TestOutcome gateKeepsFixedJacobianPattern()
   {
-    TestStatus success                                 = true;
-    auto       data                                    = loadFixtureData();
-    success                                           *= isThreeBusMutuallyCoupled(data);
-    const auto R                                       = coupledResistance();
-    const auto L                                       = coupledInductance();
-    data.loadz[0].parameters[EMT::LoadZParameters::R]  = R;
-    data.loadz[0].parameters[EMT::LoadZParameters::L]  = L;
-    data.loadz[1].parameters[EMT::LoadZParameters::R]  = R;
-    data.loadz[1].parameters[EMT::LoadZParameters::L]  = L;
-    auto  system                                       = makeFixtureSystem(data);
-    auto* normal_load                                  = findComponent<LoadT>(*system, data, 0);
-    auto* fault_load                                   = findComponent<LoadT>(*system, data, 1);
-    success                                           *= normal_load != nullptr;
-    success                                           *= fault_load != nullptr;
+    TestStatus success  = true;
+    auto       data     = loadFixtureData();
+    success            *= isThreeBusMutuallyCoupled(data);
+    const auto R        = coupledResistance();
+    const auto L        = coupledInductance();
+    setRationalBlock(data.loadz[0], EMT::LoadZSubmodels::Z, R, L);
+    setRationalBlock(data.loadz[1], EMT::LoadZSubmodels::Z, R, L);
+    auto  system       = makeFixtureSystem(data);
+    auto* normal_load  = findComponent<LoadT>(*system, data, 0);
+    auto* fault_load   = findComponent<LoadT>(*system, data, 1);
+    success           *= normal_load != nullptr;
+    success           *= fault_load != nullptr;
     if (normal_load == nullptr || fault_load == nullptr)
     {
       return success.report(__func__);

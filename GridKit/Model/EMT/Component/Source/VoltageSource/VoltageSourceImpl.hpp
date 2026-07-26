@@ -28,6 +28,11 @@ namespace GridKit
     void VoltageSource<scalar_type, index_type>::initializeParameters(const ModelDataT& data)
     {
       using Parameter = typename ModelDataT::Parameters;
+      using Submodel  = typename ModelDataT::Submodels;
+      if (data.parameters.contains(Parameter::N))
+      {
+        N_ = std::get<IdxT>(data.parameters.at(Parameter::N));
+      }
       if (data.parameters.contains(Parameter::E))
       {
         E_ = std::get<ABCVector<RealT>>(data.parameters.at(Parameter::E));
@@ -40,13 +45,12 @@ namespace GridKit
       {
         omega_ = std::get<RealT>(data.parameters.at(Parameter::omega));
       }
-      if (data.parameters.contains(Parameter::Rs))
+      if (data.submodels.contains(Submodel::Z))
       {
-        Rs_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Rs));
-      }
-      if (data.parameters.contains(Parameter::Ls))
-      {
-        Ls_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Ls));
+        const auto z = rationalCoefficients(data.submodels.at(Submodel::Z));
+        Rs_          = z.D;
+        Ls_          = z.E;
+        z_dynamic_   = z.dynamic;
       }
     }
 
@@ -85,6 +89,17 @@ namespace GridKit
       if (bus_ == nullptr)
       {
         Log::error() << "EMT::VoltageSource: bus is null\n";
+        ++status;
+      }
+      if (N_ != IdxT{3})
+      {
+        Log::error() << "EMT::VoltageSource: only three phases are supported\n";
+        ++status;
+      }
+      if (z_dynamic_)
+      {
+        Log::error() << "EMT::VoltageSource: Z rational dynamics are not yet "
+                        "supported; poles and residues must be empty\n";
         ++status;
       }
       if (!Detail::finite(E_) || E_[0] < RealT{0.0} || E_[1] < RealT{0.0} || E_[2] < RealT{0.0})

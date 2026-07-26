@@ -38,10 +38,12 @@ gridkit_add_library(
   SOURCES ${_system_model_source} SystemModelData.cpp
   HEADERS SystemModel.hpp
           SystemModelData.hpp
+          SystemModelDataJSONParser.hpp
           BusVoltageContribution.hpp
           InitialStateLayout.hpp
           ComponentLibrary.hpp
           ComponentData.hpp
+          ABCUtils.hpp
   LINK_LIBRARIES
     PUBLIC
     GridKit::phasor_dynamics_core

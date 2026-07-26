@@ -23,6 +23,26 @@ namespace GridKit::Testing::EMTTest
     return EMT::parseSystemModelData(std::filesystem::path{EMT_TEST_FIXTURE});
   }
 
+  /// Read the constant and linear coefficients of a named submodel block.
+  template <typename ComponentDataT, typename SubmodelT>
+  EMT::RationalCoefficients<RealT> rationalBlock(const ComponentDataT& data,
+                                                 SubmodelT             submodel)
+  {
+    return EMT::rationalCoefficients(data.submodels.at(submodel));
+  }
+
+  /// Overwrite the constant and linear coefficients of a named submodel block.
+  template <typename ComponentDataT, typename SubmodelT>
+  void setRationalBlock(ComponentDataT&              data,
+                        SubmodelT                    submodel,
+                        const EMT::ABCMatrix<RealT>& D,
+                        const EMT::ABCMatrix<RealT>& E)
+  {
+    auto& block                                   = data.submodels[submodel];
+    block.parameters[EMT::VectorFitParameters::D] = D;
+    block.parameters[EMT::VectorFitParameters::E] = E;
+  }
+
   inline bool isThreeBusMutuallyCoupled(const DataT& data)
   {
     if (data.bus.size() != 3 || data.line_lumped.size() != 2)
@@ -32,12 +52,11 @@ namespace GridKit::Testing::EMTTest
 
     for (const auto& line : data.line_lumped)
     {
-      const auto& Rp = std::get<EMT::ABCMatrix<RealT>>(
-          line.parameters.at(EMT::LineLumpedParameters::Rp));
-      const auto& Lp = std::get<EMT::ABCMatrix<RealT>>(
-          line.parameters.at(EMT::LineLumpedParameters::Lp));
-      const auto& Cp = std::get<EMT::ABCMatrix<RealT>>(
-          line.parameters.at(EMT::LineLumpedParameters::Cp));
+      const auto  series = rationalBlock(line, EMT::LineLumpedSubmodels::Zp);
+      const auto  shunt  = rationalBlock(line, EMT::LineLumpedSubmodels::Yp);
+      const auto& Rp     = series.D;
+      const auto& Lp     = series.E;
+      const auto& Cp     = shunt.E;
 
       if (Rp[0][1] == 0.0 || Rp[0][2] == 0.0 || Rp[1][2] == 0.0
           || Lp[0][1] == 0.0 || Lp[0][2] == 0.0 || Lp[1][2] == 0.0

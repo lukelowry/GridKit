@@ -1,3 +1,5 @@
+#include <stdexcept>
+
 #include <GridKit/AutomaticDifferentiation/Enzyme/SparseJacobians.hpp>
 
 #include "VoltageSourceImpl.hpp"
@@ -12,11 +14,15 @@ namespace GridKit
       using Function = Enzyme::Sparse::MemberFunctions;
       using ModelT   = VoltageSource<ScalarT, IdxT>;
 
+      // Upper bound on emitted entries:
+      // 6 residual rows over 6 local and 3 bus columns for DfDy and DfDyp,
+      // plus the 3 hand-written bus-injection entries.
+      static constexpr IdxT JACOBIAN_CAPACITY{93};
       if (J_rows_buffer_ == nullptr)
       {
-        J_rows_buffer_ = new IdxT[93];
-        J_cols_buffer_ = new IdxT[93];
-        J_vals_buffer_ = new RealT[93];
+        J_rows_buffer_ = new IdxT[JACOBIAN_CAPACITY];
+        J_cols_buffer_ = new IdxT[JACOBIAN_CAPACITY];
+        J_vals_buffer_ = new RealT[JACOBIAN_CAPACITY];
       }
 
       nnz_ = 0;
@@ -42,6 +48,11 @@ namespace GridKit
       J_vals_buffer_[nnz_] = kcl_scale;
       ++nnz_;
 
+      if (nnz_ > JACOBIAN_CAPACITY)
+      {
+        throw std::runtime_error(
+            "EMT::VoltageSource: Jacobian entries exceed the reserved capacity");
+      }
       this->constructCoo();
       return 0;
     }

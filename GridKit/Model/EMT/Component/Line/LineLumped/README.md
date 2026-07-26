@@ -160,8 +160,8 @@ Symbol | JSON | Source | Note
 ------ | ---- | ------ | ----
 $\mathbf{i}_{12}$ | `i12` | Initial state | Solve determines $\mathrm{d}\mathbf{i}_{12}/\mathrm{d}t$
 $\mathbf{i}_1^\mathrm{sh}$, $\mathbf{i}_2^\mathrm{sh}$ | — | Consistent solve | Shunt currents
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Zp` | Initial state | Series-impedance memory states
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yp1`, `Yp2` | Initial state | Terminal shunt-admittance memory states
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Zp.w`, `Zp.v` | Initial state | Series-impedance memory states
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Yp1.w`, `Yp1.v`, `Yp2.w`, `Yp2.v` | Initial state | Terminal shunt-admittance memory states
 
 ### Output Initialization
 

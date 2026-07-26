@@ -50,14 +50,12 @@ namespace
     const auto&  line_data = data.line_lumped[0];
     const double dx        = std::get<double>(
         line_data.parameters.at(EMT::LineLumpedParameters::dx));
-    const auto& Rp = std::get<EMT::ABCMatrix<double>>(
-        line_data.parameters.at(EMT::LineLumpedParameters::Rp));
-    const auto& Lp = std::get<EMT::ABCMatrix<double>>(
-        line_data.parameters.at(EMT::LineLumpedParameters::Lp));
-    const auto& Gp = std::get<EMT::ABCMatrix<double>>(
-        line_data.parameters.at(EMT::LineLumpedParameters::Gp));
-    const auto& Cp = std::get<EMT::ABCMatrix<double>>(
-        line_data.parameters.at(EMT::LineLumpedParameters::Cp));
+    const auto  series = rationalBlock(line_data, EMT::LineLumpedSubmodels::Zp);
+    const auto  shunt  = rationalBlock(line_data, EMT::LineLumpedSubmodels::Yp);
+    const auto& Rp     = series.D;
+    const auto& Lp     = series.E;
+    const auto& Gp     = shunt.D;
+    const auto& Cp     = shunt.E;
 
     std::array<double, 9> y{0.40, -0.75, 1.10, -0.20, 0.35, -0.55, 0.65, -0.80, 0.95};
     std::array<double, 9> yp{1.20, -1.40, 1.60, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
@@ -118,8 +116,8 @@ namespace
     const auto&  line_data = data.line_lumped[0];
     const double dx        = std::get<double>(
         line_data.parameters.at(EMT::LineLumpedParameters::dx));
-    const auto& Cp = std::get<EMT::ABCMatrix<double>>(
-        line_data.parameters.at(EMT::LineLumpedParameters::Cp));
+    const auto& Cp =
+        rationalBlock(line_data, EMT::LineLumpedSubmodels::Yp).E;
 
     const auto       row    = line->getResidualIndex(3);
     const auto       column = system->getBus(650)->getVariableIndex(1);

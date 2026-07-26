@@ -1,6 +1,9 @@
 #pragma once
 
+#include <map>
+
 #include <GridKit/Model/EMT/ComponentData.hpp>
+#include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitData.hpp>
 
 namespace GridKit
 {
@@ -8,11 +11,16 @@ namespace GridKit
   {
     enum class VoltageSourceParameters
     {
+      N,
       E,
       phi,
-      omega,
-      Rs,
-      Ls
+      omega
+    };
+
+    enum class VoltageSourceSubmodels : size_t
+    {
+      Z,
+      SIZE
     };
 
     enum class VoltageSourceBuses : size_t
@@ -51,10 +59,14 @@ namespace GridKit
                                                     VoltageSourceMonitorableVariables>
     {
       using Parameters           = VoltageSourceParameters;
+      using Submodels            = VoltageSourceSubmodels;
       using Buses                = VoltageSourceBuses;
       using SignalInputs         = VoltageSourceSignalInputs;
       using SignalOutputs        = VoltageSourceSignalOutputs;
       using MonitorableVariables = VoltageSourceMonitorableVariables;
+
+      /// Mapping of submodels to their rational-operator parameters
+      std::map<Submodels, VectorFitData<real_type, index_type>> submodels;
     };
   } // namespace EMT
 } // namespace GridKit

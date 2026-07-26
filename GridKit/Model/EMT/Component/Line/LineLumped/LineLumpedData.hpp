@@ -1,6 +1,9 @@
 #pragma once
 
+#include <map>
+
 #include <GridKit/Model/EMT/ComponentData.hpp>
+#include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitData.hpp>
 
 namespace GridKit
 {
@@ -8,11 +11,17 @@ namespace GridKit
   {
     enum class LineLumpedParameters
     {
-      dx,
-      Rp,
-      Lp,
-      Gp,
-      Cp
+      N,
+      K,
+      conductors,
+      dx
+    };
+
+    enum class LineLumpedSubmodels : size_t
+    {
+      Zp,
+      Yp,
+      SIZE
     };
 
     enum class LineLumpedBuses : size_t
@@ -55,10 +64,14 @@ namespace GridKit
                                                  LineLumpedMonitorableVariables>
     {
       using Parameters           = LineLumpedParameters;
+      using Submodels            = LineLumpedSubmodels;
       using Buses                = LineLumpedBuses;
       using SignalInputs         = LineLumpedSignalInputs;
       using SignalOutputs        = LineLumpedSignalOutputs;
       using MonitorableVariables = LineLumpedMonitorableVariables;
+
+      /// Mapping of submodels to their rational-operator parameters
+      std::map<Submodels, VectorFitData<real_type, index_type>> submodels;
     };
   } // namespace EMT
 } // namespace GridKit

@@ -1,6 +1,9 @@
 #pragma once
 
+#include <map>
+
 #include <GridKit/Model/EMT/ComponentData.hpp>
+#include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFitData.hpp>
 
 namespace GridKit
 {
@@ -8,8 +11,13 @@ namespace GridKit
   {
     enum class LoadZParameters
     {
-      R,
-      L
+      N
+    };
+
+    enum class LoadZSubmodels : size_t
+    {
+      Z,
+      SIZE
     };
 
     enum class LoadZBuses : size_t
@@ -46,10 +54,14 @@ namespace GridKit
                                             LoadZMonitorableVariables>
     {
       using Parameters           = LoadZParameters;
+      using Submodels            = LoadZSubmodels;
       using Buses                = LoadZBuses;
       using SignalInputs         = LoadZSignalInputs;
       using SignalOutputs        = LoadZSignalOutputs;
       using MonitorableVariables = LoadZMonitorableVariables;
+
+      /// Mapping of submodels to their rational-operator parameters
+      std::map<Submodels, VectorFitData<real_type, index_type>> submodels;
     };
   } // namespace EMT
 } // namespace GridKit

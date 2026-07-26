@@ -130,7 +130,7 @@ Symbol | JSON | Source | Note
 $\mathbf{i}$ | `i` | Initial state | $\mathrm{rank}(\mathbf{E}^{\mathbf{z}})=N$, solve determines $\mathrm{d}\mathbf{i}/\mathrm{d}t$
 $\mathbf{i}$ | — | Consistent solve | $\mathbf{E}^{\mathbf{z}}=\mathbf{0}$
 $\mathbf{e}$ | — | Consistent solve | $e_n(t_0)=\sqrt{2}E_n\cos(\omega t_0+\phi_n)$
-$\mathbf{w}_q$, $\mathbf{v}_q$ | `Z` | Initial state | Impedance memory states
+$\mathbf{w}_q$, $\mathbf{v}_q$ | `Z.w`, `Z.v` | Initial state | Impedance memory states
 
 ### Output Initialization
 

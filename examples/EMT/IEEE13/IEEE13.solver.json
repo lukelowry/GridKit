@@ -5,6 +5,7 @@
   "suppress_algebraic_errors": true,
   "dt_monitor": 0.0001,
   "tmax": 0.2,
+  "rel_tol": 1e-05,
   "abs_tol": 1e-08,
   "output_file": "IEEE13.csv",
   "events": [

@@ -11,7 +11,6 @@
 
 #include <nlohmann/json.hpp>
 
-#include <GridKit/Model/EMT/ABCUtils.hpp>
 #include <GridKit/Model/EMT/SystemModelData.hpp>
 #include <GridKit/Model/PhasorDynamics/SignalSource/ConstantSignalSourceData.hpp>
 
@@ -77,6 +76,17 @@ namespace GridKit::EMT
       return static_cast<unsigned short>(result);
     }
 
+    template <typename IdxT>
+    IdxT indexValue(const json& value, const std::string& context)
+    {
+      const auto result = realValue<double>(value, context);
+      if (result < 0.0 || std::floor(result) != result)
+      {
+        throw std::runtime_error(context + " must be a nonnegative integer");
+      }
+      return static_cast<IdxT>(result);
+    }
+
     template <typename RealT>
     ABCVector<RealT> realVector(const json&        value,
                                 const std::string& context)
@@ -88,6 +98,19 @@ namespace GridKit::EMT
       return {realValue<RealT>(value[0], context),
               realValue<RealT>(value[1], context),
               realValue<RealT>(value[2], context)};
+    }
+
+    template <typename IdxT>
+    ABCVector<IdxT> indexVector(const json&        value,
+                                const std::string& context)
+    {
+      if (!value.is_array() || value.size() != 3)
+      {
+        throw std::runtime_error(context + " must contain exactly 3 values");
+      }
+      return {indexValue<IdxT>(value[0], context),
+              indexValue<IdxT>(value[1], context),
+              indexValue<IdxT>(value[2], context)};
     }
 
     template <typename RealT>
@@ -151,7 +174,7 @@ namespace GridKit::EMT
                                        const std::string& expected_class)
     {
       validateKeys(device,
-                   {"class", "id", "params", "ports", "mon"},
+                   {"class", "id", "params", "ports", "submodels", "mon"},
                    {"class", "id", "params", "ports"},
                    expected_class + " device");
       if (device.at("class").get<std::string>() != expected_class)
@@ -276,6 +299,93 @@ namespace GridKit::EMT
         }
         ++q;
       }
+    }
+
+    /**
+     * @brief Parse a rational-operator parameter block.
+     *
+     * The same block appears as the `params` of a standalone `VectorFit`
+     * device and as a named entry under a component's `submodels`.
+     */
+    template <typename RealT, typename IdxT>
+    VectorFitData<RealT, IdxT> vectorFitParameters(const json&        params,
+                                                   const std::string& context)
+    {
+      validateKeys(params,
+                   {"D", "E", "poles", "residues"},
+                   {"D", "E", "poles", "residues"},
+                   context);
+
+      VectorFitData<RealT, IdxT> data;
+      data.device_class = "VectorFit";
+      data.parameters[VectorFitParameters::D] =
+          realMatrix<RealT>(params.at("D"), context + " D");
+      data.parameters[VectorFitParameters::E] =
+          realMatrix<RealT>(params.at("E"), context + " E");
+
+      if (!params.at("poles").is_array()
+          || !params.at("residues").is_array())
+      {
+        throw std::runtime_error(context
+                                 + " poles and residues must be arrays");
+      }
+
+      std::vector<std::complex<RealT>> poles;
+      for (const auto& pole : params.at("poles"))
+      {
+        poles.push_back(complexValue<RealT>(pole, context + " pole"));
+      }
+      std::vector<ABCMatrix<std::complex<RealT>>> residues;
+      for (const auto& residue : params.at("residues"))
+      {
+        residues.push_back(complexMatrix<RealT>(residue,
+                                                context + " residue"));
+      }
+      validateVectorFitPairs(poles, residues);
+
+      data.parameters[VectorFitParameters::poles]    = poles;
+      data.parameters[VectorFitParameters::residues] = residues;
+      return data;
+    }
+
+    /**
+     * @brief Parse one named submodel block of a component device.
+     */
+    template <typename RealT, typename IdxT>
+    VectorFitData<RealT, IdxT> submodelParameters(const json&        device,
+                                                  const std::string& name,
+                                                  const std::string& context)
+    {
+      if (!device.contains("submodels"))
+      {
+        throw std::runtime_error("Missing " + context + " submodels");
+      }
+      const auto& submodels = device.at("submodels");
+      if (!submodels.is_object() || !submodels.contains(name))
+      {
+        throw std::runtime_error("Missing " + context + " submodel: " + name);
+      }
+      return vectorFitParameters<RealT, IdxT>(submodels.at(name),
+                                              context + " " + name);
+    }
+
+    inline void validateSubmodelNames(const json&                  device,
+                                      const std::set<std::string>& allowed,
+                                      const std::string&           context)
+    {
+      if (allowed.empty())
+      {
+        if (device.contains("submodels"))
+        {
+          throw std::runtime_error(context + " has no submodels");
+        }
+        return;
+      }
+      if (!device.contains("submodels"))
+      {
+        throw std::runtime_error("Missing " + context + " submodels");
+      }
+      validateKeys(device.at("submodels"), allowed, allowed, context + " submodels");
     }
   } // namespace JSONDetail
 
@@ -445,32 +555,22 @@ namespace GridKit::EMT
       {
         typename SystemModelData<RealT, IdxT>::LineLumpedDataT data;
         populateEnvelope(device, kind, data);
-        validateKeys(params, {"dx", "Rp", "Lp", "Gp", "Cp"}, {"dx", "Rp", "Lp", "Gp", "Cp"}, kind + " params");
+        validateKeys(params, {"N", "K", "conductors", "dx"}, {"N", "K", "conductors", "dx"}, kind + " params");
         validateKeys(ports, {"bus1", "bus2"}, {"bus1", "bus2"}, kind + " ports");
-        const auto dx = realValue<RealT>(params.at("dx"),
-                                         "LineLumped dx");
-        const auto Rp = realMatrix<RealT>(params.at("Rp"),
-                                          "LineLumped Rp");
-        const auto Lp = realMatrix<RealT>(params.at("Lp"),
-                                          "LineLumped Lp");
-        const auto Gp = realMatrix<RealT>(params.at("Gp"),
-                                          "LineLumped Gp");
-        const auto Cp = realMatrix<RealT>(params.at("Cp"),
-                                          "LineLumped Cp");
-        if (!(dx > RealT{0.0}) || !Detail::positiveSemidefinite(Rp)
-            || !Detail::positiveDefinite(Lp)
-            || !Detail::positiveSemidefinite(Gp)
-            || !Detail::positiveSemidefinite(Cp))
-        {
-          throw std::runtime_error(
-              "LineLumped requires positive dx, positive-definite Lp, "
-              "and positive-semidefinite Rp, Gp, and Cp");
-        }
-        data.parameters[LineLumpedParameters::dx] = dx;
-        data.parameters[LineLumpedParameters::Rp] = Rp;
-        data.parameters[LineLumpedParameters::Lp] = Lp;
-        data.parameters[LineLumpedParameters::Gp] = Gp;
-        data.parameters[LineLumpedParameters::Cp] = Cp;
+        validateSubmodelNames(device, {"Zp", "Yp"}, kind);
+        data.parameters[LineLumpedParameters::N] =
+            indexValue<IdxT>(params.at("N"), "LineLumped N");
+        data.parameters[LineLumpedParameters::K] =
+            indexValue<IdxT>(params.at("K"), "LineLumped K");
+        data.parameters[LineLumpedParameters::conductors] =
+            indexVector<IdxT>(params.at("conductors"),
+                              "LineLumped conductors");
+        data.parameters[LineLumpedParameters::dx] =
+            realValue<RealT>(params.at("dx"), "LineLumped dx");
+        data.submodels[LineLumpedSubmodels::Zp] =
+            submodelParameters<RealT, IdxT>(device, "Zp", kind);
+        data.submodels[LineLumpedSubmodels::Yp] =
+            submodelParameters<RealT, IdxT>(device, "Yp", kind);
         ports.at("bus1").get_to(data.buses[LineLumpedBuses::bus1]);
         ports.at("bus2").get_to(data.buses[LineLumpedBuses::bus2]);
         for (const auto& monitor : monitorNames(device))
@@ -540,18 +640,13 @@ namespace GridKit::EMT
       {
         typename SystemModelData<RealT, IdxT>::LoadZDataT data;
         populateEnvelope(device, kind, data);
-        validateKeys(params, {"R", "L"}, {"R", "L"}, kind + " params");
+        validateKeys(params, {"N"}, {"N"}, kind + " params");
         validateKeys(ports, {"bus", "enable"}, {"bus", "enable"}, kind + " ports");
-        const auto R = realMatrix<RealT>(params.at("R"), "LoadZ R");
-        const auto L = realMatrix<RealT>(params.at("L"), "LoadZ L");
-        if (!Detail::positiveSemidefinite(R)
-            || !Detail::positiveDefinite(L))
-        {
-          throw std::runtime_error(
-              "LoadZ requires positive-semidefinite R and positive-definite L");
-        }
-        data.parameters[LoadZParameters::R] = R;
-        data.parameters[LoadZParameters::L] = L;
+        validateSubmodelNames(device, {"Z"}, kind);
+        data.parameters[LoadZParameters::N] =
+            indexValue<IdxT>(params.at("N"), "LoadZ N");
+        data.submodels[LoadZSubmodels::Z] =
+            submodelParameters<RealT, IdxT>(device, "Z", kind);
         ports.at("bus").get_to(data.buses[LoadZBuses::bus]);
         ports.at("enable").get_to(
             data.signal_inputs[LoadZSignalInputs::enable]);
@@ -586,32 +681,19 @@ namespace GridKit::EMT
       {
         typename SystemModelData<RealT, IdxT>::VoltageSourceDataT data;
         populateEnvelope(device, kind, data);
-        validateKeys(params, {"E", "phi", "omega", "Rs", "Ls"}, {"E", "phi", "omega", "Rs", "Ls"}, kind + " params");
+        validateKeys(params, {"N", "E", "phi", "omega"}, {"N", "E", "phi", "omega"}, kind + " params");
         validateKeys(ports, {"bus"}, {"bus"}, kind + " ports");
-        const auto E     = realVector<RealT>(params.at("E"),
-                                         "VoltageSource E");
-        const auto phi   = realVector<RealT>(params.at("phi"),
-                                           "VoltageSource phi");
-        const auto omega = realValue<RealT>(params.at("omega"),
-                                            "VoltageSource omega");
-        const auto Rs    = realMatrix<RealT>(params.at("Rs"),
-                                          "VoltageSource Rs");
-        const auto Ls    = realMatrix<RealT>(params.at("Ls"),
-                                          "VoltageSource Ls");
-        if (E[0] < RealT{0.0} || E[1] < RealT{0.0}
-            || E[2] < RealT{0.0} || !(omega > RealT{0.0})
-            || !Detail::positiveSemidefinite(Rs)
-            || !Detail::positiveDefinite(Ls))
-        {
-          throw std::runtime_error(
-              "VoltageSource requires nonnegative E, positive omega, "
-              "positive-semidefinite Rs, and positive-definite Ls");
-        }
-        data.parameters[VoltageSourceParameters::E]     = E;
-        data.parameters[VoltageSourceParameters::phi]   = phi;
-        data.parameters[VoltageSourceParameters::omega] = omega;
-        data.parameters[VoltageSourceParameters::Rs]    = Rs;
-        data.parameters[VoltageSourceParameters::Ls]    = Ls;
+        validateSubmodelNames(device, {"Z"}, kind);
+        data.parameters[VoltageSourceParameters::N] =
+            indexValue<IdxT>(params.at("N"), "VoltageSource N");
+        data.parameters[VoltageSourceParameters::E] =
+            realVector<RealT>(params.at("E"), "VoltageSource E");
+        data.parameters[VoltageSourceParameters::phi] =
+            realVector<RealT>(params.at("phi"), "VoltageSource phi");
+        data.parameters[VoltageSourceParameters::omega] =
+            realValue<RealT>(params.at("omega"), "VoltageSource omega");
+        data.submodels[VoltageSourceSubmodels::Z] =
+            submodelParameters<RealT, IdxT>(device, "Z", kind);
         ports.at("bus").get_to(data.buses[VoltageSourceBuses::bus]);
         for (const auto& monitor : monitorNames(device))
         {
@@ -660,37 +742,13 @@ namespace GridKit::EMT
       }
       else if (kind == "VectorFit")
       {
-        typename SystemModelData<RealT, IdxT>::VectorFitDataT data;
+        auto data = vectorFitParameters<RealT, IdxT>(params, kind + " params");
         populateEnvelope(device, kind, data);
-        validateKeys(params, {"D", "E", "poles", "residues"}, {"D", "E", "poles", "residues"}, kind + " params");
+        validateSubmodelNames(device, {}, kind);
         validateKeys(ports,
                      {"input_a", "input_b", "input_c", "out_a", "out_b", "out_c"},
                      {"input_a", "input_b", "input_c", "out_a", "out_b", "out_c"},
                      kind + " ports");
-        data.parameters[VectorFitParameters::D] =
-            realMatrix<RealT>(params.at("D"), "VectorFit D");
-        data.parameters[VectorFitParameters::E] =
-            realMatrix<RealT>(params.at("E"), "VectorFit E");
-        if (!params.at("poles").is_array()
-            || !params.at("residues").is_array())
-        {
-          throw std::runtime_error(
-              "VectorFit poles and residues must be arrays");
-        }
-        std::vector<std::complex<RealT>> poles;
-        for (const auto& pole : params.at("poles"))
-        {
-          poles.push_back(complexValue<RealT>(pole, "VectorFit pole"));
-        }
-        std::vector<ABCMatrix<std::complex<RealT>>> residues;
-        for (const auto& residue : params.at("residues"))
-        {
-          residues.push_back(complexMatrix<RealT>(residue,
-                                                  "VectorFit residue"));
-        }
-        validateVectorFitPairs(poles, residues);
-        data.parameters[VectorFitParameters::poles]    = poles;
-        data.parameters[VectorFitParameters::residues] = residues;
         ports.at("input_a").get_to(
             data.signal_inputs[VectorFitSignalInputs::input_a]);
         ports.at("input_b").get_to(
@@ -714,6 +772,7 @@ namespace GridKit::EMT
         using namespace PhasorDynamics;
         typename SystemModelData<RealT, IdxT>::ConstantSourceDataT data;
         validateDeviceEnvelope(device, kind);
+        validateSubmodelNames(device, {}, kind);
         data.device_class          = kind;
         data.disambiguation_string = id;
         validateKeys(params, {"Sr", "Si"}, {"Sr"}, kind + " params");

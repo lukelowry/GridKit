@@ -107,6 +107,7 @@ namespace GridKit
       std::map<std::string, IdxT> gridkit_component_indices_;
 
       bool                      owns_components_{false};
+      IdxT                      jacobian_entry_count_{0};
       std::unique_ptr<MonitorT> monitor_;
       std::size_t               monitored_bus_count_{0};
       std::size_t               monitored_component_count_{0};

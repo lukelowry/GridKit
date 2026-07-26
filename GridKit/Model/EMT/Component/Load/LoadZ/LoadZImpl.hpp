@@ -28,13 +28,17 @@ namespace GridKit
     void LoadZ<scalar_type, index_type>::initializeParameters(const ModelDataT& data)
     {
       using Parameter = typename ModelDataT::Parameters;
-      if (data.parameters.contains(Parameter::R))
+      using Submodel  = typename ModelDataT::Submodels;
+      if (data.parameters.contains(Parameter::N))
       {
-        R_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::R));
+        N_ = std::get<IdxT>(data.parameters.at(Parameter::N));
       }
-      if (data.parameters.contains(Parameter::L))
+      if (data.submodels.contains(Submodel::Z))
       {
-        L_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::L));
+        const auto z = rationalCoefficients(data.submodels.at(Submodel::Z));
+        R_           = z.D;
+        L_           = z.E;
+        z_dynamic_   = z.dynamic;
       }
     }
 
@@ -74,6 +78,17 @@ namespace GridKit
       if (bus_ == nullptr)
       {
         Log::error() << "EMT::LoadZ: bus is null\n";
+        ++status;
+      }
+      if (N_ != IdxT{3})
+      {
+        Log::error() << "EMT::LoadZ: only three phases are supported\n";
+        ++status;
+      }
+      if (z_dynamic_)
+      {
+        Log::error() << "EMT::LoadZ: Z rational dynamics are not yet "
+                        "supported; poles and residues must be empty\n";
         ++status;
       }
       if (!Detail::positiveSemidefinite(R_))

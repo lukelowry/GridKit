@@ -91,7 +91,13 @@ namespace GridKit
 
       BusT* bus1_{nullptr};
       BusT* bus2_{nullptr};
-      RealT dx_{0.0};
+
+      IdxT            N_{3};
+      IdxT            K_{3};
+      ABCVector<IdxT> conductors_{1, 2, 3};
+      RealT           dx_{0.0};
+      bool            zp_dynamic_{false};
+      bool            yp_dynamic_{false};
 
       ABCMatrix<RealT> Rp_{};
       ABCMatrix<RealT> Lp_{};

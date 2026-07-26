@@ -30,25 +30,37 @@ namespace GridKit
     void LineLumped<scalar_type, index_type>::initializeParameters(const ModelDataT& data)
     {
       using Parameter = typename ModelDataT::Parameters;
+      using Submodel  = typename ModelDataT::Submodels;
+      if (data.parameters.contains(Parameter::N))
+      {
+        N_ = std::get<IdxT>(data.parameters.at(Parameter::N));
+      }
+      if (data.parameters.contains(Parameter::K))
+      {
+        K_ = std::get<IdxT>(data.parameters.at(Parameter::K));
+      }
+      if (data.parameters.contains(Parameter::conductors))
+      {
+        conductors_ =
+            std::get<ABCVector<IdxT>>(data.parameters.at(Parameter::conductors));
+      }
       if (data.parameters.contains(Parameter::dx))
       {
         dx_ = std::get<RealT>(data.parameters.at(Parameter::dx));
       }
-      if (data.parameters.contains(Parameter::Rp))
+      if (data.submodels.contains(Submodel::Zp))
       {
-        Rp_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Rp));
+        const auto zp = rationalCoefficients(data.submodels.at(Submodel::Zp));
+        Rp_           = zp.D;
+        Lp_           = zp.E;
+        zp_dynamic_   = zp.dynamic;
       }
-      if (data.parameters.contains(Parameter::Lp))
+      if (data.submodels.contains(Submodel::Yp))
       {
-        Lp_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Lp));
-      }
-      if (data.parameters.contains(Parameter::Gp))
-      {
-        Gp_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Gp));
-      }
-      if (data.parameters.contains(Parameter::Cp))
-      {
-        Cp_ = std::get<ABCMatrix<RealT>>(data.parameters.at(Parameter::Cp));
+        const auto yp = rationalCoefficients(data.submodels.at(Submodel::Yp));
+        Gp_           = yp.D;
+        Cp_           = yp.E;
+        yp_dynamic_   = yp.dynamic;
       }
 
       R_ = {{{dx_ * Rp_[0][0], dx_ * Rp_[0][1], dx_ * Rp_[0][2]},
@@ -123,6 +135,24 @@ namespace GridKit
       if (bus1_ == nullptr || bus2_ == nullptr || bus1_ == bus2_)
       {
         Log::error() << "EMT::LineLumped: two distinct, non-null buses are required\n";
+        ++status;
+      }
+      if (N_ != IdxT{3} || K_ != IdxT{3})
+      {
+        Log::error() << "EMT::LineLumped: only three phases and three "
+                        "conductors are supported\n";
+        ++status;
+      }
+      if (conductors_ != ABCVector<IdxT>{1, 2, 3})
+      {
+        Log::error() << "EMT::LineLumped: conductors must be the identity "
+                        "mapping [1,2,3]\n";
+        ++status;
+      }
+      if (zp_dynamic_ || yp_dynamic_)
+      {
+        Log::error() << "EMT::LineLumped: Zp and Yp rational dynamics are not "
+                        "yet supported; poles and residues must be empty\n";
         ++status;
       }
       if (!(dx_ > RealT{0.0}) || !std::isfinite(dx_))

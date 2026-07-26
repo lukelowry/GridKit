@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <limits>
+#include <stdexcept>
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/Model/EMT/Operators/Rational/VectorFit/VectorFit.hpp>
@@ -547,6 +548,8 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int VectorFit<scalar_type, index_type>::evaluateJacobian()
     {
+      // Upper bound on emitted entries: 3 output diagonal and 9 input columns
+      // for the output rows, plus at most 18 memory-state entries per pole.
       const auto buffer_size = static_cast<size_t>(12 + 18 * pole_count_);
       if (J_rows_buffer_ == nullptr)
       {
@@ -718,6 +721,11 @@ namespace GridKit
         ++q;
       }
 
+      if (static_cast<size_t>(nnz_) > buffer_size)
+      {
+        throw std::runtime_error(
+            "EMT::VectorFit: Jacobian entries exceed the reserved capacity");
+      }
       this->constructCoo();
       return 0;
     }
