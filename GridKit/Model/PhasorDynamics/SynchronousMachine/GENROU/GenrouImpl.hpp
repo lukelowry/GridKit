@@ -652,10 +652,6 @@ namespace GridKit
       Ir() += h_[0];
       Ii() += h_[1];
 
-      if (bus_->size() > 0)
-      {
-        bus_->getResidual().setDataUpdated();
-      }
       f_.setDataUpdated();
 
       return 0;
