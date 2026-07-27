@@ -23,6 +23,11 @@ int main(int argc, const char* argv[])
   checkCommandLine(argc, "DynamicSimulation");
   auto study = parseStudyData(argv[1]);
 
+  if (study.fault_bus && !study.model_data.bus_fault.empty())
+  {
+    study.model_data.bus_fault.front().buses[BusFaultBuses::bus] = *study.fault_bus;
+  }
+
   // Instantiate system
   SystemModel<scalar_type, index_type> sys(study.model_data);
   sys.allocate();
@@ -54,10 +59,10 @@ int main(int argc, const char* argv[])
     switch (event.type)
     {
     case EventType::FAULT_ON:
-      sys.getBusFault(event.element_id)->setStatus(true);
+      sys.getBusFault(0)->setStatus(true);
       break;
     case EventType::FAULT_OFF:
-      sys.getBusFault(event.element_id)->setStatus(false);
+      sys.getBusFault(0)->setStatus(false);
       break;
     }
 

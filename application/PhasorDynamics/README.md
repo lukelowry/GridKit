@@ -11,6 +11,7 @@
   `abs_tol`           | Absolute solver tolerance override (default: 1.0e-9)
   `dt_fixed`          | Fixed solver time step size, or 0 for adaptive stepping (default: 0)
   `max_steps`         | Maximum number of solver time steps, 0 for the IDA default, or a negative number for unlimited steps (default: 0)
+  `fault_bus`         | Bus where the study's bus fault is applied (optional; defaults to the bus in the system model)
   `events`            | An array of event groups (see [Events](#events) below)
   `output_file`       | Path to output (CSV) file (optional)
   `reference_file`    | A string containing the name of the case (optional)
@@ -28,4 +29,3 @@ Each event group describes a system event that occurs at a given time point
  --------------------|-------------------------------------------------------
   `time`             | A floating point value for time event occurs
   `type`             | Event type (one of { "fault_on", "fault_off" })
-  `element_id`       | An integer value referencing the element associated with the event (e.g., bus fault id)

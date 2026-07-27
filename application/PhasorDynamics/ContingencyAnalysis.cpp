@@ -56,10 +56,10 @@ TestStatus runStudy(StudyData study_data)
     switch (event.type)
     {
     case EventType::FAULT_ON:
-      sys.getBusFault(event.element_id)->setStatus(true);
+      sys.getBusFault(0)->setStatus(true);
       break;
     case EventType::FAULT_OFF:
-      sys.getBusFault(event.element_id)->setStatus(false);
+      sys.getBusFault(0)->setStatus(false);
       break;
     }
 
@@ -78,12 +78,6 @@ TestStatus runStudy(StudyData study_data)
 
 TestStatus singleFaultStudy(std::size_t fault_id, StudyData study_data)
 {
-  // Change id in schedule to current fault id
-  for (auto& event : study_data.events)
-  {
-    event.element_id = fault_id;
-  }
-
   // Make distinct output files
   for (auto& sink : study_data.model_data.monitor_sink)
   {
