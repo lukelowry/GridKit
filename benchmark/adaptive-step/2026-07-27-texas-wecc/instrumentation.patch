@@ -1,0 +1,485 @@
+diff --git a/GridKit/Model/PhasorDynamics/SystemModel.hpp b/GridKit/Model/PhasorDynamics/SystemModel.hpp
+index cfe03130..40e9e4cb 100644
+--- a/GridKit/Model/PhasorDynamics/SystemModel.hpp
++++ b/GridKit/Model/PhasorDynamics/SystemModel.hpp
+@@ -1,5 +1,6 @@
+ #pragma once
+ 
++#include <array>
+ #include <map>
+ #include <memory>
+ #include <vector>
+@@ -92,6 +93,7 @@ namespace GridKit
+       int setAbsoluteTolerance(RealT rel_tol) override;
+       int evaluateResidual() override;
+       int evaluateJacobian() override;
++      void printResidualPerformanceStats() const;
+ 
+       void updateTime(RealT t, RealT a) override;
+ 
+@@ -120,6 +122,12 @@ namespace GridKit
+ 
+       /// Variable monitor
+       std::unique_ptr<MonitorT> monitor_;
++
++      static constexpr std::size_t profile_group_count_ = 10;
++      std::array<IdxT, profile_group_count_>  profile_component_ends_{};
++      std::array<double, profile_group_count_> profile_residual_seconds_{};
++      double                                  profile_bus_residual_seconds_{};
++      long int                                profile_residual_calls_{};
+     }; // class SystemModel
+ 
+   } // namespace PhasorDynamics
+diff --git a/GridKit/Model/PhasorDynamics/SystemModelImpl.hpp b/GridKit/Model/PhasorDynamics/SystemModelImpl.hpp
+index 2b268b1c..ccf72f27 100644
+--- a/GridKit/Model/PhasorDynamics/SystemModelImpl.hpp
++++ b/GridKit/Model/PhasorDynamics/SystemModelImpl.hpp
+@@ -1,4 +1,6 @@
+ #include <cassert>
++#include <chrono>
++#include <iomanip>
+ #include <iostream>
+ 
+ #include <GridKit/Definitions.hpp>
+@@ -689,6 +691,18 @@ namespace GridKit
+         addFault(fault);
+       }
+ 
++      IdxT profile_end         = 0;
++      profile_component_ends_[0] = profile_end += static_cast<IdxT>(data.adapter.size());
++      profile_component_ends_[1] = profile_end += static_cast<IdxT>(data.branch.size());
++      profile_component_ends_[2] = profile_end += static_cast<IdxT>(data.loadz.size() + data.loadzip.size());
++      profile_component_ends_[3] = profile_end += static_cast<IdxT>(data.genrou.size() + data.gensal.size() + data.genclassical.size());
++      profile_component_ends_[4] = profile_end += static_cast<IdxT>(data.regca.size() + data.reecb.size() + data.repca.size());
++      profile_component_ends_[5] = profile_end += static_cast<IdxT>(data.gov.size() + data.hygov.size() + data.gastpti.size());
++      profile_component_ends_[6] = profile_end += static_cast<IdxT>(data.stabilizer.size());
++      profile_component_ends_[7] = profile_end += static_cast<IdxT>(data.exciter.size() + data.esdc1a.size() + data.sexspti.size());
++      profile_component_ends_[8] = profile_end += static_cast<IdxT>(data.constant_source.size());
++      profile_component_ends_[9] = profile_end += static_cast<IdxT>(data.bus_fault.size());
++
+       for (const auto& sink : data.monitor_sink)
+       {
+         monitor_->addSink(sink);
+@@ -1064,21 +1078,69 @@ namespace GridKit
+     template <typename scalar_type, typename index_type>
+     int SystemModel<scalar_type, index_type>::evaluateResidual()
+     {
++      using ProfileClock = std::chrono::steady_clock;
++
++      const auto bus_start = ProfileClock::now();
+       for (const auto& bus : buses_)
+       {
+         bus->evaluateResidual();
+       }
++      profile_bus_residual_seconds_ += std::chrono::duration<double>(ProfileClock::now() - bus_start).count();
+ 
+-      for (const auto& component : components_)
++      IdxT profile_begin = 0;
++      for (std::size_t group = 0; group < profile_group_count_; ++group)
++      {
++        const auto group_start = ProfileClock::now();
++        for (IdxT i = profile_begin; i < profile_component_ends_[group]; ++i)
++        {
++          components_[i]->evaluateResidual();
++        }
++        profile_residual_seconds_[group] += std::chrono::duration<double>(ProfileClock::now() - group_start).count();
++        profile_begin = profile_component_ends_[group];
++      }
++      for (IdxT i = profile_begin; i < static_cast<IdxT>(components_.size()); ++i)
+       {
+-        component->evaluateResidual();
++        components_[i]->evaluateResidual();
+       }
+ 
+       f_.setDataUpdated();
++      ++profile_residual_calls_;
+ 
+       return 0;
+     }
+ 
++    template <typename scalar_type, typename index_type>
++    void SystemModel<scalar_type, index_type>::printResidualPerformanceStats() const
++    {
++      static constexpr std::array<const char*, profile_group_count_> labels = {
++        "adapter",
++        "branch",
++        "load",
++        "generator",
++        "converter",
++        "governor",
++        "stabilizer",
++        "exciter",
++        "source",
++        "fault"};
++
++      const auto flags     = std::cout.flags();
++      const auto precision = std::cout.precision();
++
++      std::cout << std::fixed << std::setprecision(6)
++                << "\nSYSTEM_RESIDUAL_PROFILE_BEGIN\n"
++                << "system_residual_calls=" << profile_residual_calls_ << '\n'
++                << "bus_residual_seconds=" << profile_bus_residual_seconds_ << '\n';
++      for (std::size_t group = 0; group < profile_group_count_; ++group)
++      {
++        std::cout << labels[group] << "_residual_seconds=" << profile_residual_seconds_[group] << '\n';
++      }
++      std::cout << "SYSTEM_RESIDUAL_PROFILE_END\n";
++
++      std::cout.flags(flags);
++      std::cout.precision(precision);
++    }
++
+     /**
+      * @brief Evaluate system Jacobian.
+      *
+diff --git a/GridKit/Solver/Dynamic/Ida.cpp b/GridKit/Solver/Dynamic/Ida.cpp
+index cce34900..b11a1cba 100644
+--- a/GridKit/Solver/Dynamic/Ida.cpp
++++ b/GridKit/Solver/Dynamic/Ida.cpp
+@@ -2,6 +2,7 @@
+ #include "Ida.hpp"
+ 
+ #include <algorithm>
++#include <chrono>
+ #include <cmath>
+ #include <iomanip>
+ #include <iostream>
+@@ -18,6 +19,73 @@ namespace AnalysisManager
+ 
+   namespace Sundials
+   {
++    namespace
++    {
++      using ProfileClock = std::chrono::steady_clock;
++
++      struct ProfileData
++      {
++        double   consistent_ic_seconds       = 0.0;
++        double   ida_solve_seconds           = 0.0;
++        double   residual_seconds            = 0.0;
++        double   residual_input_seconds      = 0.0;
++        double   residual_model_seconds      = 0.0;
++        double   residual_output_seconds     = 0.0;
++        double   jacobian_seconds            = 0.0;
++        double   jacobian_input_seconds      = 0.0;
++        double   jacobian_model_seconds      = 0.0;
++        double   jacobian_zero_seconds       = 0.0;
++        double   jacobian_structure_seconds  = 0.0;
++        double   jacobian_values_seconds     = 0.0;
++        double   linear_setup_seconds        = 0.0;
++        double   linear_solve_seconds        = 0.0;
++        double   state_update_seconds        = 0.0;
++        double   monitor_print_seconds       = 0.0;
++        long int consistent_ic_calls         = 0;
++        long int ida_solve_calls             = 0;
++        long int residual_calls              = 0;
++        long int jacobian_calls              = 0;
++        long int linear_setup_calls          = 0;
++        long int linear_solve_calls          = 0;
++        long int state_update_calls          = 0;
++        long int monitor_print_calls         = 0;
++      };
++
++      ProfileData profile;
++
++      double elapsedSeconds(ProfileClock::time_point start)
++      {
++        return std::chrono::duration<double>(ProfileClock::now() - start).count();
++      }
++
++#ifdef GRIDKIT_ENABLE_SUNDIALS_SPARSE
++      int profileKluSetup(SUNLinearSolver solver, SUNMatrix matrix)
++      {
++        const auto start = ProfileClock::now();
++        const int  status = SUNLinSolSetup_KLU(solver, matrix);
++        profile.linear_setup_seconds += elapsedSeconds(start);
++        ++profile.linear_setup_calls;
++        return status;
++      }
++
++      int profileKluSolve(SUNLinearSolver solver,
++                          SUNMatrix       matrix,
++                          N_Vector        solution,
++                          N_Vector        right_hand_side,
++                          sunrealtype     tolerance)
++      {
++        const auto start  = ProfileClock::now();
++        const int  status = SUNLinSolSolve_KLU(solver,
++                                             matrix,
++                                             solution,
++                                             right_hand_side,
++                                             tolerance);
++        profile.linear_solve_seconds += elapsedSeconds(start);
++        ++profile.linear_solve_calls;
++        return status;
++      }
++#endif
++    } // namespace
+ 
+     template <class ScalarT, typename IdxT>
+     Ida<ScalarT, IdxT>::Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model)
+@@ -165,6 +233,9 @@ namespace AnalysisManager
+       linearSolver_ = SUNLinSol_KLU(yy_, JacobianMat_, context_);
+       checkAllocation((void*) linearSolver_, "SUNLinSol_KLU");
+ 
++      linearSolver_->ops->setup = profileKluSetup;
++      linearSolver_->ops->solve = profileKluSolve;
++
+       retval = IDASetLinearSolver(solver_, linearSolver_, JacobianMat_);
+       checkOutput(retval, "IDASetLinearSolver");
+ 
+@@ -242,7 +313,10 @@ namespace AnalysisManager
+         if (tag_)
+           initType = IDA_YA_YDP_INIT;
+ 
+-        retval = IDACalcIC(solver_, initType, t0 + 0.1);
++        const auto start = ProfileClock::now();
++        retval           = IDACalcIC(solver_, initType, t0 + 0.1);
++        profile.consistent_ic_seconds += elapsedSeconds(start);
++        ++profile.consistent_ic_calls;
+         checkOutput(retval, "IDACalcIC");
+ 
+         retval = IDAGetConsistentIC(solver_, yy_, yp_);
+@@ -316,7 +390,10 @@ namespace AnalysisManager
+       {
+         const RealT tout = getMonitorTime(tf, dt_monitor, i, nsteps);
+         RealT       tret;
+-        retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
++        const auto solve_start = ProfileClock::now();
++        retval                 = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
++        profile.ida_solve_seconds += elapsedSeconds(solve_start);
++        ++profile.ida_solve_calls;
+         checkOutput(retval, "IDASolve");
+ 
+         if (step_callback.has_value() || model_->monitoring())
+@@ -324,11 +401,17 @@ namespace AnalysisManager
+           // The callback may try to observe upated values in the model, so we
+           // should update them here (At this point, the model's values are one
+           // internal integrator step out of date)
++          const auto update_start = ProfileClock::now();
+           updateModelState(tret);
++          profile.state_update_seconds += elapsedSeconds(update_start);
++          ++profile.state_update_calls;
+ 
+           if (model_->monitoring())
+           {
++            const auto monitor_start = ProfileClock::now();
+             model_->printMonitoredVariables();
++            profile.monitor_print_seconds += elapsedSeconds(monitor_start);
++            ++profile.monitor_print_calls;
+           }
+           if (step_callback.has_value())
+           {
+@@ -337,7 +420,10 @@ namespace AnalysisManager
+         }
+       }
+ 
++      const auto update_start = ProfileClock::now();
+       updateModelState(tf);
++      profile.state_update_seconds += elapsedSeconds(update_start);
++      ++profile.state_update_calls;
+ 
+       return retval;
+     }
+@@ -709,12 +795,24 @@ namespace AnalysisManager
+     {
+       GridKit::Model::Evaluator<ScalarT, IdxT>* model = static_cast<GridKit::Model::Evaluator<ScalarT, IdxT>*>(user_data);
+ 
++      const auto residual_start = ProfileClock::now();
++
++      const auto input_start = ProfileClock::now();
+       copyVec(yy, model->y());
+       copyVec(yp, model->yp());
+       model->updateTime(tres, 0.0);
++      profile.residual_input_seconds += elapsedSeconds(input_start);
+ 
++      const auto model_start = ProfileClock::now();
+       model->evaluateResidual();
++      profile.residual_model_seconds += elapsedSeconds(model_start);
++
++      const auto output_start = ProfileClock::now();
+       copyVec(model->getResidual(), rr);
++      profile.residual_output_seconds += elapsedSeconds(output_start);
++
++      profile.residual_seconds += elapsedSeconds(residual_start);
++      ++profile.residual_calls;
+ 
+       return 0;
+     }
+@@ -732,16 +830,24 @@ namespace AnalysisManager
+     {
+       GridKit::Model::Evaluator<ScalarT, IdxT>* model = static_cast<GridKit::Model::Evaluator<ScalarT, IdxT>*>(user_data);
+ 
++      const auto jacobian_start = ProfileClock::now();
++
++      const auto input_start = ProfileClock::now();
+       copyVec(yy, model->y());
+       copyVec(yp, model->yp());
+       model->updateTime(t, cj);
++      profile.jacobian_input_seconds += elapsedSeconds(input_start);
+ 
++      const auto model_start = ProfileClock::now();
+       model->evaluateJacobian();
++      profile.jacobian_model_seconds += elapsedSeconds(model_start);
+ 
+       using CsrMatrixT = GridKit::LinearAlgebra::CsrMatrix<RealT, IdxT>;
+       CsrMatrixT* Jac  = model->getCsrJacobian();
+ 
++      const auto zero_start = ProfileClock::now();
+       SUNMatZero(J);
++      profile.jacobian_zero_seconds += elapsedSeconds(zero_start);
+ 
+       sunindextype* sun_row_ptrs = SUNSparseMatrix_IndexPointers(J);
+       sunindextype* sun_cols     = SUNSparseMatrix_IndexValues(J);
+@@ -756,9 +862,17 @@ namespace AnalysisManager
+       RealT* vals     = Jac->getValues();
+ 
+       // Copy data from model jac to sundials
++      const auto structure_start = ProfileClock::now();
+       std::copy(row_ptrs, row_ptrs + n + 1, sun_row_ptrs);
+       std::copy(cols, cols + nnz, sun_cols);
++      profile.jacobian_structure_seconds += elapsedSeconds(structure_start);
++
++      const auto values_start = ProfileClock::now();
+       std::copy(vals, vals + nnz, sun_vals);
++      profile.jacobian_values_seconds += elapsedSeconds(values_start);
++
++      profile.jacobian_seconds += elapsedSeconds(jacobian_start);
++      ++profile.jacobian_calls;
+ 
+       return 0;
+     }
+@@ -954,6 +1068,44 @@ namespace AnalysisManager
+       checkOutput(retval, "IDAPrintAllStats");
+     }
+ 
++    template <class ScalarT, typename IdxT>
++    void Ida<ScalarT, IdxT>::printPerformanceStats() const
++    {
++      const auto flags     = std::cout.flags();
++      const auto precision = std::cout.precision();
++
++      std::cout << std::fixed << std::setprecision(6)
++                << "\nGRIDKIT_PROFILE_BEGIN\n"
++                << "consistent_ic_calls=" << profile.consistent_ic_calls << '\n'
++                << "consistent_ic_seconds=" << profile.consistent_ic_seconds << '\n'
++                << "ida_solve_calls=" << profile.ida_solve_calls << '\n'
++                << "ida_solve_seconds=" << profile.ida_solve_seconds << '\n'
++                << "residual_calls=" << profile.residual_calls << '\n'
++                << "residual_seconds=" << profile.residual_seconds << '\n'
++                << "residual_input_seconds=" << profile.residual_input_seconds << '\n'
++                << "residual_model_seconds=" << profile.residual_model_seconds << '\n'
++                << "residual_output_seconds=" << profile.residual_output_seconds << '\n'
++                << "jacobian_calls=" << profile.jacobian_calls << '\n'
++                << "jacobian_seconds=" << profile.jacobian_seconds << '\n'
++                << "jacobian_input_seconds=" << profile.jacobian_input_seconds << '\n'
++                << "jacobian_model_seconds=" << profile.jacobian_model_seconds << '\n'
++                << "jacobian_zero_seconds=" << profile.jacobian_zero_seconds << '\n'
++                << "jacobian_structure_seconds=" << profile.jacobian_structure_seconds << '\n'
++                << "jacobian_values_seconds=" << profile.jacobian_values_seconds << '\n'
++                << "linear_setup_calls=" << profile.linear_setup_calls << '\n'
++                << "linear_setup_seconds=" << profile.linear_setup_seconds << '\n'
++                << "linear_solve_calls=" << profile.linear_solve_calls << '\n'
++                << "linear_solve_seconds=" << profile.linear_solve_seconds << '\n'
++                << "state_update_calls=" << profile.state_update_calls << '\n'
++                << "state_update_seconds=" << profile.state_update_seconds << '\n'
++                << "monitor_print_calls=" << profile.monitor_print_calls << '\n'
++                << "monitor_print_seconds=" << profile.monitor_print_seconds << '\n'
++                << "GRIDKIT_PROFILE_END\n";
++
++      std::cout.flags(flags);
++      std::cout.precision(precision);
++    }
++
+     /**
+      * @brief Accumulate another stats object into this one, allowing for stats to be kept
+      *        across multiple simulations with IDA
+@@ -962,6 +1114,7 @@ namespace AnalysisManager
+     {
+       num_steps_                       += other.num_steps_;
+       num_residual_evals_              += other.num_residual_evals_;
++      num_jacobian_evals_              += other.num_jacobian_evals_;
+       num_linear_decompositions_       += other.num_linear_decompositions_;
+       num_error_test_fails_            += other.num_error_test_fails_;
+       num_nonlinear_iters_             += other.num_nonlinear_iters_;
+@@ -981,9 +1134,10 @@ namespace AnalysisManager
+       int               stat_width  = 12;
+       std::stringstream out;
+ 
+-      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
+-          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
+-          << std::setw(label_width) << "Linear decompositions" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
++      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_steps_ << '\n'
++          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
++          << std::setw(label_width) << "Jacobian evals" << " : " << std::setw(stat_width) << num_jacobian_evals_ << '\n'
++          << std::setw(label_width) << "Linear solver setups" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
+           << std::setw(label_width) << "Error test failures" << " : " << std::setw(stat_width) << num_error_test_fails_ << '\n'
+           << std::setw(label_width) << "Nonlinear iterations" << " : " << std::setw(stat_width) << num_nonlinear_iters_ << '\n'
+           << std::setw(label_width) << "Nonlinear convergence failures" << " : " << std::setw(stat_width) << num_nonlinear_convergence_fails_;
+@@ -1018,6 +1172,9 @@ namespace AnalysisManager
+                                          &dummy2);
+       checkOutput(retval, "IDAGetIntegratorStats");
+ 
++      retval = IDAGetNumJacEvals(solver_, &stats.num_jacobian_evals_);
++      checkOutput(retval, "IDAGetNumJacEvals");
++
+       retval = IDAGetNonlinSolvStats(solver_, &stats.num_nonlinear_iters_, &stats.num_nonlinear_convergence_fails_);
+       checkOutput(retval, "IDAGetNonlinSolvStats");
+ 
+diff --git a/GridKit/Solver/Dynamic/Ida.hpp b/GridKit/Solver/Dynamic/Ida.hpp
+index bbe87f8d..3ae5860c 100644
+--- a/GridKit/Solver/Dynamic/Ida.hpp
++++ b/GridKit/Solver/Dynamic/Ida.hpp
+@@ -31,6 +31,7 @@ namespace AnalysisManager
+     {
+       long int num_steps_                       = 0;
+       long int num_residual_evals_              = 0;
++      long int num_jacobian_evals_              = 0;
+       long int num_linear_decompositions_       = 0;
+       long int num_error_test_fails_            = 0;
+       long int num_nonlinear_iters_             = 0;
+@@ -121,6 +122,7 @@ namespace AnalysisManager
+       void printOutput(RealT t) const;
+       void printSpecial(RealT t, N_Vector x) const;
+       void printFinalStats() const;
++      void printPerformanceStats() const;
+ 
+       void setFixedStep(ScalarT time_step);
+       void setBackwardFixedStep(ScalarT time_step);
+diff --git a/application/PhasorDynamics/DynamicSimulation.cpp b/application/PhasorDynamics/DynamicSimulation.cpp
+index a77181e3..d01996cb 100644
+--- a/application/PhasorDynamics/DynamicSimulation.cpp
++++ b/application/PhasorDynamics/DynamicSimulation.cpp
+@@ -41,11 +41,13 @@ int main(int argc, const char* argv[])
+   // Initilize simultation for first run
+   auto      dt_monitor = study.dt_monitor;
+   real_type final_time = study.tmax;
++  IdaStats  stats;
+   ida.initializeSimulation(0.0);
+   for (const auto& event : study.events)
+   {
+     // Run to event time
+     ida.runSimulation(event.time, dt_monitor);
++    stats += ida.getStats();
+ 
+     // Set up run for event (to start at event time)
+     switch (event.type)
+@@ -64,6 +66,7 @@ int main(int argc, const char* argv[])
+ 
+   // Run to final time
+   ida.runSimulation(final_time, dt_monitor);
++  stats += ida.getStats();
+ 
+   real_type stop = static_cast<real_type>(clock());
+ 
+@@ -75,6 +78,10 @@ int main(int argc, const char* argv[])
+ 
+   // Report run time
+   std::cout << "\n\nComplete in " << (stop - start) / CLOCKS_PER_SEC << " seconds\n";
++  std::cout << '\n'
++            << stats.report() << '\n';
++  ida.printPerformanceStats();
++  sys.printResidualPerformanceStats();
+ 
+   return status.get();
+ }

@@ -1,0 +1,53 @@
+
+
+Complete in 0.329178 seconds
+
+                         Steps :         1668
+                Residual evals :         2067
+                Jacobian evals :           86
+          Linear solver setups :           86
+           Error test failures :           19
+          Nonlinear iterations :         2061
+Nonlinear convergence failures :            0
+
+GRIDKIT_PROFILE_BEGIN
+consistent_ic_calls=3
+consistent_ic_seconds=0.009523
+ida_solve_calls=4800
+ida_solve_seconds=0.291297
+residual_calls=2067
+residual_seconds=0.113559
+residual_input_seconds=0.013880
+residual_model_seconds=0.097676
+residual_output_seconds=0.001643
+jacobian_calls=86
+jacobian_seconds=0.030134
+jacobian_input_seconds=0.000814
+jacobian_model_seconds=0.026836
+jacobian_zero_seconds=0.001274
+jacobian_structure_seconds=0.000920
+jacobian_values_seconds=0.000228
+linear_setup_calls=86
+linear_setup_seconds=0.013042
+linear_solve_calls=2067
+linear_solve_seconds=0.049787
+state_update_calls=4803
+state_update_seconds=0.024441
+monitor_print_calls=4800
+monitor_print_seconds=0.000113
+GRIDKIT_PROFILE_END
+
+SYSTEM_RESIDUAL_PROFILE_BEGIN
+system_residual_calls=2068
+bus_residual_seconds=0.007906
+adapter_residual_seconds=0.000043
+branch_residual_seconds=0.036587
+load_residual_seconds=0.016708
+generator_residual_seconds=0.018888
+converter_residual_seconds=0.000032
+governor_residual_seconds=0.007275
+stabilizer_residual_seconds=0.000973
+exciter_residual_seconds=0.008367
+source_residual_seconds=0.000031
+fault_residual_seconds=0.000175
+SYSTEM_RESIDUAL_PROFILE_END
