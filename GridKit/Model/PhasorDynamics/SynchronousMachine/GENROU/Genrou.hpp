@@ -42,8 +42,6 @@ namespace GridKit
       PSIPQ,  ///< \f$\psi'_q\f$
       EPD,    ///< \f$E'_d\f$
       EPQ,    ///< \f$E'_q\f$
-      VD,     ///< \f$V_d\f$
-      VQ,     ///< \f$V_q\f$
       ID,     ///< \f$I_d\f$
       IQ,     ///< \f$I_q\f$
       IR,     ///< \f$I_r\f$
