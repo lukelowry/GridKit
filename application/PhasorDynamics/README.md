@@ -5,7 +5,7 @@
    Name               | Value
  ---------------------|-------------------------------------------------------
   `system_model_file` | Path to the system model file[^1]
-  `dt_monitor`        | Monitor output time interval for recorded simulation results (default: 0, no intermediate monitoring)
+  `dt_monitor`        | Monitor output time interval for recorded simulation results (default: 0, no intermediate monitoring)[^2]
   `tmax`              | A floating-point value for max time
   `ida`               | IDA solver options (optional; see [IDA options](#ida-options))
   `fault_bus`         | Bus where the study's bus fault is applied (optional; defaults to the bus in the system model)
@@ -17,6 +17,8 @@
   `abs_err_threshold` | A floating-point value for the smallest value at which to scale relative error (default: machine epsilon for double-precision)
 
 [^1]: See system model [case format](../../GridKit/Model/PhasorDynamics/INPUT_FORMAT.md)
+
+[^2]: Accepted under the deprecated name `dt` for backward compatibility. `dt_monitor` takes precedence when both are given.
 
 ## IDA options
 
@@ -70,3 +72,11 @@ Each event group describes a system event that occurs at a given time point
  --------------------|-------------------------------------------------------
   `time`             | A floating point value for time event occurs
   `type`             | Event type (one of { "fault_on", "fault_off" })
+
+   Name              | Value
+ --------------------|-------------------------------------------------------
+  `element_id`       | Index of the bus where the fault is applied (optional)
+
+`element_id` is a zero-based index into the case file's bus list, resolved to
+that bus's id. A root-level `fault_bus`, which names the bus by id, takes
+precedence when both are given.

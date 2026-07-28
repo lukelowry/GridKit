@@ -63,6 +63,8 @@ namespace GridKit
       AnalysisManager::Sundials::IdaOptions<double> ida;
       /// bus where the study's bus fault is applied
       std::optional<std::size_t>                    fault_bus;
+      /// index of the bus where the study's bus fault is applied
+      std::optional<std::size_t>                    fault_bus_index;
       /// set of system events
       std::vector<SystemEvent>                      events;
       /// path to output file
@@ -183,7 +185,11 @@ namespace GridKit
       using namespace magic_enum;
 
       j.at("system_model_file").get_to(c.system_model_file);
-      c.dt_monitor = j.value("dt_monitor", 0.0);
+      if (j.contains("dt"))
+      {
+        Log::warning() << "\"dt\" is deprecated; use \"dt_monitor\"\n";
+      }
+      c.dt_monitor = j.value("dt_monitor", j.value("dt", 0.0));
       j.at("tmax").get_to(c.tmax);
       if (j.contains("rel_tol") || j.contains("abs_tol") || j.contains("dt_fixed")
           || j.contains("max_steps"))
@@ -205,6 +211,12 @@ namespace GridKit
       {
         auto& event = c.events.emplace_back();
         raw_event.at("time").get_to(event.time);
+
+        // Legacy input files locate the fault by bus index rather than by id
+        if (!c.fault_bus_index && raw_event.contains("element_id"))
+        {
+          c.fault_bus_index = raw_event.at("element_id").get<std::size_t>();
+        }
 
         auto type_str   = raw_event.at("type").get<std::string>();
         using EventType = SystemEvent::Type;
@@ -303,6 +315,17 @@ namespace GridKit
 
       auto csv        = ::GridKit::Model::VariableMonitorFormat::CSV;
       data.model_data = parseSystemModelData(data.system_model_file);
+
+      // Resolve a bus index from a legacy event to the bus id the fault uses;
+      // an explicit fault_bus takes precedence
+      if (!data.fault_bus && data.fault_bus_index)
+      {
+        if (*data.fault_bus_index >= data.model_data.bus.size())
+        {
+          throw std::out_of_range("Event element_id is not a valid bus index");
+        }
+        data.fault_bus = data.model_data.bus[*data.fault_bus_index].bus_id;
+      }
       std::string model_output_file;
       // Find output file (CSV) specified in model input file
       for (const auto& sink : data.model_data.monitor_sink)

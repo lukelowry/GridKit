@@ -11,6 +11,9 @@ docs/api/reference/
 docs/xml/
 __pycache__
 
+# Generated simulation run output directories
+*.run/
+
 # Generated PhasorDynamics simulation figures
 examples/PhasorDynamics/**/*_delta.png
 examples/PhasorDynamics/**/*_omega.png

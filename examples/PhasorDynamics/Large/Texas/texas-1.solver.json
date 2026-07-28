@@ -3,15 +3,15 @@
     {
       "time": 1,
       "type": "fault_on",
-      "element_id": 2
+      "element_id": 0
     },
     {
-      "time": 1.01,
+      "time": 1.1,
       "type": "fault_off",
-      "element_id": 2
+      "element_id": 0
     }
   ],
-  "system_model_file": "wecc.case.json",
-  "dt": 0.05,
+  "system_model_file": "texas.case.json",
+  "dt": 0.01,
   "tmax": 10
 }
