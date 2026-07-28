@@ -58,7 +58,7 @@ namespace GridKit
                                                                                      yp_.getData(),
                                                                                      wb_.data(),
                                                                                      ws_.data(),
-                                                                                     alpha_,
+                                                                                     alpha(),
                                                                                      J_rows_buffer_,
                                                                                      J_cols_buffer_,
                                                                                      J_vals_buffer_,
