@@ -46,14 +46,19 @@ All IDA options are optional. Omitted options use the listed default.
  `step_tolerance_ic`         | IDA default
  `linear_solution_scaling`   | `true`
  `delta_cj_lsetup`           | `0.25`
- `klu_ordering`              | `"colamd"`; one of `"amd"`, `"colamd"`, or `"natural"`
+ `klu_ordering`              | `"amd"`; one of `"amd"`, `"colamd"`, or `"natural"`
 
 `fixed_step` sets both the integration mode and step size. It cannot be combined
 with `init_step`, `min_step`, or `max_step`.
 
+`klu_ordering` selects the fill-reducing ordering KLU applies to the Jacobian.
+`"amd"` suits the near-symmetric network matrices these models produce and is
+the default; the other orderings are provided for comparison.
+
 ```json
 "ida": {
-    "klu_ordering": "amd"
+    "rel_tol": 1.0e-6,
+    "max_num_steps": 2000
 }
 ```
 

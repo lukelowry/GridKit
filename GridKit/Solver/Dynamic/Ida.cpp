@@ -251,11 +251,13 @@ namespace AnalysisManager
       linearSolver_ = SUNLinSol_KLU(yy_, JacobianMat_, context_);
       checkAllocation((void*) linearSolver_, "SUNLinSol_KLU");
 
-      if (options_.klu_ordering.has_value())
-      {
-        retval = SUNLinSol_KLUSetOrdering(linearSolver_, static_cast<int>(*options_.klu_ordering));
-        checkOutput(retval, "SUNLinSol_KLUSetOrdering");
-      }
+      // Power system Jacobians are structurally near-symmetric network matrices
+      // that form a single irreducible block, so AMD on A+A' is the appropriate
+      // fill-reducing ordering. SUNDIALS defaults to COLAMD, which minimizes
+      // fill for A'A, and produces both more fill and a worse growth rate here.
+      const KluOrdering ordering = options_.klu_ordering.value_or(KluOrdering::AMD);
+      retval                     = SUNLinSol_KLUSetOrdering(linearSolver_, static_cast<int>(ordering));
+      checkOutput(retval, "SUNLinSol_KLUSetOrdering");
 
       linearSolver_->ops->setup = profileKluSetup;
       linearSolver_->ops->solve = profileKluSolve;
