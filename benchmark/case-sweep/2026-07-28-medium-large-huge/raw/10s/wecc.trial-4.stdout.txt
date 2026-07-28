@@ -1,0 +1,153 @@
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] Hygov: Tr, Tf, Tg, Tw, and Tnp below 0.001 s are raised to that floor to keep the governor lags well posed
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+[[33;1mWARNING[0m] A component has returned a nullptr Jacobian.
+
+
+Complete in 0.363138 seconds
+
+                         Steps :         2339
+                Residual evals :         3260
+                Jacobian evals :          175
+          Linear solver setups :          175
+           Error test failures :           88
+          Nonlinear iterations :         3252
+Nonlinear convergence failures :            2
+
+GRIDKIT_PROFILE_BEGIN
+consistent_ic_calls=3
+consistent_ic_seconds=0.008960
+ida_solve_calls=2400
+ida_solve_seconds=0.351963
+residual_calls=3260
+residual_seconds=0.121803
+residual_input_seconds=0.004569
+residual_model_seconds=0.114393
+residual_output_seconds=0.002472
+jacobian_calls=175
+jacobian_seconds=0.041424
+jacobian_input_seconds=0.000330
+jacobian_model_seconds=0.039457
+jacobian_structure_seconds=0.000929
+jacobian_values_seconds=0.000631
+linear_setup_calls=175
+linear_setup_seconds=0.018293
+linear_solve_calls=3262
+linear_solve_seconds=0.071389
+state_update_calls=3
+state_update_seconds=0.000004
+monitor_print_calls=0
+monitor_print_seconds=0.000000
+GRIDKIT_PROFILE_END
+
+SYSTEM_RESIDUAL_PROFILE_BEGIN
+system_residual_calls=3261
+network_residual_seconds=0.002358
+network_rows=243
+network_nnz=945
+adapter_residual_seconds=0.000053
+branch_residual_seconds=0.000046
+load_residual_seconds=0.000046
+generator_residual_seconds=0.018831
+converter_residual_seconds=0.059800
+governor_residual_seconds=0.019886
+stabilizer_residual_seconds=0.001185
+exciter_residual_seconds=0.010565
+source_residual_seconds=0.000432
+fault_residual_seconds=0.000274
+SYSTEM_RESIDUAL_PROFILE_END

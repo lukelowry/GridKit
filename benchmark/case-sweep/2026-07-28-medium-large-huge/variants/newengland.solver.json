@@ -1,0 +1,16 @@
+{
+    "system_model_file": "newengland.case.json",
+    "dt_monitor": 0.004166666666666667,
+    "tmax": 20.0,
+    "events": [
+        {
+            "time": 10.0,
+            "type": "fault_on"
+        },
+        {
+            "time": 10.1,
+            "type": "fault_off"
+        }
+    ],
+    "fault_bus": 2
+}
