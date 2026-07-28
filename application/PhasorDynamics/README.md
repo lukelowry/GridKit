@@ -26,8 +26,8 @@ All IDA options are optional. Omitted options use the listed default.
 
  Name                        | Default
  ----------------------------|-----------------------
- `rel_tol`                   | `1.0e-7`
- `abs_tol`                   | `1.0e-9`; use `0` for model-specific tolerances
+ `rel_tol`                   | `1.0e-5`
+ `abs_tol`                   | `1.0e-7`; use `0` for model-specific tolerances
  `fixed_step`                | Adaptive stepping
  `init_step`                 | Estimated by IDA
  `min_step`                  | No minimum

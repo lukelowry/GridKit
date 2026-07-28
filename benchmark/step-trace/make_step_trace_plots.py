@@ -50,9 +50,10 @@ F_NOMINAL = 60.0
 # decade the solver actually works in fills the axis.
 YLIM = (1.0e-3, 1.0e0)
 
-# Tolerance used by the per-case figure, and the ratio held between the
-# absolute and relative tolerances across the sweep.
-BASE_REL_TOL = 1.0e-7
+# Tolerance used by the per-case figure. Tracks the application default in
+# AnalysisUtilities.hpp so the figure shows what a stock run does. The ratio
+# between the absolute and relative tolerances is held across the sweep.
+BASE_REL_TOL = 1.0e-5
 ABS_OVER_REL = 1.0e-2
 
 SWEEP_CASE = "texas"
@@ -152,13 +153,14 @@ def load(trace_path: Path) -> pd.DataFrame:
 
 def draw_reference(ax) -> None:
     y = 1.0 / (4.0 * F_NOMINAL)
-    ax.axhline(y, color="0.45", linestyle="--", linewidth=0.8, zorder=1)
+    ax.axhline(y, color=INK_MUTED, linestyle=(0, (4, 3)), linewidth=0.7, zorder=2)
     ax.annotate(
         r"$\frac{1}{4f}$",
-        xy=(1.005, y),
+        xy=(1.012, y),
         xycoords=("axes fraction", "data"),
         va="center",
-        fontsize=11,
+        fontsize=10,
+        color=INK_MUTED,
         annotation_clip=False,
     )
 
@@ -167,49 +169,89 @@ def style_axes(ax) -> None:
     ax.set_yscale("log")
     ax.set_xlim(0.0, TMAX)
     ax.set_ylim(*YLIM)
-    ax.set_xlabel(r"$t$ $-$ Time [sec]")
-    ax.set_ylabel(r"$h$ $-$ Time step [sec]")
-    ax.axvline(FAULT_ON, color="0.25", linestyle=":", linewidth=0.9, zorder=1)
-    ax.grid(True, which="major", linewidth=0.4, alpha=0.35)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
+    ax.set_xlabel(r"$t$ $-$ Time [s]")
+    ax.set_ylabel(r"$h$ $-$ Time step [s]")
+    # The fault window, rather than a bare line, so the cleared instant reads too
+    ax.axvspan(FAULT_ON, FAULT_OFF, color=INK_MUTED, alpha=0.12, linewidth=0, zorder=1)
+    ax.grid(True, which="major", linewidth=0.4, alpha=0.6, color=GRID)
+    ax.set_axisbelow(True)
+
+
+# Shared figure style. Keep in sync with scripts/pdsim/plot_bus_frequency.py so
+# the whole figure set reads as one system.
+SURFACE = "#fcfcfb"
+INK = "#0b0b0b"
+INK_MUTED = "#52514e"
+GRID = "#c9c8c3"
+
+# Categorical slots 1-7 of the reference palette, in its documented fixed
+# order. That ordering is what clears the colorblind-separation gates on the
+# adjacent pairlist, which is the one line charts use; do not reorder.
+SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#4a3aa7"]
+
+# Blue sequential ramp for the tolerance sweep: relative tolerance is an
+# ordered magnitude, so it gets one hue light to dark, never a rainbow. No step
+# lighter than 250, which is the ordinal floor against a light surface.
+TOL_RAMP = ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#0d366b"]
 
 
 def apply_style() -> None:
     plt.rcParams.update({
         "font.family": "serif",
-        "font.serif": ["DejaVu Serif", "serif"],
+        "font.serif": ["Times New Roman", "Liberation Serif", "Nimbus Roman", "DejaVu Serif"],
+        "mathtext.fontset": "stix",
         "font.size": 9,
         "axes.labelsize": 10,
-        "axes.linewidth": 0.7,
+        "axes.titlesize": 10,
+        "axes.linewidth": 0.6,
+        "axes.edgecolor": INK_MUTED,
+        "axes.labelcolor": INK,
+        "axes.facecolor": SURFACE,
+        "figure.facecolor": SURFACE,
+        "axes.spines.top": False,
+        "axes.spines.right": False,
+        "axes.grid": True,
+        "grid.color": GRID,
+        "grid.linewidth": 0.4,
+        "grid.alpha": 0.6,
         "xtick.labelsize": 8.5,
         "ytick.labelsize": 8.5,
+        "xtick.color": INK_MUTED,
+        "ytick.color": INK_MUTED,
+        "xtick.direction": "out",
+        "ytick.direction": "out",
+        "xtick.major.size": 3,
+        "ytick.major.size": 3,
+        "xtick.major.width": 0.6,
+        "ytick.major.width": 0.6,
         "legend.fontsize": 8.5,
         "legend.frameon": False,
         "figure.dpi": 150,
         "savefig.dpi": 300,
         "savefig.bbox": "tight",
-        "lines.linewidth": 1.0,
+        "lines.linewidth": 1.1,
+        "lines.solid_capstyle": "round",
     })
 
 
 def plot_by_case(traces: dict[str, Path]) -> Path:
     """h(t) for each case, one line per case, at the base tolerance."""
     apply_style()
-    fig, ax = plt.subplots(figsize=(6.4, 3.4))
-    colors = plt.cm.tab10(np.linspace(0, 1, 10))
+    fig, ax = plt.subplots(figsize=(7.0, 3.6))
 
     for i, (name, path) in enumerate(traces.items()):
         frame = load(path)
         ax.step(frame["t"], frame["h"], where="post",
-                color=colors[i % 10], label=CASES[name]["label"], linewidth=1.0)
+                color=SERIES[i % len(SERIES)], label=CASES[name]["label"],
+                linewidth=0.9, alpha=0.9, solid_joinstyle="round")
 
     style_axes(ax)
     draw_reference(ax)
     ncol = min(len(traces), 4)
     rows = -(-len(traces) // ncol)
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.08 + 0.08 * rows), ncol=ncol,
-              handlelength=1.6, columnspacing=1.4)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.06 + 0.085 * rows), ncol=ncol,
+              handlelength=1.5, columnspacing=1.6, borderpad=0.0,
+              labelcolor=INK, handletextpad=0.6)
     out = HERE / "step_size_by_case.png"
     fig.savefig(out)
     plt.close(fig)
@@ -219,32 +261,34 @@ def plot_by_case(traces: dict[str, Path]) -> Path:
 def plot_by_tolerance(traces: dict[float, Path]) -> Path:
     """h(t) for one case across the tolerance sweep, with a colorbar key."""
     apply_style()
-    fig, ax = plt.subplots(figsize=(6.4, 3.4))
+    fig, ax = plt.subplots(figsize=(7.0, 3.6))
 
-    # Keyed on -log10(rel_tol) so the loosest tolerance sits at the left of
-    # the bar and the sweep reads left to right as it tightens.
-    keys = [-np.log10(r) for r in traces]
-    cmap = plt.cm.turbo
-    norm = matplotlib.colors.Normalize(vmin=min(keys), vmax=max(keys))
+    # Ordered magnitude, so one hue light to dark: loosest tolerance lightest,
+    # tightest darkest. Discrete blocks because these are five distinct runs.
+    order = sorted(traces, reverse=True)
+    cmap = matplotlib.colors.ListedColormap(TOL_RAMP[:len(order)])
+    color_of = {rel_tol: TOL_RAMP[i] for i, rel_tol in enumerate(order)}
 
-    for rel_tol, path in sorted(traces.items(), reverse=True):
-        frame = load(path)
+    # Loose first so the tighter, darker traces settle on top
+    for rel_tol in order:
+        frame = load(traces[rel_tol])
         ax.step(frame["t"], frame["h"], where="post",
-                color=cmap(norm(-np.log10(rel_tol))), linewidth=1.0)
+                color=color_of[rel_tol], linewidth=0.9, alpha=0.95,
+                solid_joinstyle="round")
 
     style_axes(ax)
     draw_reference(ax)
 
+    bounds = np.arange(len(order) + 1)
     bar = fig.colorbar(
-        plt.cm.ScalarMappable(norm=norm, cmap=cmap),
+        plt.cm.ScalarMappable(norm=matplotlib.colors.BoundaryNorm(bounds, cmap.N), cmap=cmap),
         ax=ax, orientation="horizontal", location="top",
-        fraction=0.055, pad=0.04, aspect=40,
+        fraction=0.05, pad=0.03, aspect=45, ticks=bounds[:-1] + 0.5,
     )
-    bar.set_ticks(sorted(keys))
-    bar.set_ticklabels([rf"$10^{{{-int(k)}}}$" for k in sorted(keys)])
-    bar.set_label(r"$r_{tol}$", labelpad=4)
-    bar.ax.tick_params(labelsize=8.5, length=0)
-    bar.outline.set_linewidth(0.5)
+    bar.set_ticklabels([rf"$10^{{{int(np.log10(r))}}}$" for r in order])
+    bar.set_label(r"$r_{tol}$", labelpad=5, color=INK)
+    bar.ax.tick_params(labelsize=8.5, length=0, colors=INK_MUTED)
+    bar.outline.set_visible(False)
 
     out = HERE / "step_size_by_tolerance.png"
     fig.savefig(out)

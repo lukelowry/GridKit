@@ -87,8 +87,8 @@ namespace GridKit
     using json = ::nlohmann::json;
     using Log  = ::GridKit::Utilities::Logger;
 
-    inline constexpr double DEFAULT_SOLVER_REL_TOL   = 1.0e-7;
-    inline constexpr double DEFAULT_SOLVER_ABS_TOL   = 1.0e-9;
+    inline constexpr double DEFAULT_SOLVER_REL_TOL   = 1.0e-5;
+    inline constexpr double DEFAULT_SOLVER_ABS_TOL   = 1.0e-7;
     inline constexpr double DEFAULT_VERIFICATION_TOL = 1.0e-4;
 
     inline constexpr std::array<std::string_view, 23> IDA_OPTION_KEYS = {
