@@ -8,6 +8,7 @@
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 
 #include <idas/idas.h>
 #include <idas/idas_ls.h>
@@ -129,6 +130,8 @@ namespace AnalysisManager
     {
       int retval = 0;
 
+      validateOptions(options_);
+
       // Allocate solution vectors
       yy_ = N_VNew_Serial(static_cast<sunindextype>(model_->size()), context_);
       checkAllocation((void*) yy_, "N_VNew_Serial");
@@ -164,7 +167,13 @@ namespace AnalysisManager
       retval = IDASetId(solver_, tag_);
       checkOutput(retval, "IDASetId");
 
-      setIDAOptions(solver_, time_step_, rel_tol_, abs_tol_override_, max_steps_, suppress_alg_);
+      setIDAOptions(solver_,
+                    options_.fixed_step.value_or(0),
+                    options_.rel_tol,
+                    options_.abs_tol,
+                    options_.max_num_steps.value_or(0),
+                    options_.suppress_alg.value_or(false));
+      applyIDAOptions(solver_, options_);
 
       // Set up linear solver
       return this->configureLinearSolver();
@@ -192,9 +201,17 @@ namespace AnalysisManager
       }
       else
       {
+        if (options_.klu_ordering.has_value())
+        {
+          throw std::invalid_argument("ida.klu_ordering requires the KLU linear solver");
+        }
         this->configureLinearSolverDense();
       }
 #else
+      if (options_.klu_ordering.has_value())
+      {
+        throw std::invalid_argument("ida.klu_ordering requires GridKit to be built with KLU support");
+      }
       /// Todo - Improve error handling capabilities and hasJacobian_ ownership
       if (model_->hasJacobian())
       {
@@ -234,6 +251,12 @@ namespace AnalysisManager
       linearSolver_ = SUNLinSol_KLU(yy_, JacobianMat_, context_);
       checkAllocation((void*) linearSolver_, "SUNLinSol_KLU");
 
+      if (options_.klu_ordering.has_value())
+      {
+        retval = SUNLinSol_KLUSetOrdering(linearSolver_, static_cast<int>(*options_.klu_ordering));
+        checkOutput(retval, "SUNLinSol_KLUSetOrdering");
+      }
+
       linearSolver_->ops->setup = profileKluSetup;
       linearSolver_->ops->solve = profileKluSolve;
 
@@ -242,6 +265,8 @@ namespace AnalysisManager
 
       retval = IDASetJacFn(solver_, this->Jac);
       checkOutput(retval, "IDASetJacFn");
+
+      applyLinearSolverOptions(solver_, options_);
 
       return retval;
     }
@@ -268,6 +293,8 @@ namespace AnalysisManager
 
       retval = IDASetLinearSolver(solver_, linearSolver_, JacobianMat_);
       checkOutput(retval, "IDASetLinearSolver");
+
+      applyLinearSolverOptions(solver_, options_);
 
       return retval;
     }
@@ -1226,7 +1253,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setFixedStep(ScalarT time_step)
     {
-      time_step_ = time_step;
+      options_.fixed_step = time_step > 0 ? std::optional<RealT>(time_step) : std::nullopt;
     }
 
     /**
@@ -1258,8 +1285,8 @@ namespace AnalysisManager
     void Ida<ScalarT, IdxT>::setTolerance(ScalarT rel_tol,
                                           ScalarT abs_tol_override)
     {
-      rel_tol_          = rel_tol;
-      abs_tol_override_ = abs_tol_override;
+      options_.rel_tol = rel_tol;
+      options_.abs_tol = abs_tol_override;
     }
 
     /**
@@ -1320,6 +1347,16 @@ namespace AnalysisManager
     }
 
     /**
+     * @brief Set forward IDA and linear solver options
+     */
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::setOptions(const Options& options)
+    {
+      validateOptions(options);
+      options_ = options;
+    }
+
+    /**
      * @brief Set whether IDA suppresses local error tests on algebraic variables
      *
      * @param suppress If true, algebraic variables are excluded from IDA's
@@ -1330,7 +1367,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setSuppressAlgebraicErrors(bool suppress)
     {
-      suppress_alg_ = suppress;
+      options_.suppress_alg = suppress;
     }
 
     /**
@@ -1358,7 +1395,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setMaxSteps(IdxT max_steps)
     {
-      max_steps_ = max_steps;
+      options_.max_num_steps = static_cast<long int>(max_steps);
     }
 
     /**
@@ -1371,7 +1408,182 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setBackwardMaxSteps(IdxT max_steps)
     {
-      backward_max_steps_ = max_steps;
+      backward_max_steps_ = static_cast<long int>(max_steps);
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::validateOptions(const Options& options)
+    {
+      if (options.rel_tol <= 0 || options.abs_tol < 0)
+      {
+        throw std::invalid_argument("ida tolerances require rel_tol > 0 and abs_tol >= 0");
+      }
+
+      if (options.fixed_step.has_value()
+          && (options.init_step.has_value()
+              || options.min_step.has_value()
+              || options.max_step.has_value()))
+      {
+        throw std::invalid_argument("ida.fixed_step cannot be combined with init_step, min_step, or max_step");
+      }
+
+      if ((options.fixed_step.has_value() && *options.fixed_step <= 0)
+          || (options.init_step.has_value() && *options.init_step <= 0)
+          || (options.min_step.has_value() && *options.min_step <= 0)
+          || (options.max_step.has_value() && *options.max_step <= 0))
+      {
+        throw std::invalid_argument("specified IDA step sizes must be positive");
+      }
+
+      if (options.min_step.has_value()
+          && options.max_step.has_value()
+          && *options.min_step > *options.max_step)
+      {
+        throw std::invalid_argument("ida.min_step cannot exceed ida.max_step");
+      }
+
+      if (options.max_order.has_value()
+          && (*options.max_order < 1 || *options.max_order > 5))
+      {
+        throw std::invalid_argument("ida.max_order must be between 1 and 5");
+      }
+
+      if (options.fixed_step.has_value()
+          && options.max_order.has_value()
+          && *options.max_order > 2)
+      {
+        throw std::invalid_argument("ida.max_order cannot exceed 2 with fixed_step");
+      }
+
+      if (options.fixed_step.has_value() && options.nonlin_conv_coef.has_value())
+      {
+        throw std::invalid_argument("ida.nonlin_conv_coef is controlled by fixed_step");
+      }
+
+      if ((options.max_num_steps.has_value() && *options.max_num_steps <= 0)
+          || (options.max_err_test_fails.has_value() && *options.max_err_test_fails <= 0)
+          || (options.max_nonlin_iters.has_value() && *options.max_nonlin_iters <= 0)
+          || (options.max_conv_fails.has_value() && *options.max_conv_fails <= 0)
+          || (options.max_num_steps_ic.has_value() && *options.max_num_steps_ic <= 0)
+          || (options.max_num_jacs_ic.has_value() && *options.max_num_jacs_ic <= 0)
+          || (options.max_num_iters_ic.has_value() && *options.max_num_iters_ic <= 0)
+          || (options.max_backs_ic.has_value() && *options.max_backs_ic <= 0))
+      {
+        throw std::invalid_argument("specified IDA iteration limits must be positive");
+      }
+
+      if ((options.nonlin_conv_coef.has_value() && *options.nonlin_conv_coef <= 0)
+          || (options.nonlin_conv_coef_ic.has_value() && *options.nonlin_conv_coef_ic <= 0)
+          || (options.step_tolerance_ic.has_value() && *options.step_tolerance_ic <= 0))
+      {
+        throw std::invalid_argument("specified IDA convergence settings must be positive");
+      }
+
+      if (options.delta_cj_lsetup.has_value()
+          && (*options.delta_cj_lsetup < 0 || *options.delta_cj_lsetup >= 1))
+      {
+        throw std::invalid_argument("ida.delta_cj_lsetup must be in [0, 1)");
+      }
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::applyIDAOptions(void* mem, const Options& options)
+    {
+      int retval = 0;
+
+      if (options.init_step.has_value())
+      {
+        retval = IDASetInitStep(mem, *options.init_step);
+        checkOutput(retval, "IDASetInitStep");
+      }
+      if (options.min_step.has_value())
+      {
+        retval = IDASetMinStep(mem, *options.min_step);
+        checkOutput(retval, "IDASetMinStep");
+      }
+      if (options.max_step.has_value())
+      {
+        retval = IDASetMaxStep(mem, *options.max_step);
+        checkOutput(retval, "IDASetMaxStep");
+      }
+      if (options.max_order.has_value())
+      {
+        retval = IDASetMaxOrd(mem, *options.max_order);
+        checkOutput(retval, "IDASetMaxOrd");
+      }
+      if (options.max_err_test_fails.has_value())
+      {
+        retval = IDASetMaxErrTestFails(mem, *options.max_err_test_fails);
+        checkOutput(retval, "IDASetMaxErrTestFails");
+      }
+      if (options.max_nonlin_iters.has_value())
+      {
+        retval = IDASetMaxNonlinIters(mem, *options.max_nonlin_iters);
+        checkOutput(retval, "IDASetMaxNonlinIters");
+      }
+      if (options.max_conv_fails.has_value())
+      {
+        retval = IDASetMaxConvFails(mem, *options.max_conv_fails);
+        checkOutput(retval, "IDASetMaxConvFails");
+      }
+      if (options.nonlin_conv_coef.has_value())
+      {
+        retval = IDASetNonlinConvCoef(mem, *options.nonlin_conv_coef);
+        checkOutput(retval, "IDASetNonlinConvCoef");
+      }
+      if (options.max_num_steps_ic.has_value())
+      {
+        retval = IDASetMaxNumStepsIC(mem, *options.max_num_steps_ic);
+        checkOutput(retval, "IDASetMaxNumStepsIC");
+      }
+      if (options.max_num_jacs_ic.has_value())
+      {
+        retval = IDASetMaxNumJacsIC(mem, *options.max_num_jacs_ic);
+        checkOutput(retval, "IDASetMaxNumJacsIC");
+      }
+      if (options.max_num_iters_ic.has_value())
+      {
+        retval = IDASetMaxNumItersIC(mem, *options.max_num_iters_ic);
+        checkOutput(retval, "IDASetMaxNumItersIC");
+      }
+      if (options.max_backs_ic.has_value())
+      {
+        retval = IDASetMaxBacksIC(mem, *options.max_backs_ic);
+        checkOutput(retval, "IDASetMaxBacksIC");
+      }
+      if (options.line_search_off_ic.has_value())
+      {
+        retval = IDASetLineSearchOffIC(mem, *options.line_search_off_ic ? SUNTRUE : SUNFALSE);
+        checkOutput(retval, "IDASetLineSearchOffIC");
+      }
+      if (options.nonlin_conv_coef_ic.has_value())
+      {
+        retval = IDASetNonlinConvCoefIC(mem, *options.nonlin_conv_coef_ic);
+        checkOutput(retval, "IDASetNonlinConvCoefIC");
+      }
+      if (options.step_tolerance_ic.has_value())
+      {
+        retval = IDASetStepToleranceIC(mem, *options.step_tolerance_ic);
+        checkOutput(retval, "IDASetStepToleranceIC");
+      }
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::applyLinearSolverOptions(void* mem, const Options& options)
+    {
+      int retval = 0;
+
+      if (options.linear_solution_scaling.has_value())
+      {
+        retval = IDASetLinearSolutionScaling(mem,
+                                             *options.linear_solution_scaling ? SUNTRUE : SUNFALSE);
+        checkOutput(retval, "IDASetLinearSolutionScaling");
+      }
+      if (options.delta_cj_lsetup.has_value())
+      {
+        retval = IDASetDeltaCjLSetup(mem, *options.delta_cj_lsetup);
+        checkOutput(retval, "IDASetDeltaCjLSetup");
+      }
     }
 
     /**
@@ -1390,19 +1602,19 @@ namespace AnalysisManager
      * @tparam IdxT Index data type
      */
     template <class ScalarT, typename IdxT>
-    void Ida<ScalarT, IdxT>::setIDAOptions(void*   mem,
-                                           ScalarT time_step,
-                                           ScalarT rel_tol,
-                                           ScalarT abs_tol_override,
-                                           IdxT    max_steps,
-                                           bool    suppress_alg)
+    void Ida<ScalarT, IdxT>::setIDAOptions(void*    mem,
+                                           ScalarT  time_step,
+                                           ScalarT  rel_tol,
+                                           ScalarT  abs_tol_override,
+                                           long int max_steps,
+                                           bool     suppress_alg)
     {
       int retval = 0;
       retval     = IDASetMinStep(mem, time_step);
       checkOutput(retval, "IDASetMinStep");
       retval = IDASetMaxStep(mem, time_step);
       checkOutput(retval, "IDASetMaxStep");
-      retval = IDASetMaxNumSteps(mem, static_cast<long int>(max_steps));
+      retval = IDASetMaxNumSteps(mem, max_steps);
       checkOutput(retval, "IDASetMaxNumSteps");
       retval = IDASetSuppressAlg(mem, suppress_alg ? SUNTRUE : SUNFALSE);
       checkOutput(retval, "IDASetSuppressAlg");

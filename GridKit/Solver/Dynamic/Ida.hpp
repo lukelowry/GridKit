@@ -41,6 +41,46 @@ namespace AnalysisManager
       std::string report() const;
     };
 
+    enum class KluOrdering
+    {
+      AMD     = 0,
+      COLAMD  = 1,
+      NATURAL = 2
+    };
+
+    template <class RealT>
+    struct IdaOptions
+    {
+      RealT rel_tol{1e-5};
+      RealT abs_tol{};
+
+      std::optional<RealT> fixed_step;
+      std::optional<RealT> init_step;
+      std::optional<RealT> min_step;
+      std::optional<RealT> max_step;
+
+      std::optional<int>      max_order;
+      std::optional<long int> max_num_steps;
+      std::optional<int>      max_err_test_fails;
+      std::optional<bool>     suppress_alg;
+
+      std::optional<int>   max_nonlin_iters;
+      std::optional<int>   max_conv_fails;
+      std::optional<RealT> nonlin_conv_coef;
+
+      std::optional<int>   max_num_steps_ic;
+      std::optional<int>   max_num_jacs_ic;
+      std::optional<int>   max_num_iters_ic;
+      std::optional<int>   max_backs_ic;
+      std::optional<bool>  line_search_off_ic;
+      std::optional<RealT> nonlin_conv_coef_ic;
+      std::optional<RealT> step_tolerance_ic;
+
+      std::optional<bool>        linear_solution_scaling;
+      std::optional<RealT>       delta_cj_lsetup;
+      std::optional<KluOrdering> klu_ordering;
+    };
+
     template <class ScalarT, typename IdxT>
     class Ida : public DynamicSolver<ScalarT, IdxT>
     {
@@ -51,6 +91,8 @@ namespace AnalysisManager
       using VectorT    = typename EvaluatorT::VectorT;
 
     public:
+      using Options = IdaOptions<RealT>;
+
       Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model);
       ~Ida();
 
@@ -133,6 +175,7 @@ namespace AnalysisManager
                                   ScalarT abs_tol_override = 0);
       void setBackwardQuadratureTolerance(ScalarT rel_tol,
                                           ScalarT abs_tol_override = 0);
+      void setOptions(const Options& options);
       void setSuppressAlgebraicErrors(bool suppress);
       void setBackwardSuppressAlgebraicErrors(bool suppress);
       void setMaxSteps(IdxT maxSteps) override;
@@ -210,17 +253,13 @@ namespace AnalysisManager
 
       int backwardID_{};
 
-      RealT time_step_{};
-      RealT rel_tol_{DEFAULT_REL_TOL};
-      RealT abs_tol_override_{};
-      IdxT  max_steps_{};
-      bool  suppress_alg_{false};
+      Options options_{};
 
-      RealT backward_time_step_{};
-      RealT backward_rel_tol_{DEFAULT_REL_TOL};
-      RealT backward_abs_tol_override_{};
-      IdxT  backward_max_steps_{};
-      bool  backward_suppress_alg_{false};
+      RealT    backward_time_step_{};
+      RealT    backward_rel_tol_{DEFAULT_REL_TOL};
+      RealT    backward_abs_tol_override_{};
+      long int backward_max_steps_{};
+      bool     backward_suppress_alg_{false};
 
       RealT quadrature_rel_tol_{0.1 * DEFAULT_REL_TOL};
       RealT quadrature_abs_tol_override_{};
@@ -238,19 +277,22 @@ namespace AnalysisManager
       static void checkAllocation(void* v, const char* functionName);
       static void checkOutput(int retval, const char* functionName);
 
-      void setIDAOptions(void*   mem,
-                         ScalarT time_step,
-                         ScalarT rel_tol,
-                         ScalarT abs_tol_override,
-                         IdxT    max_steps,
-                         bool    suppress_alg);
-      void setTolerance(void*   mem,
-                        ScalarT rel_tol,
-                        ScalarT abs_tol_override,
-                        ScalarT abs_tol_fac = 1);
-      void setQuadratureTolerance(void*   mem,
-                                  ScalarT rel_tol,
-                                  ScalarT abs_tol_override);
+      void        setIDAOptions(void*    mem,
+                                ScalarT  time_step,
+                                ScalarT  rel_tol,
+                                ScalarT  abs_tol_override,
+                                long int max_steps,
+                                bool     suppress_alg);
+      void        applyIDAOptions(void* mem, const Options& options);
+      void        applyLinearSolverOptions(void* mem, const Options& options);
+      static void validateOptions(const Options& options);
+      void        setTolerance(void*   mem,
+                               ScalarT rel_tol,
+                               ScalarT abs_tol_override,
+                               ScalarT abs_tol_fac = 1);
+      void        setQuadratureTolerance(void*   mem,
+                                         ScalarT rel_tol,
+                                         ScalarT abs_tol_override);
     };
 
     /// Simple exception to use within Ida class.

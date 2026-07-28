@@ -3,6 +3,9 @@
     "dt_monitor": 0.004166666666666667,
     "tmax": 20.0,
     "fault_bus": 1002,
+    "ida": {
+        "klu_ordering": "amd"
+    },
     "events": [
         { "time": 10.0, "type": "fault_on" },
         { "time": 10.05, "type": "fault_off" }

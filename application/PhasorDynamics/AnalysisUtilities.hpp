@@ -1,18 +1,23 @@
 #pragma once
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <magic_enum/magic_enum.hpp>
 #include <nlohmann/json.hpp>
 
 #include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
+#include <GridKit/Solver/Dynamic/Ida.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
 
@@ -49,35 +54,29 @@ namespace GridKit
     struct StudyData
     {
       /// path to system model JSON file
-      fs::path                   system_model_file;
+      fs::path                                      system_model_file;
       /// monitor output time step size, or 0 for no intermediate monitoring
-      double                     dt_monitor;
+      double                                        dt_monitor;
       /// max time
-      double                     tmax;
-      /// relative tolerance for the solver
-      double                     rel_tol;
-      /// absolute tolerance for the solver
-      double                     abs_tol;
-      /// fixed solver time step size, or 0 for adaptive stepping
-      double                     dt_fixed;
-      /// maximum number of solver time steps, or 0 for the IDA default
-      std::size_t                max_steps;
+      double                                        tmax;
+      /// IDA solver options
+      AnalysisManager::Sundials::IdaOptions<double> ida;
       /// bus where the study's bus fault is applied
-      std::optional<std::size_t> fault_bus;
+      std::optional<std::size_t>                    fault_bus;
       /// set of system events
-      std::vector<SystemEvent>   events;
+      std::vector<SystemEvent>                      events;
       /// path to output file
-      fs::path                   output_file;
+      fs::path                                      output_file;
       /// path to reference file for validation
-      fs::path                   reference_file;
+      fs::path                                      reference_file;
       /// Error tolerance (between output file and reference file)
-      std::vector<double>        error_tol;
+      std::vector<double>                           error_tol;
       /// Type of total error (relative or absolute)
-      Testing::ErrorType         error_type;
+      Testing::ErrorType                            error_type;
       /// Smallest value at which to scale for relative error
-      double                     abs_err_threshold;
+      double                                        abs_err_threshold;
       /// Instance of model data
-      SystemModelData<>          model_data;
+      SystemModelData<>                             model_data;
     };
 
     using json = ::nlohmann::json;
@@ -86,6 +85,95 @@ namespace GridKit
     inline constexpr double DEFAULT_SOLVER_REL_TOL   = 1.0e-7;
     inline constexpr double DEFAULT_SOLVER_ABS_TOL   = 1.0e-9;
     inline constexpr double DEFAULT_VERIFICATION_TOL = 1.0e-4;
+
+    inline constexpr std::array<std::string_view, 23> IDA_OPTION_KEYS = {
+        "rel_tol",
+        "abs_tol",
+        "fixed_step",
+        "init_step",
+        "min_step",
+        "max_step",
+        "max_order",
+        "max_num_steps",
+        "max_err_test_fails",
+        "suppress_alg",
+        "max_nonlin_iters",
+        "max_conv_fails",
+        "nonlin_conv_coef",
+        "max_num_steps_ic",
+        "max_num_jacs_ic",
+        "max_num_iters_ic",
+        "max_backs_ic",
+        "line_search_off_ic",
+        "nonlin_conv_coef_ic",
+        "step_tolerance_ic",
+        "linear_solution_scaling",
+        "delta_cj_lsetup",
+        "klu_ordering"};
+
+    template <class T>
+    void getOptional(const json& j, std::string_view key, std::optional<T>& value)
+    {
+      if (j.contains(key))
+      {
+        value = j.at(key).get<T>();
+      }
+    }
+
+    void parseIdaOptions(const json&                                    j,
+                         AnalysisManager::Sundials::IdaOptions<double>& options)
+    {
+      if (!j.is_object())
+      {
+        throw std::invalid_argument("ida must be a JSON object");
+      }
+
+      for (auto entry = j.begin(); entry != j.end(); ++entry)
+      {
+        if (std::find(IDA_OPTION_KEYS.begin(), IDA_OPTION_KEYS.end(), entry.key())
+            == IDA_OPTION_KEYS.end())
+        {
+          throw std::invalid_argument("Unknown IDA option: " + entry.key());
+        }
+      }
+
+      options.rel_tol = j.value("rel_tol", options.rel_tol);
+      options.abs_tol = j.value("abs_tol", options.abs_tol);
+
+      getOptional(j, "fixed_step", options.fixed_step);
+      getOptional(j, "init_step", options.init_step);
+      getOptional(j, "min_step", options.min_step);
+      getOptional(j, "max_step", options.max_step);
+      getOptional(j, "max_order", options.max_order);
+      getOptional(j, "max_num_steps", options.max_num_steps);
+      getOptional(j, "max_err_test_fails", options.max_err_test_fails);
+      getOptional(j, "suppress_alg", options.suppress_alg);
+      getOptional(j, "max_nonlin_iters", options.max_nonlin_iters);
+      getOptional(j, "max_conv_fails", options.max_conv_fails);
+      getOptional(j, "nonlin_conv_coef", options.nonlin_conv_coef);
+      getOptional(j, "max_num_steps_ic", options.max_num_steps_ic);
+      getOptional(j, "max_num_jacs_ic", options.max_num_jacs_ic);
+      getOptional(j, "max_num_iters_ic", options.max_num_iters_ic);
+      getOptional(j, "max_backs_ic", options.max_backs_ic);
+      getOptional(j, "line_search_off_ic", options.line_search_off_ic);
+      getOptional(j, "nonlin_conv_coef_ic", options.nonlin_conv_coef_ic);
+      getOptional(j, "step_tolerance_ic", options.step_tolerance_ic);
+      getOptional(j, "linear_solution_scaling", options.linear_solution_scaling);
+      getOptional(j, "delta_cj_lsetup", options.delta_cj_lsetup);
+
+      if (j.contains("klu_ordering"))
+      {
+        using KluOrdering   = AnalysisManager::Sundials::KluOrdering;
+        const auto name     = j.at("klu_ordering").get<std::string>();
+        const auto ordering = magic_enum::enum_cast<KluOrdering>(name,
+                                                                 magic_enum::case_insensitive);
+        if (!ordering.has_value())
+        {
+          throw std::invalid_argument("ida.klu_ordering must be amd, colamd, or natural");
+        }
+        options.klu_ordering = *ordering;
+      }
+    }
 
     /**
      * @brief JSON parser implemntation for `StudyData`
@@ -97,10 +185,17 @@ namespace GridKit
       j.at("system_model_file").get_to(c.system_model_file);
       c.dt_monitor = j.value("dt_monitor", 0.0);
       j.at("tmax").get_to(c.tmax);
-      c.rel_tol   = j.value("rel_tol", DEFAULT_SOLVER_REL_TOL);
-      c.abs_tol   = j.value("abs_tol", DEFAULT_SOLVER_ABS_TOL);
-      c.dt_fixed  = j.value("dt_fixed", 0.0);
-      c.max_steps = j.value("max_steps", std::size_t{0});
+      if (j.contains("rel_tol") || j.contains("abs_tol") || j.contains("dt_fixed")
+          || j.contains("max_steps"))
+      {
+        throw std::invalid_argument("IDA options must be specified in the ida object");
+      }
+      c.ida.rel_tol = DEFAULT_SOLVER_REL_TOL;
+      c.ida.abs_tol = DEFAULT_SOLVER_ABS_TOL;
+      if (j.contains("ida"))
+      {
+        parseIdaOptions(j.at("ida"), c.ida);
+      }
       if (j.contains("fault_bus"))
       {
         c.fault_bus = j.at("fault_bus").get<std::size_t>();

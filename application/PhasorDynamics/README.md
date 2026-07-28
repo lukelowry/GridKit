@@ -7,10 +7,7 @@
   `system_model_file` | Path to the system model file[^1]
   `dt_monitor`        | Monitor output time interval for recorded simulation results (default: 0, no intermediate monitoring)
   `tmax`              | A floating-point value for max time
-  `rel_tol`           | Relative solver tolerance (default: 1.0e-7)
-  `abs_tol`           | Absolute solver tolerance override (default: 1.0e-9)
-  `dt_fixed`          | Fixed solver time step size, or 0 for adaptive stepping (default: 0)
-  `max_steps`         | Maximum number of solver time steps, 0 for the IDA default, or a negative number for unlimited steps (default: 0)
+  `ida`               | IDA solver options (optional; see [IDA options](#ida-options))
   `fault_bus`         | Bus where the study's bus fault is applied (optional; defaults to the bus in the system model)
   `events`            | An array of event groups (see [Events](#events) below)
   `output_file`       | Path to output (CSV) file (optional)
@@ -20,6 +17,45 @@
   `abs_err_threshold` | A floating-point value for the smallest value at which to scale relative error (default: machine epsilon for double-precision)
 
 [^1]: See system model [case format](../../GridKit/Model/PhasorDynamics/INPUT_FORMAT.md)
+
+## IDA options
+
+All IDA options are optional. Omitted options use the listed default.
+
+ Name                        | Default
+ ----------------------------|-----------------------
+ `rel_tol`                   | `1.0e-7`
+ `abs_tol`                   | `1.0e-9`; use `0` for model-specific tolerances
+ `fixed_step`                | Adaptive stepping
+ `init_step`                 | Estimated by IDA
+ `min_step`                  | No minimum
+ `max_step`                  | Unbounded
+ `max_order`                 | `5`
+ `max_num_steps`             | `500`
+ `max_err_test_fails`        | `10`
+ `suppress_alg`              | `false`
+ `max_nonlin_iters`          | `4`
+ `max_conv_fails`            | `10`
+ `nonlin_conv_coef`          | `0.33`
+ `max_num_steps_ic`          | `5`
+ `max_num_jacs_ic`           | `4`
+ `max_num_iters_ic`          | `10`
+ `max_backs_ic`              | `100`
+ `line_search_off_ic`        | `false`
+ `nonlin_conv_coef_ic`       | `0.0033`
+ `step_tolerance_ic`         | IDA default
+ `linear_solution_scaling`   | `true`
+ `delta_cj_lsetup`           | `0.25`
+ `klu_ordering`              | `"colamd"`; one of `"amd"`, `"colamd"`, or `"natural"`
+
+`fixed_step` sets both the integration mode and step size. It cannot be combined
+with `init_step`, `min_step`, or `max_step`.
+
+```json
+"ida": {
+    "klu_ordering": "amd"
+}
+```
 
 ## Events
 
