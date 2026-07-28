@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <optional>
 #include <stdexcept>
@@ -69,6 +70,8 @@ namespace GridKit
       std::vector<SystemEvent>                      events;
       /// path to output file
       fs::path                                      output_file;
+      /// path to per-step integrator trace file, or empty for no trace
+      fs::path                                      step_trace_file;
       /// path to reference file for validation
       fs::path                                      reference_file;
       /// Error tolerance (between output file and reference file)
@@ -233,6 +236,11 @@ namespace GridKit
         j.at("output_file").get_to(c.output_file);
       }
 
+      if (j.contains("step_trace_file"))
+      {
+        j.at("step_trace_file").get_to(c.step_trace_file);
+      }
+
       if (j.contains("reference_file"))
       {
         j.at("reference_file").get_to(c.reference_file);
@@ -312,6 +320,10 @@ namespace GridKit
           data.reference_file = loc / data.reference_file;
         }
       }
+      if (!data.step_trace_file.empty() && !data.step_trace_file.is_absolute())
+      {
+        data.step_trace_file = loc / data.step_trace_file;
+      }
 
       auto csv        = ::GridKit::Model::VariableMonitorFormat::CSV;
       data.model_data = parseSystemModelData(data.system_model_file);
@@ -369,6 +381,42 @@ namespace GridKit
       }
 
       return data;
+    }
+
+    /**
+     * @brief Write the integrator's per-step trace as CSV
+     *
+     * Work counters are cumulative within a segment, so differencing
+     * consecutive rows gives the cost of a single step.
+     */
+    void writeStepTrace(
+        const fs::path&                                              file_path,
+        const std::vector<AnalysisManager::Sundials::IdaStepRecord>& trace)
+    {
+      auto out = std::ofstream(file_path);
+      if (!out)
+      {
+        Log::error() << "Failed to open step trace file: " << file_path << std::endl;
+        return;
+      }
+
+      out << "segment,t,h,h_next,order,order_next,nsteps,nres,njac,netf,nni,nncf\n";
+      out << std::setprecision(12);
+      for (const auto& record : trace)
+      {
+        out << record.segment << ','
+            << record.t << ','
+            << record.h << ','
+            << record.h_next << ','
+            << record.order << ','
+            << record.order_next << ','
+            << record.num_steps << ','
+            << record.num_residual_evals << ','
+            << record.num_jacobian_evals << ','
+            << record.num_error_test_fails << ','
+            << record.num_nonlinear_iters << ','
+            << record.num_nonlinear_convergence_fails << '\n';
+      }
     }
 
     void checkCommandLine(int argc, const std::string& appName)

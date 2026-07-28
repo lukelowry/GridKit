@@ -5,6 +5,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <vector>
 
 #include <nvector/nvector_serial.h>
 #include <sundials/sundials_context.h>
@@ -39,6 +40,28 @@ namespace AnalysisManager
 
       IdaStats&   operator+=(const IdaStats& other);
       std::string report() const;
+    };
+
+    /**
+     * @brief Integrator state recorded after a single internal step
+     *
+     * Counters are cumulative within a segment, so differencing consecutive
+     * records gives the work performed by one step.
+     */
+    struct IdaStepRecord
+    {
+      int         segment                         = 0;
+      sunrealtype t                               = 0.0;
+      sunrealtype h                               = 0.0;
+      sunrealtype h_next                          = 0.0;
+      int         order                           = 0;
+      int         order_next                      = 0;
+      long int    num_steps                       = 0;
+      long int    num_residual_evals              = 0;
+      long int    num_jacobian_evals              = 0;
+      long int    num_error_test_fails            = 0;
+      long int    num_nonlinear_iters             = 0;
+      long int    num_nonlinear_convergence_fails = 0;
     };
 
     enum class KluOrdering
@@ -183,6 +206,23 @@ namespace AnalysisManager
 
       IdaStats getStats() const;
 
+      /// Record integrator state after every internal step of `runSimulation`
+      void enableStepTrace(bool enable = true)
+      {
+        trace_enabled_ = enable;
+      }
+
+      /// Label applied to records taken until the next call
+      void setTraceSegment(int segment)
+      {
+        trace_segment_ = segment;
+      }
+
+      const std::vector<IdaStepRecord>& getStepTrace() const
+      {
+        return step_trace_;
+      }
+
     private:
       static int Residual(RealT    t,
                           N_Vector yy,
@@ -226,6 +266,8 @@ namespace AnalysisManager
       int   getMonitorStepCount(RealT tf, RealT dt_monitor) const;
       RealT getMonitorTime(RealT tf, RealT dt_monitor, int step, int nsteps) const;
       void  updateModelState(RealT t);
+      int   runSimulationTraced(RealT tf, RealT dt_monitor);
+      void  recordStep(RealT t);
 
     private:
       static constexpr ScalarT DEFAULT_REL_TOL = 1e-5;
@@ -266,6 +308,10 @@ namespace AnalysisManager
 
       RealT backward_quadrature_rel_tol_{0.1 * DEFAULT_REL_TOL};
       RealT backward_quadrature_abs_tol_override_{};
+
+      std::vector<IdaStepRecord> step_trace_{};
+      bool                       trace_enabled_{false};
+      int                        trace_segment_{0};
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);

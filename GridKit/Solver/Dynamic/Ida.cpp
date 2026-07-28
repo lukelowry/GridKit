@@ -412,6 +412,11 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::runSimulation(RealT tf, RealT dt_monitor, const std::optional<std::function<void(RealT)>> step_callback)
     {
+      if (trace_enabled_)
+      {
+        return runSimulationTraced(tf, dt_monitor);
+      }
+
       int retval = 0;
       int nsteps = getMonitorStepCount(tf, dt_monitor);
 
@@ -455,6 +460,76 @@ namespace AnalysisManager
       ++profile.state_update_calls;
 
       return retval;
+    }
+
+    /**
+     * @brief Run to `tf` one internal step at a time, recording integrator
+     * state after each step.
+     *
+     * No stop time is set on the solver, so `IDA_ONE_STEP` follows the same
+     * error-controlled step sequence `IDA_NORMAL` would and the trace
+     * describes an untraced run. The monitor targets are still walked in
+     * order because IDA sizes its first step from the first `tout` it is
+     * given. The last step lands past `tf`, so the model is handed the
+     * interpolated solution at `tf` to leave it where the monitored path
+     * would.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::runSimulationTraced(RealT tf, RealT dt_monitor)
+    {
+      int   retval = 0;
+      int   nsteps = getMonitorStepCount(tf, dt_monitor);
+      RealT tret   = t_init_;
+
+      for (int i = 1; i <= nsteps; i++)
+      {
+        const RealT tout = getMonitorTime(tf, dt_monitor, i, nsteps);
+        while (tret < tout)
+        {
+          const auto solve_start     = ProfileClock::now();
+          retval                     = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_ONE_STEP);
+          profile.ida_solve_seconds += elapsedSeconds(solve_start);
+          ++profile.ida_solve_calls;
+          checkOutput(retval, "IDASolve");
+          recordStep(tret);
+        }
+      }
+
+      retval = IDAGetDky(solver_, tf, 0, yy_);
+      checkOutput(retval, "IDAGetDky");
+      retval = IDAGetDky(solver_, tf, 1, yp_);
+      checkOutput(retval, "IDAGetDky");
+
+      const auto update_start = ProfileClock::now();
+      updateModelState(tf);
+      profile.state_update_seconds += elapsedSeconds(update_start);
+      ++profile.state_update_calls;
+
+      return retval;
+    }
+
+    /**
+     * @brief Append the integrator's current step size, order and work
+     * counters to the trace.
+     */
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::recordStep(RealT t)
+    {
+      auto& record   = step_trace_.emplace_back();
+      record.segment = trace_segment_;
+      record.t       = t;
+
+      IDAGetLastStep(solver_, &record.h);
+      IDAGetCurrentStep(solver_, &record.h_next);
+      IDAGetLastOrder(solver_, &record.order);
+      IDAGetCurrentOrder(solver_, &record.order_next);
+      IDAGetNumSteps(solver_, &record.num_steps);
+      IDAGetNumResEvals(solver_, &record.num_residual_evals);
+      IDAGetNumJacEvals(solver_, &record.num_jacobian_evals);
+      IDAGetNumErrTestFails(solver_, &record.num_error_test_fails);
+      IDAGetNonlinSolvStats(solver_,
+                            &record.num_nonlinear_iters,
+                            &record.num_nonlinear_convergence_fails);
     }
 
     /**

@@ -22,3 +22,6 @@ examples/PhasorDynamics/**/*_ipcmd.png
 examples/PhasorDynamics/**/*_iqcmd.png
 examples/PhasorDynamics/**/*_lvpl_diagnostic.png
 examples/PhasorDynamics/**/*_comparison.png
+
+# Generated step-trace study inputs and traces
+benchmark/step-trace/work/
