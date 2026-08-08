@@ -1,11 +1,12 @@
 {
-    "$schema": "https://gridkit.readthedocs.io/en/lukel/case.schema.json",
     "header": {
-        "format_version": 0,
-        "format_revision": 1,
+        "format_version": 0.2,
+        "format_revision": 0,
         "case_name": "WECC240",
         "case_description": "",
-        "case_comments": "",
+        "case_comments": ""
+    },
+    "params": {
         "freq_base": 60.0,
         "va_base": 100000000.0
     },
@@ -18,7 +19,7 @@
     "buses": [
         {
             "number": 1001,
-            "class": "bus",
+            "class": "Bus",
             "name": "FOURCORN",
             "init": {
                 "Vr": 1.0291178854372438,
@@ -38,7 +39,7 @@
         },
         {
             "number": 1002,
-            "class": "bus",
+            "class": "Bus",
             "name": "FOURCORN",
             "init": {
                 "Vr": 1.0032050288440562,
@@ -58,7 +59,7 @@
         },
         {
             "number": 1003,
-            "class": "bus",
+            "class": "Bus",
             "name": "FOURCORN",
             "init": {
                 "Vr": 0.9731683917939695,
@@ -78,7 +79,7 @@
         },
         {
             "number": 1004,
-            "class": "bus",
+            "class": "Bus",
             "name": "SAN JUAN",
             "init": {
                 "Vr": 0.9750083889067531,
@@ -98,7 +99,7 @@
         },
         {
             "number": 1032,
-            "class": "bus",
+            "class": "Bus",
             "name": "FCNGN4CC",
             "init": {
                 "Vr": 1.0015564684871028,
@@ -118,7 +119,7 @@
         },
         {
             "number": 1034,
-            "class": "bus",
+            "class": "Bus",
             "name": "SJUAN G4",
             "init": {
                 "Vr": 0.9684387912559518,
@@ -138,7 +139,7 @@
         },
         {
             "number": 1101,
-            "class": "bus",
+            "class": "Bus",
             "name": "CORONADO",
             "init": {
                 "Vr": 0.9817288403261187,
@@ -158,7 +159,7 @@
         },
         {
             "number": 1102,
-            "class": "bus",
+            "class": "Bus",
             "name": "CHOLLA",
             "init": {
                 "Vr": 0.9911787882031262,
@@ -178,7 +179,7 @@
         },
         {
             "number": 1131,
-            "class": "bus",
+            "class": "Bus",
             "name": "CORONADO",
             "init": {
                 "Vr": 0.9841390269038477,
@@ -198,7 +199,7 @@
         },
         {
             "number": 1201,
-            "class": "bus",
+            "class": "Bus",
             "name": "MOENKOPI",
             "init": {
                 "Vr": 1.0840856880765497,
@@ -218,7 +219,7 @@
         },
         {
             "number": 1202,
-            "class": "bus",
+            "class": "Bus",
             "name": "NAVAJO",
             "init": {
                 "Vr": 1.077540070445575,
@@ -238,7 +239,7 @@
         },
         {
             "number": 1232,
-            "class": "bus",
+            "class": "Bus",
             "name": "NAVAJO 2",
             "init": {
                 "Vr": 1.0783785013749112,
@@ -258,7 +259,7 @@
         },
         {
             "number": 1301,
-            "class": "bus",
+            "class": "Bus",
             "name": "MEAD",
             "init": {
                 "Vr": 1.0295416878422843,
@@ -278,7 +279,7 @@
         },
         {
             "number": 1302,
-            "class": "bus",
+            "class": "Bus",
             "name": "H ALLEN",
             "init": {
                 "Vr": 1.0031906476403882,
@@ -298,7 +299,7 @@
         },
         {
             "number": 1303,
-            "class": "bus",
+            "class": "Bus",
             "name": "H ALLEN",
             "init": {
                 "Vr": 0.9697210881035389,
@@ -318,7 +319,7 @@
         },
         {
             "number": 1331,
-            "class": "bus",
+            "class": "Bus",
             "name": "HOOVER",
             "init": {
                 "Vr": 1.0327887989266924,
@@ -338,7 +339,7 @@
         },
         {
             "number": 1333,
-            "class": "bus",
+            "class": "Bus",
             "name": "H ALLEN",
             "init": {
                 "Vr": 0.9789437262325904,
@@ -358,7 +359,7 @@
         },
         {
             "number": 1401,
-            "class": "bus",
+            "class": "Bus",
             "name": "PALOVRDE",
             "init": {
                 "Vr": 1.0007416182190785,
@@ -378,7 +379,7 @@
         },
         {
             "number": 1402,
-            "class": "bus",
+            "class": "Bus",
             "name": "WESTWING",
             "init": {
                 "Vr": 0.992803796506842,
@@ -398,7 +399,7 @@
         },
         {
             "number": 1403,
-            "class": "bus",
+            "class": "Bus",
             "name": "PARKER",
             "init": {
                 "Vr": 1.002713928087405,
@@ -418,7 +419,7 @@
         },
         {
             "number": 1431,
-            "class": "bus",
+            "class": "Bus",
             "name": "PALOVRD2",
             "init": {
                 "Vr": 1.0156571770372371,
@@ -438,7 +439,7 @@
         },
         {
             "number": 2000,
-            "class": "bus",
+            "class": "Bus",
             "name": "MEXICO",
             "init": {
                 "Vr": 0.9574411831779276,
@@ -458,7 +459,7 @@
         },
         {
             "number": 2030,
-            "class": "bus",
+            "class": "Bus",
             "name": "MEXICO",
             "init": {
                 "Vr": 0.9622086686257666,
@@ -478,7 +479,7 @@
         },
         {
             "number": 2100,
-            "class": "bus",
+            "class": "Bus",
             "name": "IMPERIAL",
             "init": {
                 "Vr": 1.0106471695431412,
@@ -498,7 +499,7 @@
         },
         {
             "number": 2130,
-            "class": "bus",
+            "class": "Bus",
             "name": "IMPERIAL",
             "init": {
                 "Vr": 1.0125355376272693,
@@ -518,7 +519,7 @@
         },
         {
             "number": 2201,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIGUEL",
             "init": {
                 "Vr": 0.8892165103680651,
@@ -538,7 +539,7 @@
         },
         {
             "number": 2202,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIGUEL",
             "init": {
                 "Vr": 0.8770950011639516,
@@ -558,7 +559,7 @@
         },
         {
             "number": 2203,
-            "class": "bus",
+            "class": "Bus",
             "name": "MISSION",
             "init": {
                 "Vr": 0.8879448550434562,
@@ -578,7 +579,7 @@
         },
         {
             "number": 2233,
-            "class": "bus",
+            "class": "Bus",
             "name": "MISSION",
             "init": {
                 "Vr": 0.8918895552561795,
@@ -598,7 +599,7 @@
         },
         {
             "number": 2301,
-            "class": "bus",
+            "class": "Bus",
             "name": "IMPRLVLY",
             "init": {
                 "Vr": 1.000405604495706,
@@ -618,7 +619,7 @@
         },
         {
             "number": 2302,
-            "class": "bus",
+            "class": "Bus",
             "name": "IMPRLVLY",
             "init": {
                 "Vr": 1.0047474357675403,
@@ -638,7 +639,7 @@
         },
         {
             "number": 2332,
-            "class": "bus",
+            "class": "Bus",
             "name": "IMPRLVLY",
             "init": {
                 "Vr": 1.0059463388354748,
@@ -658,7 +659,7 @@
         },
         {
             "number": 2400,
-            "class": "bus",
+            "class": "Bus",
             "name": "DEVERS",
             "init": {
                 "Vr": 0.9687697509488613,
@@ -678,7 +679,7 @@
         },
         {
             "number": 2401,
-            "class": "bus",
+            "class": "Bus",
             "name": "LUGO",
             "init": {
                 "Vr": 1.020185317104043,
@@ -698,7 +699,7 @@
         },
         {
             "number": 2402,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIRALOMA",
             "init": {
                 "Vr": 0.9812428318038446,
@@ -718,7 +719,7 @@
         },
         {
             "number": 2403,
-            "class": "bus",
+            "class": "Bus",
             "name": "VALLEY",
             "init": {
                 "Vr": 0.9496430311917626,
@@ -738,7 +739,7 @@
         },
         {
             "number": 2404,
-            "class": "bus",
+            "class": "Bus",
             "name": "VINCENT",
             "init": {
                 "Vr": 1.023581697567488,
@@ -758,7 +759,7 @@
         },
         {
             "number": 2405,
-            "class": "bus",
+            "class": "Bus",
             "name": "SYLMAR S",
             "init": {
                 "Vr": 0.9927278917027919,
@@ -778,7 +779,7 @@
         },
         {
             "number": 2406,
-            "class": "bus",
+            "class": "Bus",
             "name": "EAGLROCK",
             "init": {
                 "Vr": 0.9735893514354769,
@@ -798,7 +799,7 @@
         },
         {
             "number": 2407,
-            "class": "bus",
+            "class": "Bus",
             "name": "LITEHIPE",
             "init": {
                 "Vr": 0.9107761107658282,
@@ -818,7 +819,7 @@
         },
         {
             "number": 2408,
-            "class": "bus",
+            "class": "Bus",
             "name": "MESA CAL",
             "init": {
                 "Vr": 0.9960829983667543,
@@ -838,7 +839,7 @@
         },
         {
             "number": 2409,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIRALOMA",
             "init": {
                 "Vr": 0.9657092502933803,
@@ -858,7 +859,7 @@
         },
         {
             "number": 2410,
-            "class": "bus",
+            "class": "Bus",
             "name": "PARDEE",
             "init": {
                 "Vr": 0.9741576354525452,
@@ -878,7 +879,7 @@
         },
         {
             "number": 2411,
-            "class": "bus",
+            "class": "Bus",
             "name": "VINCENT",
             "init": {
                 "Vr": 1.0001435873014726,
@@ -898,7 +899,7 @@
         },
         {
             "number": 2431,
-            "class": "bus",
+            "class": "Bus",
             "name": "LUGO",
             "init": {
                 "Vr": 1.0202564793923456,
@@ -918,7 +919,7 @@
         },
         {
             "number": 2434,
-            "class": "bus",
+            "class": "Bus",
             "name": "VINCENT",
             "init": {
                 "Vr": 0.9999165296632286,
@@ -938,7 +939,7 @@
         },
         {
             "number": 2438,
-            "class": "bus",
+            "class": "Bus",
             "name": "MESA CAL",
             "init": {
                 "Vr": 1.000573076456902,
@@ -958,7 +959,7 @@
         },
         {
             "number": 2439,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIRALOMA",
             "init": {
                 "Vr": 0.965799645483867,
@@ -978,7 +979,7 @@
         },
         {
             "number": 2501,
-            "class": "bus",
+            "class": "Bus",
             "name": "SERRANO",
             "init": {
                 "Vr": 0.9633415436055629,
@@ -998,7 +999,7 @@
         },
         {
             "number": 2502,
-            "class": "bus",
+            "class": "Bus",
             "name": "SERRANO",
             "init": {
                 "Vr": 0.9513187283801735,
@@ -1018,7 +1019,7 @@
         },
         {
             "number": 2503,
-            "class": "bus",
+            "class": "Bus",
             "name": "S.ONOFRE",
             "init": {
                 "Vr": 0.9248147380467772,
@@ -1038,7 +1039,7 @@
         },
         {
             "number": 2533,
-            "class": "bus",
+            "class": "Bus",
             "name": "S.ONOFRE",
             "init": {
                 "Vr": 0.9290778821775172,
@@ -1058,7 +1059,7 @@
         },
         {
             "number": 2600,
-            "class": "bus",
+            "class": "Bus",
             "name": "ADELANTO",
             "init": {
                 "Vr": 1.0417157975318705,
@@ -1078,7 +1079,7 @@
         },
         {
             "number": 2601,
-            "class": "bus",
+            "class": "Bus",
             "name": "RINALDI",
             "init": {
                 "Vr": 1.0326042911106608,
@@ -1098,7 +1099,7 @@
         },
         {
             "number": 2602,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA E",
             "init": {
                 "Vr": 1.0086893651068751,
@@ -1118,7 +1119,7 @@
         },
         {
             "number": 2603,
-            "class": "bus",
+            "class": "Bus",
             "name": "VICTORVL",
             "init": {
                 "Vr": 1.040439629599286,
@@ -1138,7 +1139,7 @@
         },
         {
             "number": 2604,
-            "class": "bus",
+            "class": "Bus",
             "name": "INTERMT",
             "init": {
                 "Vr": 1.0282510831640337,
@@ -1158,7 +1159,7 @@
         },
         {
             "number": 2605,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA B1",
             "init": {
                 "Vr": 1.012818757596012,
@@ -1178,7 +1179,7 @@
         },
         {
             "number": 2606,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA B2",
             "init": {
                 "Vr": 1.012818757596012,
@@ -1198,7 +1199,7 @@
         },
         {
             "number": 2607,
-            "class": "bus",
+            "class": "Bus",
             "name": "VICTORVL",
             "init": {
                 "Vr": 1.034163217506761,
@@ -1218,7 +1219,7 @@
         },
         {
             "number": 2608,
-            "class": "bus",
+            "class": "Bus",
             "name": "CASTAIC",
             "init": {
                 "Vr": 1.0012616559172747,
@@ -1238,7 +1239,7 @@
         },
         {
             "number": 2609,
-            "class": "bus",
+            "class": "Bus",
             "name": "GLENDAL",
             "init": {
                 "Vr": 0.9906538349030883,
@@ -1258,7 +1259,7 @@
         },
         {
             "number": 2610,
-            "class": "bus",
+            "class": "Bus",
             "name": "HAYNES",
             "init": {
                 "Vr": 0.9976290136127944,
@@ -1278,7 +1279,7 @@
         },
         {
             "number": 2611,
-            "class": "bus",
+            "class": "Bus",
             "name": "OLIVE",
             "init": {
                 "Vr": 1.0006947498616412,
@@ -1298,7 +1299,7 @@
         },
         {
             "number": 2612,
-            "class": "bus",
+            "class": "Bus",
             "name": "RINALDI",
             "init": {
                 "Vr": 0.9981814359215982,
@@ -1318,7 +1319,7 @@
         },
         {
             "number": 2613,
-            "class": "bus",
+            "class": "Bus",
             "name": "RIVER",
             "init": {
                 "Vr": 0.9920714739096348,
@@ -1338,7 +1339,7 @@
         },
         {
             "number": 2614,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA BLD",
             "init": {
                 "Vr": 0.9970240906342276,
@@ -1358,7 +1359,7 @@
         },
         {
             "number": 2615,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA E",
             "init": {
                 "Vr": 0.9926101753760911,
@@ -1378,7 +1379,7 @@
         },
         {
             "number": 2616,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA F",
             "init": {
                 "Vr": 0.9935468290693091,
@@ -1398,7 +1399,7 @@
         },
         {
             "number": 2617,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA G",
             "init": {
                 "Vr": 0.9916964406539152,
@@ -1418,7 +1419,7 @@
         },
         {
             "number": 2618,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA J",
             "init": {
                 "Vr": 0.992558705681965,
@@ -1438,7 +1439,7 @@
         },
         {
             "number": 2619,
-            "class": "bus",
+            "class": "Bus",
             "name": "SYLMARLA",
             "init": {
                 "Vr": 0.9980796625833909,
@@ -1458,7 +1459,7 @@
         },
         {
             "number": 2620,
-            "class": "bus",
+            "class": "Bus",
             "name": "VALLEY",
             "init": {
                 "Vr": 0.9937915165908,
@@ -1478,7 +1479,7 @@
         },
         {
             "number": 2621,
-            "class": "bus",
+            "class": "Bus",
             "name": "STA B",
             "init": {
                 "Vr": 1.005434675493241,
@@ -1498,7 +1499,7 @@
         },
         {
             "number": 2630,
-            "class": "bus",
+            "class": "Bus",
             "name": "HAYNES3G",
             "init": {
                 "Vr": 0.9971389605845953,
@@ -1518,7 +1519,7 @@
         },
         {
             "number": 2631,
-            "class": "bus",
+            "class": "Bus",
             "name": "OLIVE",
             "init": {
                 "Vr": 1.0010405941541551,
@@ -1538,7 +1539,7 @@
         },
         {
             "number": 2634,
-            "class": "bus",
+            "class": "Bus",
             "name": "INTERM1G",
             "init": {
                 "Vr": 1.0285417184438843,
@@ -1558,7 +1559,7 @@
         },
         {
             "number": 2637,
-            "class": "bus",
+            "class": "Bus",
             "name": "OWENS G",
             "init": {
                 "Vr": 0.9984488847326837,
@@ -1578,7 +1579,7 @@
         },
         {
             "number": 2638,
-            "class": "bus",
+            "class": "Bus",
             "name": "CASTAI4G",
             "init": {
                 "Vr": 1.0014600657990034,
@@ -1598,7 +1599,7 @@
         },
         {
             "number": 2901,
-            "class": "bus",
+            "class": "Bus",
             "name": "ELDORADO",
             "init": {
                 "Vr": 1.0905891370529095,
@@ -1618,7 +1619,7 @@
         },
         {
             "number": 2902,
-            "class": "bus",
+            "class": "Bus",
             "name": "MOHAVE",
             "init": {
                 "Vr": 1.096153053959966,
@@ -1638,7 +1639,7 @@
         },
         {
             "number": 3101,
-            "class": "bus",
+            "class": "Bus",
             "name": "EMBRCDRD",
             "init": {
                 "Vr": 0.9722931284547578,
@@ -1658,7 +1659,7 @@
         },
         {
             "number": 3102,
-            "class": "bus",
+            "class": "Bus",
             "name": "MARTIN",
             "init": {
                 "Vr": 0.9794265121238133,
@@ -1678,7 +1679,7 @@
         },
         {
             "number": 3103,
-            "class": "bus",
+            "class": "Bus",
             "name": "SANMATEO",
             "init": {
                 "Vr": 0.9896580875926599,
@@ -1698,7 +1699,7 @@
         },
         {
             "number": 3104,
-            "class": "bus",
+            "class": "Bus",
             "name": "MARTIN",
             "init": {
                 "Vr": 0.9660330473147188,
@@ -1718,7 +1719,7 @@
         },
         {
             "number": 3105,
-            "class": "bus",
+            "class": "Bus",
             "name": "POTRERO",
             "init": {
                 "Vr": 0.9799048238020691,
@@ -1738,7 +1739,7 @@
         },
         {
             "number": 3133,
-            "class": "bus",
+            "class": "Bus",
             "name": "SANMATEO",
             "init": {
                 "Vr": 0.9896073417355664,
@@ -1758,7 +1759,7 @@
         },
         {
             "number": 3135,
-            "class": "bus",
+            "class": "Bus",
             "name": "POTRERO",
             "init": {
                 "Vr": 0.9805420521360869,
@@ -1778,7 +1779,7 @@
         },
         {
             "number": 3201,
-            "class": "bus",
+            "class": "Bus",
             "name": "C.COSTA",
             "init": {
                 "Vr": 1.0004147159397625,
@@ -1798,7 +1799,7 @@
         },
         {
             "number": 3202,
-            "class": "bus",
+            "class": "Bus",
             "name": "MORAGA",
             "init": {
                 "Vr": 0.9997040603567278,
@@ -1818,7 +1819,7 @@
         },
         {
             "number": 3203,
-            "class": "bus",
+            "class": "Bus",
             "name": "NEWARK",
             "init": {
                 "Vr": 0.9978320796012269,
@@ -1838,7 +1839,7 @@
         },
         {
             "number": 3204,
-            "class": "bus",
+            "class": "Bus",
             "name": "PITSBURG",
             "init": {
                 "Vr": 1.0099967188161656,
@@ -1858,7 +1859,7 @@
         },
         {
             "number": 3205,
-            "class": "bus",
+            "class": "Bus",
             "name": "SOBRANTE",
             "init": {
                 "Vr": 0.9998452023240696,
@@ -1878,7 +1879,7 @@
         },
         {
             "number": 3234,
-            "class": "bus",
+            "class": "Bus",
             "name": "PITSBURG",
             "init": {
                 "Vr": 1.0118253240235424,
@@ -1898,7 +1899,7 @@
         },
         {
             "number": 3301,
-            "class": "bus",
+            "class": "Bus",
             "name": "METCALF",
             "init": {
                 "Vr": 1.007866937546572,
@@ -1918,7 +1919,7 @@
         },
         {
             "number": 3302,
-            "class": "bus",
+            "class": "Bus",
             "name": "JEFFERSN",
             "init": {
                 "Vr": 0.9754937580171337,
@@ -1938,7 +1939,7 @@
         },
         {
             "number": 3303,
-            "class": "bus",
+            "class": "Bus",
             "name": "METCALF",
             "init": {
                 "Vr": 0.9954325113973748,
@@ -1958,7 +1959,7 @@
         },
         {
             "number": 3304,
-            "class": "bus",
+            "class": "Bus",
             "name": "MONTAVIS",
             "init": {
                 "Vr": 0.9823906419731837,
@@ -1978,7 +1979,7 @@
         },
         {
             "number": 3305,
-            "class": "bus",
+            "class": "Bus",
             "name": "RAVENSWD",
             "init": {
                 "Vr": 0.9914754213389761,
@@ -1998,7 +1999,7 @@
         },
         {
             "number": 3333,
-            "class": "bus",
+            "class": "Bus",
             "name": "METCALF",
             "init": {
                 "Vr": 0.9966163504641669,
@@ -2018,7 +2019,7 @@
         },
         {
             "number": 3401,
-            "class": "bus",
+            "class": "Bus",
             "name": "GREGG",
             "init": {
                 "Vr": 0.9385628433185484,
@@ -2038,7 +2039,7 @@
         },
         {
             "number": 3402,
-            "class": "bus",
+            "class": "Bus",
             "name": "HELMS PP",
             "init": {
                 "Vr": 0.9405776900269747,
@@ -2058,7 +2059,7 @@
         },
         {
             "number": 3403,
-            "class": "bus",
+            "class": "Bus",
             "name": "MC CALL",
             "init": {
                 "Vr": 0.9996379495082729,
@@ -2078,7 +2079,7 @@
         },
         {
             "number": 3404,
-            "class": "bus",
+            "class": "Bus",
             "name": "PANOCHE",
             "init": {
                 "Vr": 0.9770923660147381,
@@ -2098,7 +2099,7 @@
         },
         {
             "number": 3405,
-            "class": "bus",
+            "class": "Bus",
             "name": "WILSON",
             "init": {
                 "Vr": 0.9267614523616793,
@@ -2118,7 +2119,7 @@
         },
         {
             "number": 3432,
-            "class": "bus",
+            "class": "Bus",
             "name": "HELMS PP",
             "init": {
                 "Vr": 0.9405776900269747,
@@ -2138,7 +2139,7 @@
         },
         {
             "number": 3433,
-            "class": "bus",
+            "class": "Bus",
             "name": "MC CALL",
             "init": {
                 "Vr": 1.000022781865973,
@@ -2158,7 +2159,7 @@
         },
         {
             "number": 3501,
-            "class": "bus",
+            "class": "Bus",
             "name": "FULTON",
             "init": {
                 "Vr": 0.9996023627645195,
@@ -2178,7 +2179,7 @@
         },
         {
             "number": 3531,
-            "class": "bus",
+            "class": "Bus",
             "name": "FULTON",
             "init": {
                 "Vr": 0.9997935418988533,
@@ -2198,7 +2199,7 @@
         },
         {
             "number": 3601,
-            "class": "bus",
+            "class": "Bus",
             "name": "HUMBOLDT",
             "init": {
                 "Vr": 1.012594829955947,
@@ -2218,7 +2219,7 @@
         },
         {
             "number": 3631,
-            "class": "bus",
+            "class": "Bus",
             "name": "HUMBOLDT",
             "init": {
                 "Vr": 1.012396079859527,
@@ -2238,7 +2239,7 @@
         },
         {
             "number": 3701,
-            "class": "bus",
+            "class": "Bus",
             "name": "SUMMIT",
             "init": {
                 "Vr": 0.9416557558603073,
@@ -2258,7 +2259,7 @@
         },
         {
             "number": 3731,
-            "class": "bus",
+            "class": "Bus",
             "name": "SUMMIT",
             "init": {
                 "Vr": 0.9414818409693088,
@@ -2278,7 +2279,7 @@
         },
         {
             "number": 3801,
-            "class": "bus",
+            "class": "Bus",
             "name": "DIABLO",
             "init": {
                 "Vr": 1.0489913945645062,
@@ -2298,7 +2299,7 @@
         },
         {
             "number": 3802,
-            "class": "bus",
+            "class": "Bus",
             "name": "GATES",
             "init": {
                 "Vr": 1.0318774425716297,
@@ -2318,7 +2319,7 @@
         },
         {
             "number": 3803,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY",
             "init": {
                 "Vr": 1.0381071545683649,
@@ -2338,7 +2339,7 @@
         },
         {
             "number": 3804,
-            "class": "bus",
+            "class": "Bus",
             "name": "GATES",
             "init": {
                 "Vr": 0.9945929770856804,
@@ -2358,7 +2359,7 @@
         },
         {
             "number": 3805,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY",
             "init": {
                 "Vr": 1.0280211033651232,
@@ -2378,7 +2379,7 @@
         },
         {
             "number": 3806,
-            "class": "bus",
+            "class": "Bus",
             "name": "MORROBAY",
             "init": {
                 "Vr": 1.0170704073699968,
@@ -2398,7 +2399,7 @@
         },
         {
             "number": 3831,
-            "class": "bus",
+            "class": "Bus",
             "name": "DIABLO1",
             "init": {
                 "Vr": 1.0486618750743935,
@@ -2418,7 +2419,7 @@
         },
         {
             "number": 3835,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY",
             "init": {
                 "Vr": 1.028507010937164,
@@ -2438,7 +2439,7 @@
         },
         {
             "number": 3836,
-            "class": "bus",
+            "class": "Bus",
             "name": "MORROBAY",
             "init": {
                 "Vr": 1.0172317024618558,
@@ -2458,7 +2459,7 @@
         },
         {
             "number": 3891,
-            "class": "bus",
+            "class": "Bus",
             "name": "GATES1",
             "init": {
                 "Vr": 1.0384992251021798,
@@ -2478,7 +2479,7 @@
         },
         {
             "number": 3892,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY1",
             "init": {
                 "Vr": 1.0362966886561964,
@@ -2498,7 +2499,7 @@
         },
         {
             "number": 3893,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY2",
             "init": {
                 "Vr": 1.006416717622578,
@@ -2518,7 +2519,7 @@
         },
         {
             "number": 3894,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY3",
             "init": {
                 "Vr": 1.0361566693266289,
@@ -2538,7 +2539,7 @@
         },
         {
             "number": 3895,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY4",
             "init": {
                 "Vr": 1.0065214763974337,
@@ -2558,7 +2559,7 @@
         },
         {
             "number": 3896,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY5",
             "init": {
                 "Vr": 1.036734140432592,
@@ -2578,7 +2579,7 @@
         },
         {
             "number": 3897,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDWAY6",
             "init": {
                 "Vr": 1.0090410697014338,
@@ -2598,7 +2599,7 @@
         },
         {
             "number": 3901,
-            "class": "bus",
+            "class": "Bus",
             "name": "LOSBANOS",
             "init": {
                 "Vr": 1.024235363911919,
@@ -2618,7 +2619,7 @@
         },
         {
             "number": 3902,
-            "class": "bus",
+            "class": "Bus",
             "name": "MOSSLAND",
             "init": {
                 "Vr": 0.9992197525213846,
@@ -2638,7 +2639,7 @@
         },
         {
             "number": 3903,
-            "class": "bus",
+            "class": "Bus",
             "name": "TESLA",
             "init": {
                 "Vr": 1.0302497343114967,
@@ -2658,7 +2659,7 @@
         },
         {
             "number": 3904,
-            "class": "bus",
+            "class": "Bus",
             "name": "VACA-DIX",
             "init": {
                 "Vr": 1.029444168877676,
@@ -2678,7 +2679,7 @@
         },
         {
             "number": 3905,
-            "class": "bus",
+            "class": "Bus",
             "name": "TABLE MT",
             "init": {
                 "Vr": 1.0431184070605861,
@@ -2698,7 +2699,7 @@
         },
         {
             "number": 3906,
-            "class": "bus",
+            "class": "Bus",
             "name": "ROUND MT",
             "init": {
                 "Vr": 1.0649774101089475,
@@ -2718,7 +2719,7 @@
         },
         {
             "number": 3907,
-            "class": "bus",
+            "class": "Bus",
             "name": "BELLOTA",
             "init": {
                 "Vr": 0.9419070958335489,
@@ -2738,7 +2739,7 @@
         },
         {
             "number": 3908,
-            "class": "bus",
+            "class": "Bus",
             "name": "BRIGHTON",
             "init": {
                 "Vr": 0.9345738765963039,
@@ -2758,7 +2759,7 @@
         },
         {
             "number": 3909,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLGATE",
             "init": {
                 "Vr": 0.9404009334990066,
@@ -2778,7 +2779,7 @@
         },
         {
             "number": 3910,
-            "class": "bus",
+            "class": "Bus",
             "name": "CORTINA",
             "init": {
                 "Vr": 0.9545072532199945,
@@ -2798,7 +2799,7 @@
         },
         {
             "number": 3911,
-            "class": "bus",
+            "class": "Bus",
             "name": "COTWDPGE",
             "init": {
                 "Vr": 1.0403165540407433,
@@ -2818,7 +2819,7 @@
         },
         {
             "number": 3912,
-            "class": "bus",
+            "class": "Bus",
             "name": "GLENN",
             "init": {
                 "Vr": 1.0083289707968137,
@@ -2838,7 +2839,7 @@
         },
         {
             "number": 3913,
-            "class": "bus",
+            "class": "Bus",
             "name": "GOLDHILL",
             "init": {
                 "Vr": 0.9638389469915553,
@@ -2858,7 +2859,7 @@
         },
         {
             "number": 3914,
-            "class": "bus",
+            "class": "Bus",
             "name": "IGNACIO",
             "init": {
                 "Vr": 0.9906657476318554,
@@ -2878,7 +2879,7 @@
         },
         {
             "number": 3915,
-            "class": "bus",
+            "class": "Bus",
             "name": "LAKEVILE",
             "init": {
                 "Vr": 0.9952778869991848,
@@ -2898,7 +2899,7 @@
         },
         {
             "number": 3916,
-            "class": "bus",
+            "class": "Bus",
             "name": "LOGAN CR",
             "init": {
                 "Vr": 1.006797145740073,
@@ -2918,7 +2919,7 @@
         },
         {
             "number": 3917,
-            "class": "bus",
+            "class": "Bus",
             "name": "LOSBANOS",
             "init": {
                 "Vr": 0.9994489088245955,
@@ -2938,7 +2939,7 @@
         },
         {
             "number": 3918,
-            "class": "bus",
+            "class": "Bus",
             "name": "MOSSLAND",
             "init": {
                 "Vr": 0.9883467710975091,
@@ -2958,7 +2959,7 @@
         },
         {
             "number": 3919,
-            "class": "bus",
+            "class": "Bus",
             "name": "PALERMO",
             "init": {
                 "Vr": 0.9551573079151378,
@@ -2978,7 +2979,7 @@
         },
         {
             "number": 3920,
-            "class": "bus",
+            "class": "Bus",
             "name": "RIO OSO",
             "init": {
                 "Vr": 0.9504839580759618,
@@ -2998,7 +2999,7 @@
         },
         {
             "number": 3921,
-            "class": "bus",
+            "class": "Bus",
             "name": "ROUND MT",
             "init": {
                 "Vr": 1.0696329641683537,
@@ -3018,7 +3019,7 @@
         },
         {
             "number": 3922,
-            "class": "bus",
+            "class": "Bus",
             "name": "TABLE MT",
             "init": {
                 "Vr": 0.9913288500399144,
@@ -3038,7 +3039,7 @@
         },
         {
             "number": 3923,
-            "class": "bus",
+            "class": "Bus",
             "name": "TESLA",
             "init": {
                 "Vr": 1.0174459838144574,
@@ -3058,7 +3059,7 @@
         },
         {
             "number": 3924,
-            "class": "bus",
+            "class": "Bus",
             "name": "VACA-DIX",
             "init": {
                 "Vr": 1.0049188471121937,
@@ -3078,7 +3079,7 @@
         },
         {
             "number": 3925,
-            "class": "bus",
+            "class": "Bus",
             "name": "COTWDPGE",
             "init": {
                 "Vr": 1.0272875871698077,
@@ -3098,7 +3099,7 @@
         },
         {
             "number": 3926,
-            "class": "bus",
+            "class": "Bus",
             "name": "RIO OSO",
             "init": {
                 "Vr": 0.9403213475282999,
@@ -3118,7 +3119,7 @@
         },
         {
             "number": 3931,
-            "class": "bus",
+            "class": "Bus",
             "name": "ROUND MT",
             "init": {
                 "Vr": 1.070091197006786,
@@ -3138,7 +3139,7 @@
         },
         {
             "number": 3932,
-            "class": "bus",
+            "class": "Bus",
             "name": "MOSSLAND",
             "init": {
                 "Vr": 0.9982283130082861,
@@ -3158,7 +3159,7 @@
         },
         {
             "number": 3933,
-            "class": "bus",
+            "class": "Bus",
             "name": "TESLA",
             "init": {
                 "Vr": 1.0199999809265137,
@@ -3178,7 +3179,7 @@
         },
         {
             "number": 4001,
-            "class": "bus",
+            "class": "Bus",
             "name": "MALIN",
             "init": {
                 "Vr": 1.0742150954886451,
@@ -3198,7 +3199,7 @@
         },
         {
             "number": 4002,
-            "class": "bus",
+            "class": "Bus",
             "name": "SUMMER L",
             "init": {
                 "Vr": 1.1117588653391925,
@@ -3218,7 +3219,7 @@
         },
         {
             "number": 4003,
-            "class": "bus",
+            "class": "Bus",
             "name": "BURNS",
             "init": {
                 "Vr": 1.1254580462787114,
@@ -3238,7 +3239,7 @@
         },
         {
             "number": 4004,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY",
             "init": {
                 "Vr": 1.0958334028460324,
@@ -3258,7 +3259,7 @@
         },
         {
             "number": 4005,
-            "class": "bus",
+            "class": "Bus",
             "name": "JOHN DAY",
             "init": {
                 "Vr": 1.0753080995429867,
@@ -3278,7 +3279,7 @@
         },
         {
             "number": 4006,
-            "class": "bus",
+            "class": "Bus",
             "name": "BIG EDDY",
             "init": {
                 "Vr": 1.0628128498876628,
@@ -3298,7 +3299,7 @@
         },
         {
             "number": 4007,
-            "class": "bus",
+            "class": "Bus",
             "name": "CELILOCA",
             "init": {
                 "Vr": 1.0623064836131175,
@@ -3318,7 +3319,7 @@
         },
         {
             "number": 4008,
-            "class": "bus",
+            "class": "Bus",
             "name": "MALIN",
             "init": {
                 "Vr": 1.0693154704164687,
@@ -3338,7 +3339,7 @@
         },
         {
             "number": 4009,
-            "class": "bus",
+            "class": "Bus",
             "name": "BIG EDDY",
             "init": {
                 "Vr": 1.0585649232896344,
@@ -3358,7 +3359,7 @@
         },
         {
             "number": 4010,
-            "class": "bus",
+            "class": "Bus",
             "name": "CELILO",
             "init": {
                 "Vr": 1.0563885991972057,
@@ -3378,7 +3379,7 @@
         },
         {
             "number": 4031,
-            "class": "bus",
+            "class": "Bus",
             "name": "MALIN",
             "init": {
                 "Vr": 1.0717996284183116,
@@ -3398,7 +3399,7 @@
         },
         {
             "number": 4035,
-            "class": "bus",
+            "class": "Bus",
             "name": "JOHN DAY",
             "init": {
                 "Vr": 1.073926468979413,
@@ -3418,7 +3419,7 @@
         },
         {
             "number": 4039,
-            "class": "bus",
+            "class": "Bus",
             "name": "DALLES21",
             "init": {
                 "Vr": 1.0644295672627466,
@@ -3438,7 +3439,7 @@
         },
         {
             "number": 4090,
-            "class": "bus",
+            "class": "Bus",
             "name": "MALIN1",
             "init": {
                 "Vr": 1.1079273209852338,
@@ -3458,7 +3459,7 @@
         },
         {
             "number": 4091,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY1",
             "init": {
                 "Vr": 1.106561302953537,
@@ -3478,7 +3479,7 @@
         },
         {
             "number": 4092,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY2",
             "init": {
                 "Vr": 1.0882278845876256,
@@ -3498,7 +3499,7 @@
         },
         {
             "number": 4093,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY3",
             "init": {
                 "Vr": 1.0863994414257208,
@@ -3518,7 +3519,7 @@
         },
         {
             "number": 4094,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY4",
             "init": {
                 "Vr": 1.1003951431675545,
@@ -3538,7 +3539,7 @@
         },
         {
             "number": 4095,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY5",
             "init": {
                 "Vr": 1.0865438776549408,
@@ -3558,7 +3559,7 @@
         },
         {
             "number": 4096,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY6",
             "init": {
                 "Vr": 1.0844982600176971,
@@ -3578,7 +3579,7 @@
         },
         {
             "number": 4097,
-            "class": "bus",
+            "class": "Bus",
             "name": "GRIZZLY7",
             "init": {
                 "Vr": 1.100156324094967,
@@ -3598,7 +3599,7 @@
         },
         {
             "number": 4101,
-            "class": "bus",
+            "class": "Bus",
             "name": "COULEE",
             "init": {
                 "Vr": 1.106259130542874,
@@ -3618,7 +3619,7 @@
         },
         {
             "number": 4102,
-            "class": "bus",
+            "class": "Bus",
             "name": "HANFORD",
             "init": {
                 "Vr": 1.0933308488862448,
@@ -3638,7 +3639,7 @@
         },
         {
             "number": 4103,
-            "class": "bus",
+            "class": "Bus",
             "name": "BELL",
             "init": {
                 "Vr": 1.0785286137608066,
@@ -3658,7 +3659,7 @@
         },
         {
             "number": 4104,
-            "class": "bus",
+            "class": "Bus",
             "name": "BELL",
             "init": {
                 "Vr": 1.0173271028054875,
@@ -3678,7 +3679,7 @@
         },
         {
             "number": 4131,
-            "class": "bus",
+            "class": "Bus",
             "name": "COULEE",
             "init": {
                 "Vr": 1.101289655917031,
@@ -3698,7 +3699,7 @@
         },
         {
             "number": 4132,
-            "class": "bus",
+            "class": "Bus",
             "name": "HANFORD",
             "init": {
                 "Vr": 1.0912138201935935,
@@ -3718,7 +3719,7 @@
         },
         {
             "number": 4201,
-            "class": "bus",
+            "class": "Bus",
             "name": "NORTH",
             "init": {
                 "Vr": 1.1171502138256575,
@@ -3738,7 +3739,7 @@
         },
         {
             "number": 4202,
-            "class": "bus",
+            "class": "Bus",
             "name": "WCASCADE",
             "init": {
                 "Vr": 1.0490325011586195,
@@ -3758,7 +3759,7 @@
         },
         {
             "number": 4203,
-            "class": "bus",
+            "class": "Bus",
             "name": "WILLAMET",
             "init": {
                 "Vr": 1.008659388938506,
@@ -3778,7 +3779,7 @@
         },
         {
             "number": 4204,
-            "class": "bus",
+            "class": "Bus",
             "name": "MERIDIAN",
             "init": {
                 "Vr": 1.0522103173835093,
@@ -3798,7 +3799,7 @@
         },
         {
             "number": 4231,
-            "class": "bus",
+            "class": "Bus",
             "name": "NORTH G3",
             "init": {
                 "Vr": 1.122012845901798,
@@ -3818,7 +3819,7 @@
         },
         {
             "number": 4232,
-            "class": "bus",
+            "class": "Bus",
             "name": "WCASCADE",
             "init": {
                 "Vr": 1.0495669903600091,
@@ -3838,7 +3839,7 @@
         },
         {
             "number": 5001,
-            "class": "bus",
+            "class": "Bus",
             "name": "CANADA",
             "init": {
                 "Vr": 1.044697957467842,
@@ -3858,7 +3859,7 @@
         },
         {
             "number": 5002,
-            "class": "bus",
+            "class": "Bus",
             "name": "CANALB",
             "init": {
                 "Vr": 1.0471976935789618,
@@ -3878,7 +3879,7 @@
         },
         {
             "number": 5003,
-            "class": "bus",
+            "class": "Bus",
             "name": "CA230TO",
             "init": {
                 "Vr": 1.0362072539978977,
@@ -3898,7 +3899,7 @@
         },
         {
             "number": 5004,
-            "class": "bus",
+            "class": "Bus",
             "name": "CA230",
             "init": {
                 "Vr": 1.0605136082258966,
@@ -3918,7 +3919,7 @@
         },
         {
             "number": 5031,
-            "class": "bus",
+            "class": "Bus",
             "name": "CANAD G1",
             "init": {
                 "Vr": 1.0520077225700353,
@@ -3938,7 +3939,7 @@
         },
         {
             "number": 5032,
-            "class": "bus",
+            "class": "Bus",
             "name": "CMAIN GM",
             "init": {
                 "Vr": 1.0580457806182115,
@@ -3958,7 +3959,7 @@
         },
         {
             "number": 6101,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDPOINT",
             "init": {
                 "Vr": 1.034845555465481,
@@ -3978,7 +3979,7 @@
         },
         {
             "number": 6102,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDPOINT",
             "init": {
                 "Vr": 0.9865247716604576,
@@ -3998,7 +3999,7 @@
         },
         {
             "number": 6103,
-            "class": "bus",
+            "class": "Bus",
             "name": "BORAH",
             "init": {
                 "Vr": 0.9814350507322236,
@@ -4018,7 +4019,7 @@
         },
         {
             "number": 6104,
-            "class": "bus",
+            "class": "Bus",
             "name": "BORAH",
             "init": {
                 "Vr": 1.0086610396824167,
@@ -4038,7 +4039,7 @@
         },
         {
             "number": 6132,
-            "class": "bus",
+            "class": "Bus",
             "name": "MIDPOINT",
             "init": {
                 "Vr": 0.9770442655079542,
@@ -4058,7 +4059,7 @@
         },
         {
             "number": 6201,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLSTRP",
             "init": {
                 "Vr": 1.0512607632089848,
@@ -4078,7 +4079,7 @@
         },
         {
             "number": 6202,
-            "class": "bus",
+            "class": "Bus",
             "name": "GARRISON",
             "init": {
                 "Vr": 1.0935227185534016,
@@ -4098,7 +4099,7 @@
         },
         {
             "number": 6203,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLSTRP",
             "init": {
                 "Vr": 0.9993297313330015,
@@ -4118,7 +4119,7 @@
         },
         {
             "number": 6204,
-            "class": "bus",
+            "class": "Bus",
             "name": "GARRISON",
             "init": {
                 "Vr": 1.050156048950021,
@@ -4138,7 +4139,7 @@
         },
         {
             "number": 6205,
-            "class": "bus",
+            "class": "Bus",
             "name": "MONTANA",
             "init": {
                 "Vr": 1.0230816995897476,
@@ -4158,7 +4159,7 @@
         },
         {
             "number": 6231,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLSTRP",
             "init": {
                 "Vr": 1.0498663181019732,
@@ -4178,7 +4179,7 @@
         },
         {
             "number": 6235,
-            "class": "bus",
+            "class": "Bus",
             "name": "MONTA G1",
             "init": {
                 "Vr": 1.0222216198529543,
@@ -4198,7 +4199,7 @@
         },
         {
             "number": 6301,
-            "class": "bus",
+            "class": "Bus",
             "name": "BRIDGER",
             "init": {
                 "Vr": 0.9773593118339055,
@@ -4218,7 +4219,7 @@
         },
         {
             "number": 6302,
-            "class": "bus",
+            "class": "Bus",
             "name": "LARAMIE",
             "init": {
                 "Vr": 0.8513436846801328,
@@ -4238,7 +4239,7 @@
         },
         {
             "number": 6303,
-            "class": "bus",
+            "class": "Bus",
             "name": "BRIDGER2",
             "init": {
                 "Vr": 0.8961468778007547,
@@ -4258,7 +4259,7 @@
         },
         {
             "number": 6304,
-            "class": "bus",
+            "class": "Bus",
             "name": "LARAMIE",
             "init": {
                 "Vr": 0.9368187909677602,
@@ -4278,7 +4279,7 @@
         },
         {
             "number": 6305,
-            "class": "bus",
+            "class": "Bus",
             "name": "NAUGHTON",
             "init": {
                 "Vr": 0.9180104614155901,
@@ -4298,7 +4299,7 @@
         },
         {
             "number": 6333,
-            "class": "bus",
+            "class": "Bus",
             "name": "BRIDGER",
             "init": {
                 "Vr": 0.8896627869972821,
@@ -4318,7 +4319,7 @@
         },
         {
             "number": 6335,
-            "class": "bus",
+            "class": "Bus",
             "name": "NAUGHT",
             "init": {
                 "Vr": 0.9143801386054924,
@@ -4338,7 +4339,7 @@
         },
         {
             "number": 6401,
-            "class": "bus",
+            "class": "Bus",
             "name": "TRACYSPP",
             "init": {
                 "Vr": 1.0130307044587665,
@@ -4358,7 +4359,7 @@
         },
         {
             "number": 6402,
-            "class": "bus",
+            "class": "Bus",
             "name": "SUMITSPP",
             "init": {
                 "Vr": 0.9670124115274004,
@@ -4378,7 +4379,7 @@
         },
         {
             "number": 6403,
-            "class": "bus",
+            "class": "Bus",
             "name": "VALMY",
             "init": {
                 "Vr": 1.1072754144375725,
@@ -4398,7 +4399,7 @@
         },
         {
             "number": 6404,
-            "class": "bus",
+            "class": "Bus",
             "name": "GONDER",
             "init": {
                 "Vr": 1.0792041930637892,
@@ -4418,7 +4419,7 @@
         },
         {
             "number": 6433,
-            "class": "bus",
+            "class": "Bus",
             "name": "VALMY",
             "init": {
                 "Vr": 1.1079871163876425,
@@ -4438,7 +4439,7 @@
         },
         {
             "number": 6501,
-            "class": "bus",
+            "class": "Bus",
             "name": "BENLOMND",
             "init": {
                 "Vr": 1.0222378440185365,
@@ -4458,7 +4459,7 @@
         },
         {
             "number": 6502,
-            "class": "bus",
+            "class": "Bus",
             "name": "CAMP WIL",
             "init": {
                 "Vr": 1.0199890330318777,
@@ -4478,7 +4479,7 @@
         },
         {
             "number": 6503,
-            "class": "bus",
+            "class": "Bus",
             "name": "EMERY",
             "init": {
                 "Vr": 1.0480922840187312,
@@ -4498,7 +4499,7 @@
         },
         {
             "number": 6504,
-            "class": "bus",
+            "class": "Bus",
             "name": "MONA",
             "init": {
                 "Vr": 1.0225335445238373,
@@ -4518,7 +4519,7 @@
         },
         {
             "number": 6505,
-            "class": "bus",
+            "class": "Bus",
             "name": "PINTO",
             "init": {
                 "Vr": 1.0586390446964378,
@@ -4538,7 +4539,7 @@
         },
         {
             "number": 6506,
-            "class": "bus",
+            "class": "Bus",
             "name": "PINTO PS",
             "init": {
                 "Vr": 1.0470416985338609,
@@ -4558,7 +4559,7 @@
         },
         {
             "number": 6507,
-            "class": "bus",
+            "class": "Bus",
             "name": "SIGURD",
             "init": {
                 "Vr": 1.0513104657332852,
@@ -4578,7 +4579,7 @@
         },
         {
             "number": 6508,
-            "class": "bus",
+            "class": "Bus",
             "name": "SPAN FRK",
             "init": {
                 "Vr": 1.0278217002112773,
@@ -4598,7 +4599,7 @@
         },
         {
             "number": 6509,
-            "class": "bus",
+            "class": "Bus",
             "name": "TERMINAL",
             "init": {
                 "Vr": 1.020743685275763,
@@ -4618,7 +4619,7 @@
         },
         {
             "number": 6510,
-            "class": "bus",
+            "class": "Bus",
             "name": "BENLOMND",
             "init": {
                 "Vr": 0.9884696859234469,
@@ -4638,7 +4639,7 @@
         },
         {
             "number": 6533,
-            "class": "bus",
+            "class": "Bus",
             "name": "EMERY",
             "init": {
                 "Vr": 1.0466086833922248,
@@ -4658,7 +4659,7 @@
         },
         {
             "number": 7001,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLOEAST",
             "init": {
                 "Vr": 0.8473568427622199,
@@ -4678,7 +4679,7 @@
         },
         {
             "number": 7002,
-            "class": "bus",
+            "class": "Bus",
             "name": "CRAIG",
             "init": {
                 "Vr": 0.8730095288262582,
@@ -4698,7 +4699,7 @@
         },
         {
             "number": 7031,
-            "class": "bus",
+            "class": "Bus",
             "name": "COLOEAST",
             "init": {
                 "Vr": 0.8647534008283276,
@@ -4718,7 +4719,7 @@
         },
         {
             "number": 7032,
-            "class": "bus",
+            "class": "Bus",
             "name": "CRAIG",
             "init": {
                 "Vr": 0.8801103910765938,
@@ -4738,7 +4739,7 @@
         },
         {
             "number": 8001,
-            "class": "bus",
+            "class": "Bus",
             "name": "OLINDA",
             "init": {
                 "Vr": 1.058881132588958,
@@ -4758,7 +4759,7 @@
         },
         {
             "number": 8002,
-            "class": "bus",
+            "class": "Bus",
             "name": "TRACY",
             "init": {
                 "Vr": 1.032499551862721,
@@ -4778,7 +4779,7 @@
         },
         {
             "number": 8003,
-            "class": "bus",
+            "class": "Bus",
             "name": "COTWDWAP",
             "init": {
                 "Vr": 1.073016887407295,
@@ -4798,7 +4799,7 @@
         },
         {
             "number": 8004,
-            "class": "bus",
+            "class": "Bus",
             "name": "RNCHSECO",
             "init": {
                 "Vr": 0.9791255000728262,
@@ -4818,7 +4819,7 @@
         },
         {
             "number": 8005,
-            "class": "bus",
+            "class": "Bus",
             "name": "TRACYPMP",
             "init": {
                 "Vr": 0.975632495789703,
@@ -4838,7 +4839,7 @@
         },
         {
             "number": 8033,
-            "class": "bus",
+            "class": "Bus",
             "name": "COTWDWAP",
             "init": {
                 "Vr": 1.074528218161104,
@@ -4858,7 +4859,7 @@
         },
         {
             "number": 8034,
-            "class": "bus",
+            "class": "Bus",
             "name": "RNCHSECO",
             "init": {
                 "Vr": 0.9846175031479656,
@@ -22082,7 +22083,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1032,
                 "speed": 148,
                 "pmech": 149
             },
@@ -22115,8 +22115,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1050.0,
-                "mode": 0
+                "Trate": 1050.0
             }
         },
         {
@@ -22270,10 +22269,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 1032,
-                "ibranchr": 340,
-                "ibranchi": 341,
-                "pbranch": 342,
-                "qbranch": 343,
+                "ir": 340,
+                "ii": 341,
+                "p": 342,
+                "q": 343,
                 "freq": 344,
                 "qext": 345,
                 "pext": 346
@@ -22367,7 +22366,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1034,
                 "speed": 151,
                 "pmech": 152
             },
@@ -22400,8 +22398,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2900.0,
-                "mode": 0
+                "Trate": 2900.0
             }
         },
         {
@@ -22555,10 +22552,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 1034,
-                "ibranchr": 349,
-                "ibranchi": 350,
-                "pbranch": 351,
-                "qbranch": 352,
+                "ir": 349,
+                "ii": 350,
+                "p": 351,
+                "q": 352,
                 "freq": 353,
                 "qext": 354,
                 "pext": 355
@@ -22652,7 +22649,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1131,
                 "speed": 154,
                 "pmech": 155
             },
@@ -22685,8 +22681,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 4934.0,
-                "mode": 0
+                "Trate": 4934.0
             }
         },
         {
@@ -22794,7 +22789,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1232,
                 "speed": 157,
                 "pmech": 158
             },
@@ -22918,8 +22912,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2167.0,
-                "mode": 0
+                "Trate": 2167.0
             }
         },
         {
@@ -23118,7 +23111,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1333,
                 "speed": 166,
                 "pmech": 167
             },
@@ -23151,8 +23143,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 7011.0,
-                "mode": 0
+                "Trate": 7011.0
             }
         },
         {
@@ -23198,7 +23189,6 @@
             },
             "id": "1333_G_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -23336,10 +23326,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 1333,
-                "ibranchr": 358,
-                "ibranchi": 359,
-                "pbranch": 360,
-                "qbranch": 361,
+                "ir": 358,
+                "ii": 359,
+                "p": 360,
+                "q": 361,
                 "freq": 362,
                 "qext": 363,
                 "pext": 364
@@ -23396,8 +23386,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 9170.0,
-                "mode": 0
+                "Trate": 9170.0
             }
         },
         {
@@ -23505,7 +23494,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 1431,
                 "speed": 169,
                 "pmech": 170
             },
@@ -23621,10 +23609,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 1431,
-                "ibranchr": 367,
-                "ibranchi": 368,
-                "pbranch": 369,
-                "qbranch": 370,
+                "ir": 367,
+                "ii": 368,
+                "p": 369,
+                "q": 370,
                 "freq": 371,
                 "qext": 372,
                 "pext": 373
@@ -23718,7 +23706,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 2030,
                 "speed": 172,
                 "pmech": 173
             },
@@ -23751,8 +23738,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2140.0,
-                "mode": 0
+                "Trate": 2140.0
             }
         },
         {
@@ -23798,7 +23784,6 @@
             },
             "id": "2030_G_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -23890,7 +23875,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 2130,
                 "speed": 175,
                 "pmech": 176
             },
@@ -23923,8 +23907,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 586.0,
-                "mode": 0
+                "Trate": 586.0
             }
         },
         {
@@ -24169,10 +24152,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2130,
-                "ibranchr": 376,
-                "ibranchi": 377,
-                "pbranch": 378,
-                "qbranch": 379,
+                "ir": 376,
+                "ii": 377,
+                "p": 378,
+                "q": 379,
                 "freq": 380,
                 "qext": 381,
                 "pext": 382
@@ -24229,8 +24212,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1035.0,
-                "mode": 0
+                "Trate": 1035.0
             }
         },
         {
@@ -24301,8 +24283,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1837.0,
-                "mode": 0
+                "Trate": 1837.0
             }
         },
         {
@@ -24373,8 +24354,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 733.0,
-                "mode": 0
+                "Trate": 733.0
             }
         },
         {
@@ -24528,10 +24508,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2332,
-                "ibranchr": 385,
-                "ibranchi": 386,
-                "pbranch": 387,
-                "qbranch": 388,
+                "ir": 385,
+                "ii": 386,
+                "p": 387,
+                "q": 388,
                 "freq": 389,
                 "qext": 390,
                 "pext": 391
@@ -24671,10 +24651,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2431,
-                "ibranchr": 394,
-                "ibranchi": 395,
-                "pbranch": 396,
-                "qbranch": 397,
+                "ir": 394,
+                "ii": 395,
+                "p": 396,
+                "q": 397,
                 "freq": 398,
                 "qext": 399,
                 "pext": 400
@@ -24814,10 +24794,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2434,
-                "ibranchr": 403,
-                "ibranchi": 404,
-                "pbranch": 405,
-                "qbranch": 406,
+                "ir": 403,
+                "ii": 404,
+                "p": 405,
+                "q": 406,
                 "freq": 407,
                 "qext": 408,
                 "pext": 409
@@ -24874,8 +24854,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2292.0,
-                "mode": 0
+                "Trate": 2292.0
             }
         },
         {
@@ -24946,8 +24925,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 5451.0,
-                "mode": 0
+                "Trate": 5451.0
             }
         },
         {
@@ -25101,10 +25079,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2438,
-                "ibranchr": 412,
-                "ibranchi": 413,
-                "pbranch": 414,
-                "qbranch": 415,
+                "ir": 412,
+                "ii": 413,
+                "p": 414,
+                "q": 415,
                 "freq": 416,
                 "qext": 417,
                 "pext": 418
@@ -25161,8 +25139,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 4110.0,
-                "mode": 0
+                "Trate": 4110.0
             }
         },
         {
@@ -25407,10 +25384,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2438,
-                "ibranchr": 421,
-                "ibranchi": 422,
-                "pbranch": 423,
-                "qbranch": 424,
+                "ir": 421,
+                "ii": 422,
+                "p": 423,
+                "q": 424,
                 "freq": 425,
                 "qext": 426,
                 "pext": 427
@@ -25467,8 +25444,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 5817.0,
-                "mode": 0
+                "Trate": 5817.0
             }
         },
         {
@@ -25514,7 +25490,6 @@
             },
             "id": "2438_WG_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -25652,10 +25627,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2439,
-                "ibranchr": 430,
-                "ibranchi": 431,
-                "pbranch": 432,
-                "qbranch": 433,
+                "ir": 430,
+                "ii": 431,
+                "p": 432,
+                "q": 433,
                 "freq": 434,
                 "qext": 435,
                 "pext": 436
@@ -25795,10 +25770,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2533,
-                "ibranchr": 439,
-                "ibranchi": 440,
-                "pbranch": 441,
-                "qbranch": 442,
+                "ir": 439,
+                "ii": 440,
+                "p": 441,
+                "q": 442,
                 "freq": 443,
                 "qext": 444,
                 "pext": 445
@@ -25855,8 +25830,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 3947.0,
-                "mode": 0
+                "Trate": 3947.0
             }
         },
         {
@@ -25902,7 +25876,6 @@
             },
             "id": "2630_G_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -26040,10 +26013,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 2631,
-                "ibranchr": 448,
-                "ibranchi": 449,
-                "pbranch": 450,
-                "qbranch": 451,
+                "ir": 448,
+                "ii": 449,
+                "p": 450,
+                "q": 451,
                 "freq": 452,
                 "qext": 453,
                 "pext": 454
@@ -26137,7 +26110,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 2634,
                 "speed": 187,
                 "pmech": 188
             },
@@ -26352,8 +26324,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 80.0,
-                "mode": 0
+                "Trate": 80.0
             }
         },
         {
@@ -26424,8 +26395,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 541.0,
-                "mode": 0
+                "Trate": 541.0
             }
         },
         {
@@ -26496,8 +26466,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 38.0,
-                "mode": 0
+                "Trate": 38.0
             }
         },
         {
@@ -26568,8 +26537,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 177.0,
-                "mode": 0
+                "Trate": 177.0
             }
         },
         {
@@ -26640,8 +26608,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 3853.0,
-                "mode": 0
+                "Trate": 3853.0
             }
         },
         {
@@ -26712,8 +26679,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1037.0,
-                "mode": 0
+                "Trate": 1037.0
             }
         },
         {
@@ -26867,10 +26833,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3234,
-                "ibranchr": 457,
-                "ibranchi": 458,
-                "pbranch": 459,
-                "qbranch": 460,
+                "ir": 457,
+                "ii": 458,
+                "p": 459,
+                "q": 460,
                 "freq": 461,
                 "qext": 462,
                 "pext": 463
@@ -26927,8 +26893,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1012.0,
-                "mode": 0
+                "Trate": 1012.0
             }
         },
         {
@@ -26999,8 +26964,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 312.0,
-                "mode": 0
+                "Trate": 312.0
             }
         },
         {
@@ -27071,8 +27035,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 921.0,
-                "mode": 0
+                "Trate": 921.0
             }
         },
         {
@@ -27226,10 +27189,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3433,
-                "ibranchr": 466,
-                "ibranchi": 467,
-                "pbranch": 468,
-                "qbranch": 469,
+                "ir": 466,
+                "ii": 467,
+                "p": 468,
+                "q": 469,
                 "freq": 470,
                 "qext": 471,
                 "pext": 472
@@ -27323,7 +27286,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3531,
                 "speed": 202,
                 "pmech": 203
             },
@@ -27393,7 +27355,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3531,
                 "speed": 205,
                 "pmech": 206
             },
@@ -27554,7 +27515,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3631,
                 "speed": 211,
                 "pmech": 212
             },
@@ -27587,8 +27547,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 210.0,
-                "mode": 0
+                "Trate": 210.0
             }
         },
         {
@@ -27787,7 +27746,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3831,
                 "speed": 217,
                 "pmech": 218
             },
@@ -27820,8 +27778,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2025.0,
-                "mode": 0
+                "Trate": 2025.0
             }
         },
         {
@@ -27975,10 +27932,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3835,
-                "ibranchr": 475,
-                "ibranchi": 476,
-                "pbranch": 477,
-                "qbranch": 478,
+                "ir": 475,
+                "ii": 476,
+                "p": 477,
+                "q": 478,
                 "freq": 479,
                 "qext": 480,
                 "pext": 481
@@ -28035,8 +27992,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1497.0,
-                "mode": 0
+                "Trate": 1497.0
             }
         },
         {
@@ -28144,7 +28100,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3931,
                 "speed": 223,
                 "pmech": 224
             },
@@ -28243,7 +28198,6 @@
             },
             "id": "3931_NH_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -28381,10 +28335,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3932,
-                "ibranchr": 484,
-                "ibranchi": 485,
-                "pbranch": 486,
-                "qbranch": 487,
+                "ir": 484,
+                "ii": 485,
+                "p": 486,
+                "q": 487,
                 "freq": 488,
                 "qext": 489,
                 "pext": 490
@@ -28441,8 +28395,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 865.0,
-                "mode": 0
+                "Trate": 865.0
             }
         },
         {
@@ -28550,7 +28503,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 3933,
                 "speed": 230,
                 "pmech": 231
             },
@@ -28583,8 +28535,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1927.0,
-                "mode": 0
+                "Trate": 1927.0
             }
         },
         {
@@ -28829,10 +28780,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3933,
-                "ibranchr": 493,
-                "ibranchi": 494,
-                "pbranch": 495,
-                "qbranch": 496,
+                "ir": 493,
+                "ii": 494,
+                "p": 495,
+                "q": 496,
                 "freq": 497,
                 "qext": 498,
                 "pext": 499
@@ -28972,10 +28923,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 3933,
-                "ibranchr": 502,
-                "ibranchi": 503,
-                "pbranch": 504,
-                "qbranch": 505,
+                "ir": 502,
+                "ii": 503,
+                "p": 504,
+                "q": 505,
                 "freq": 506,
                 "qext": 507,
                 "pext": 508
@@ -29032,8 +28983,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2710.0,
-                "mode": 0
+                "Trate": 2710.0
             }
         },
         {
@@ -29278,10 +29228,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4031,
-                "ibranchr": 511,
-                "ibranchi": 512,
-                "pbranch": 513,
-                "qbranch": 514,
+                "ir": 511,
+                "ii": 512,
+                "p": 513,
+                "q": 514,
                 "freq": 515,
                 "qext": 516,
                 "pext": 517
@@ -29421,10 +29371,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4031,
-                "ibranchr": 520,
-                "ibranchi": 521,
-                "pbranch": 522,
-                "qbranch": 523,
+                "ir": 520,
+                "ii": 521,
+                "p": 522,
+                "q": 523,
                 "freq": 524,
                 "qext": 525,
                 "pext": 526
@@ -29518,7 +29468,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 4035,
                 "speed": 242,
                 "pmech": 243
             },
@@ -29551,8 +29500,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1656.0,
-                "mode": 0
+                "Trate": 1656.0
             }
         },
         {
@@ -29797,10 +29745,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4035,
-                "ibranchr": 529,
-                "ibranchi": 530,
-                "pbranch": 531,
-                "qbranch": 532,
+                "ir": 529,
+                "ii": 530,
+                "p": 531,
+                "q": 532,
                 "freq": 533,
                 "qext": 534,
                 "pext": 535
@@ -29857,8 +29805,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 150.0,
-                "mode": 0
+                "Trate": 150.0
             }
         },
         {
@@ -30103,10 +30050,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4039,
-                "ibranchr": 538,
-                "ibranchi": 539,
-                "pbranch": 540,
-                "qbranch": 541,
+                "ir": 538,
+                "ii": 539,
+                "p": 540,
+                "q": 541,
                 "freq": 542,
                 "qext": 543,
                 "pext": 544
@@ -30200,7 +30147,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 4131,
                 "speed": 251,
                 "pmech": 252
             },
@@ -30299,7 +30245,6 @@
             },
             "id": "4131_H_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -30437,10 +30382,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4131,
-                "ibranchr": 547,
-                "ibranchi": 548,
-                "pbranch": 549,
-                "qbranch": 550,
+                "ir": 547,
+                "ii": 548,
+                "p": 549,
+                "q": 550,
                 "freq": 551,
                 "qext": 552,
                 "pext": 553
@@ -30497,8 +30442,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2170.0,
-                "mode": 0
+                "Trate": 2170.0
             }
         },
         {
@@ -30697,7 +30641,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 4132,
                 "speed": 261,
                 "pmech": 262
             },
@@ -30813,10 +30756,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4132,
-                "ibranchr": 556,
-                "ibranchi": 557,
-                "pbranch": 558,
-                "qbranch": 559,
+                "ir": 556,
+                "ii": 557,
+                "p": 558,
+                "q": 559,
                 "freq": 560,
                 "qext": 561,
                 "pext": 562
@@ -30910,7 +30853,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 4231,
                 "speed": 264,
                 "pmech": 265
             },
@@ -30943,8 +30885,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 970.0,
-                "mode": 0
+                "Trate": 970.0
             }
         },
         {
@@ -31106,8 +31047,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 872.0,
-                "mode": 0
+                "Trate": 872.0
             }
         },
         {
@@ -31352,10 +31292,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 4232,
-                "ibranchr": 565,
-                "ibranchi": 566,
-                "pbranch": 567,
-                "qbranch": 568,
+                "ir": 565,
+                "ii": 566,
+                "p": 567,
+                "q": 568,
                 "freq": 569,
                 "qext": 570,
                 "pext": 571
@@ -31412,8 +31352,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 2650.0,
-                "mode": 0
+                "Trate": 2650.0
             }
         },
         {
@@ -31612,7 +31551,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 5032,
                 "speed": 276,
                 "pmech": 277
             },
@@ -31645,8 +31583,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 9636.0,
-                "mode": 0
+                "Trate": 9636.0
             }
         },
         {
@@ -31754,7 +31691,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 5032,
                 "speed": 279,
                 "pmech": 280
             },
@@ -31870,10 +31806,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 5032,
-                "ibranchr": 574,
-                "ibranchi": 575,
-                "pbranch": 576,
-                "qbranch": 577,
+                "ir": 574,
+                "ii": 575,
+                "p": 576,
+                "q": 577,
                 "freq": 578,
                 "qext": 579,
                 "pext": 580
@@ -32013,10 +31949,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 5032,
-                "ibranchr": 583,
-                "ibranchi": 584,
-                "pbranch": 585,
-                "qbranch": 586,
+                "ir": 583,
+                "ii": 584,
+                "p": 585,
+                "q": 586,
                 "freq": 587,
                 "qext": 588,
                 "pext": 589
@@ -32110,7 +32046,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6132,
                 "speed": 282,
                 "pmech": 283
             },
@@ -32143,8 +32078,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1272.0,
-                "mode": 0
+                "Trate": 1272.0
             }
         },
         {
@@ -32389,10 +32323,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6132,
-                "ibranchr": 592,
-                "ibranchi": 593,
-                "pbranch": 594,
-                "qbranch": 595,
+                "ir": 592,
+                "ii": 593,
+                "p": 594,
+                "q": 595,
                 "freq": 596,
                 "qext": 597,
                 "pext": 598
@@ -32532,10 +32466,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6132,
-                "ibranchr": 601,
-                "ibranchi": 602,
-                "pbranch": 603,
-                "qbranch": 604,
+                "ir": 601,
+                "ii": 602,
+                "p": 603,
+                "q": 604,
                 "freq": 605,
                 "qext": 606,
                 "pext": 607
@@ -32629,7 +32563,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6231,
                 "speed": 288,
                 "pmech": 289
             },
@@ -32662,8 +32595,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 250.0,
-                "mode": 0
+                "Trate": 250.0
             }
         },
         {
@@ -32734,8 +32666,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 226.0,
-                "mode": 0
+                "Trate": 226.0
             }
         },
         {
@@ -32872,7 +32803,6 @@
             },
             "id": "6235_H_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -33010,10 +32940,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6235,
-                "ibranchr": 610,
-                "ibranchi": 611,
-                "pbranch": 612,
-                "qbranch": 613,
+                "ir": 610,
+                "ii": 611,
+                "p": 612,
+                "q": 613,
                 "freq": 614,
                 "qext": 615,
                 "pext": 616
@@ -33107,7 +33037,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6333,
                 "speed": 295,
                 "pmech": 296
             },
@@ -33223,10 +33152,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6333,
-                "ibranchr": 619,
-                "ibranchi": 620,
-                "pbranch": 621,
-                "qbranch": 622,
+                "ir": 619,
+                "ii": 620,
+                "p": 621,
+                "q": 622,
                 "freq": 623,
                 "qext": 624,
                 "pext": 625
@@ -33320,7 +33249,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6335,
                 "speed": 298,
                 "pmech": 299
             },
@@ -33353,8 +33281,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 418.0,
-                "mode": 0
+                "Trate": 418.0
             }
         },
         {
@@ -33553,7 +33480,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6433,
                 "speed": 304,
                 "pmech": 305
             },
@@ -33623,7 +33549,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6433,
                 "speed": 307,
                 "pmech": 308
             },
@@ -33656,8 +33581,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1369.0,
-                "mode": 0
+                "Trate": 1369.0
             }
         },
         {
@@ -33811,10 +33735,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6433,
-                "ibranchr": 628,
-                "ibranchi": 629,
-                "pbranch": 630,
-                "qbranch": 631,
+                "ir": 628,
+                "ii": 629,
+                "p": 630,
+                "q": 631,
                 "freq": 632,
                 "qext": 633,
                 "pext": 634
@@ -33897,7 +33821,6 @@
             },
             "id": "6533_C_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -33938,7 +33861,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 6533,
                 "speed": 310,
                 "pmech": 311
             },
@@ -33971,8 +33893,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 3239.0,
-                "mode": 0
+                "Trate": 3239.0
             }
         },
         {
@@ -34217,10 +34138,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6533,
-                "ibranchr": 637,
-                "ibranchi": 638,
-                "pbranch": 639,
-                "qbranch": 640,
+                "ir": 637,
+                "ii": 638,
+                "p": 639,
+                "q": 640,
                 "freq": 641,
                 "qext": 642,
                 "pext": 643
@@ -34360,10 +34281,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 6533,
-                "ibranchr": 646,
-                "ibranchi": 647,
-                "pbranch": 648,
-                "qbranch": 649,
+                "ir": 646,
+                "ii": 647,
+                "p": 648,
+                "q": 649,
                 "freq": 650,
                 "qext": 651,
                 "pext": 652
@@ -34457,7 +34378,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 7031,
                 "speed": 317,
                 "pmech": 318
             },
@@ -34490,8 +34410,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 6346.0,
-                "mode": 0
+                "Trate": 6346.0
             }
         },
         {
@@ -34537,7 +34456,6 @@
             },
             "id": "7031_G_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,
@@ -34629,7 +34547,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 7031,
                 "speed": 320,
                 "pmech": 321
             },
@@ -34745,10 +34662,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 7031,
-                "ibranchr": 655,
-                "ibranchi": 656,
-                "pbranch": 657,
-                "qbranch": 658,
+                "ir": 655,
+                "ii": 656,
+                "p": 657,
+                "q": 658,
                 "freq": 659,
                 "qext": 660,
                 "pext": 661
@@ -34842,7 +34759,6 @@
         {
             "class": "Tgov1",
             "ports": {
-                "bus": 7032,
                 "speed": 326,
                 "pmech": 327
             },
@@ -34875,8 +34791,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 1483.0,
-                "mode": 0
+                "Trate": 1483.0
             }
         },
         {
@@ -35121,10 +35036,10 @@
             "class": "Repca",
             "ports": {
                 "bus": 7032,
-                "ibranchr": 664,
-                "ibranchi": 665,
-                "pbranch": 666,
-                "qbranch": 667,
+                "ir": 664,
+                "ii": 665,
+                "p": 666,
+                "q": 667,
                 "freq": 668,
                 "qext": 669,
                 "pext": 670
@@ -35272,8 +35187,7 @@
                 "Vmax": 1.0,
                 "Vmin": 0.0,
                 "Dturb": 0.0,
-                "Trate": 3754.0,
-                "mode": 0
+                "Trate": 3754.0
             }
         },
         {
@@ -35319,7 +35233,6 @@
             },
             "id": "8034_G_ieeest",
             "params": {
-                "order": 2,
                 "A1": 1.0130000114440918,
                 "A2": 0.013000000268220901,
                 "A3": 0.0,

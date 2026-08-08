@@ -93,11 +93,12 @@ namespace GridKit
         bus.initialize();
         success *= load.initialize() == 0;
 
-        const auto* y  = load.y().getData();
-        ScalarT     p  = bus.Vr() * y[0] + bus.Vi() * y[1];
-        ScalarT     q  = bus.Vi() * y[0] - bus.Vr() * y[1];
-        success       *= isEqual(p, static_cast<ScalarT>(-Pnom), tol_);
-        success       *= isEqual(q, static_cast<ScalarT>(-Qnom), tol_);
+        bus.evaluateResidual();
+        load.evaluateResidual();
+        ScalarT p  = bus.Vr() * bus.Ir() + bus.Vi() * bus.Ii();
+        ScalarT q  = bus.Vi() * bus.Ir() - bus.Vr() * bus.Ii();
+        success   *= isEqual(p, static_cast<ScalarT>(-Pnom), tol_);
+        success   *= isEqual(q, static_cast<ScalarT>(-Qnom), tol_);
 
         // Reinitializing at a different voltage anchors the same dispatch
         // there.
@@ -106,8 +107,10 @@ namespace GridKit
         bus.y().setDataUpdated();
         success *= load.initialize() == 0;
 
-        p        = bus.Vr() * y[0] + bus.Vi() * y[1];
-        q        = bus.Vi() * y[0] - bus.Vr() * y[1];
+        bus.evaluateResidual();
+        load.evaluateResidual();
+        p        = bus.Vr() * bus.Ir() + bus.Vi() * bus.Ii();
+        q        = bus.Vi() * bus.Ir() - bus.Vr() * bus.Ii();
         success *= isEqual(p, static_cast<ScalarT>(-Pnom), tol_);
         success *= isEqual(q, static_cast<ScalarT>(-Qnom), tol_);
 
