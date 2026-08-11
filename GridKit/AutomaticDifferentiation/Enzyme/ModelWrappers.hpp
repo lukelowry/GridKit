@@ -8,6 +8,8 @@
 
 #include <vector>
 
+#include <GridKit/Smoothing.hpp>
+
 namespace GridKit
 {
   namespace Enzyme
@@ -17,11 +19,16 @@ namespace GridKit
       /**
        * @brief Model member function parameter keys
        *
+       * The Piecewise keys differentiate the same residual instantiated with
+       * Math::Smoothing::Piecewise primitives; models that support both
+       * forms select the key at runtime in evaluateJacobian().
        */
       enum class MemberFunctions
       {
         InternalResidual,
         InternalResidualWithSignal,
+        InternalResidualPiecewise,
+        InternalResidualWithSignalPiecewise,
         BusResidual,
         BusResidual11, //< Special case for branches that are connected to two buses
         BusResidual12, //< Special case for branches that are connected to two buses
@@ -92,6 +99,60 @@ namespace GridKit
                          ScalarT*       f)
         {
           model->evaluateInternalResidual(y, yp, wb, ws, f);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for InternalResidualPiecewise
+       *
+       */
+      template <typename ModelT>
+      struct ModelWrapper<ModelT, MemberFunctions::InternalResidualPiecewise>
+      {
+        using ScalarT = typename ModelT::ScalarT;
+
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[out] f - Internal residual
+         */
+        static void eval(ModelT*        model,
+                         const ScalarT* y,
+                         const ScalarT* yp,
+                         const ScalarT* wb,
+                         ScalarT*       f)
+        {
+          model->template evaluateInternalResidual<GridKit::Math::Smoothing::Piecewise>(y, yp, wb, f);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for InternalResidualWithSignalPiecewise
+       *
+       */
+      template <typename ModelT>
+      struct ModelWrapper<ModelT, MemberFunctions::InternalResidualWithSignalPiecewise>
+      {
+        using ScalarT = typename ModelT::ScalarT;
+
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[in] ws - Signal variables
+         * @param[out] f - Internal residual
+         */
+        static void eval(ModelT*        model,
+                         const ScalarT* y,
+                         const ScalarT* yp,
+                         const ScalarT* wb,
+                         const ScalarT* ws,
+                         ScalarT*       f)
+        {
+          model->template evaluateInternalResidual<GridKit::Math::Smoothing::Piecewise>(y, yp, wb, ws, f);
         }
       };
 

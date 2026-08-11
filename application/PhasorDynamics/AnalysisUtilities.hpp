@@ -18,6 +18,7 @@
 #include <nlohmann/json.hpp>
 
 #include <GridKit/Model/PhasorDynamics/SystemModelData.hpp>
+#include <GridKit/Smoothing.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
 #include <GridKit/Testing/TestHelpers.hpp>
 #include <GridKit/Utilities/Logger/Logger.hpp>
@@ -50,6 +51,17 @@ namespace GridKit
     };
 
     /**
+     * @brief Runtime CommonMath configuration for a study
+     */
+    struct MathOptions
+    {
+      /// functional form used by the CommonMath primitives
+      GridKit::Math::Smoothing mode{GridKit::Math::Smoothing::Smooth};
+      /// sharpness scale shared by both smoothing families
+      double                   mu{240.0};
+    };
+
+    /**
      * @brief Data defined in JSON file for parameterized study
      */
     struct StudyData
@@ -63,6 +75,8 @@ namespace GridKit
       double                                        tmax;
       /// IDA solver options
       AnalysisManager::Sundials::IdaOptions<double> ida;
+      /// runtime CommonMath smoothing configuration
+      MathOptions                                   math;
       /// bus where the study's bus fault is applied
       std::optional<std::size_t>                    fault_bus;
       /// index of the bus where the study's bus fault is applied
@@ -185,6 +199,41 @@ namespace GridKit
       }
     }
 
+    void parseMathOptions(const json& j, MathOptions& options)
+    {
+      if (!j.is_object())
+      {
+        throw std::invalid_argument("math must be a JSON object");
+      }
+
+      for (auto entry = j.begin(); entry != j.end(); ++entry)
+      {
+        if (entry.key() != "mode" && entry.key() != "mu")
+        {
+          throw std::invalid_argument("Unknown math option: " + entry.key());
+        }
+      }
+
+      if (j.contains("mode"))
+      {
+        using Smoothing = GridKit::Math::Smoothing;
+        const auto name = j.at("mode").get<std::string>();
+        const auto mode = magic_enum::enum_cast<Smoothing>(name,
+                                                           magic_enum::case_insensitive);
+        if (!mode.has_value())
+        {
+          throw std::invalid_argument("math.mode must be smooth or piecewise");
+        }
+        options.mode = *mode;
+      }
+
+      options.mu = j.value("mu", options.mu);
+      if (options.mu <= 0.0)
+      {
+        throw std::invalid_argument("math.mu must be positive");
+      }
+    }
+
     /**
      * @brief JSON parser implemntation for `StudyData`
      */
@@ -209,6 +258,10 @@ namespace GridKit
       if (j.contains("ida"))
       {
         parseIdaOptions(j.at("ida"), c.ida);
+      }
+      if (j.contains("math"))
+      {
+        parseMathOptions(j.at("math"), c.math);
       }
       if (j.contains("fault_bus"))
       {

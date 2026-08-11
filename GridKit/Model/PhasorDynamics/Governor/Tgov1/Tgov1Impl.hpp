@@ -353,6 +353,7 @@ namespace GridKit
        *
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int Tgov1<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT*                  y,
           const ScalarT*                  yp,
@@ -381,7 +382,7 @@ namespace GridKit
 
         f[PTX] = -T3_ * pturb_dot - pturb + pv + T2_ * pv_dot;
         f[PV]  = -T1_ * pv_dot
-                + Math::antiwindup(pv, valve_rate, Pvmin_, Pvmax_);
+                + Math::antiwindup<M>(pv, valve_rate, Pvmin_, Pvmax_);
         f[PM] = -toComponentBase(pmech) + pturb - Dt_ * omega;
 
         return 0;
@@ -418,7 +419,14 @@ namespace GridKit
         const auto* y  = y_.getData();
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
 
         f_.setDataUpdated();
 

@@ -5,6 +5,8 @@
 #include <optional>
 #include <string>
 
+#include <magic_enum/magic_enum.hpp>
+
 #include <GridKit/Model/PhasorDynamics/BusFault/BusFault.hpp>
 #include <GridKit/Model/PhasorDynamics/SystemModel.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
@@ -30,6 +32,11 @@ int main(int argc, const char* argv[])
   checkCommandLine(argc, "DynamicSimulation");
   auto study = parseStudyData(argv[1]);
 
+  // Configure the CommonMath primitives before any component is constructed
+  // or initialized so residuals and exact-init inverses agree on one form.
+  GridKit::Math::SMOOTHING_MODE = study.math.mode;
+  GridKit::Math::MU<real_type>  = study.math.mu;
+
   if (study.fault_bus && !study.model_data.bus_fault.empty())
   {
     study.model_data.bus_fault.front().buses[BusFaultBuses::bus] = *study.fault_bus;
@@ -43,6 +50,8 @@ int main(int argc, const char* argv[])
             << "buses=" << study.model_data.bus.size() << '\n'
             << "states=" << sys.size() << '\n'
             << "jacobian_nnz=" << sys.nnz() << '\n'
+            << "math_mode=" << magic_enum::enum_name(study.math.mode) << '\n'
+            << "math_mu=" << study.math.mu << '\n'
             << "GRIDKIT_SYSTEM_END\n";
 
   // Set up simulation

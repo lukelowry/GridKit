@@ -11,6 +11,7 @@
 
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
+#include <GridKit/Smoothing.hpp>
 
 // Forward declarations
 namespace GridKit
@@ -111,10 +112,15 @@ namespace GridKit
         }
 
       public:
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT*, const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
 
       private:
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         // Input parameters
         RealT Trate_{static_cast<RealT>(100.0)};
         RealT R_{static_cast<RealT>(0.05)};

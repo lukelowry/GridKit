@@ -365,6 +365,28 @@ namespace GridKit
        */
       TestOutcome jacobian()
       {
+        return jacobianForMode("jacobian");
+      }
+
+      /**
+       * A test case to verify Jacobian values with piecewise primitives
+       *
+       * Runs the same DependencyTracking-vs-Enzyme comparison as jacobian()
+       * with the runtime smoothing mode set to Piecewise, exercising the
+       * fmax-based residual through both autodiff paths.
+       */
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
+      }
+
+    private:
+      TestOutcome jacobianForMode(const char* report_name)
+      {
         TestStatus success = true;
 
         using BusType     = PhasorDynamics::BusData<ScalarT, IdxT>::BusType;
@@ -412,10 +434,9 @@ namespace GridKit
         {
           success *= (GridKit::Testing::isEqual(dependency_tracking_jacobian[i], enzyme_jacobian[i], tol));
         }
-        return success.report(__func__);
+        return success.report(report_name);
       }
 
-    private:
       std::vector<DependencyTracking::Variable::DependencyMap> DependencyTrackingJacobian(
           PhasorDynamics::BusData<ScalarT, IdxT>    busdata,
           PhasorDynamics::GenrouData<ScalarT, IdxT> gendata)
