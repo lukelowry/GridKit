@@ -5,12 +5,14 @@
    Name               | Value
  ---------------------|-------------------------------------------------------
   `system_model_file` | Path to the system model file[^1]
-  `dt_monitor`        | Monitor output time interval for recorded simulation results (default: 0, no intermediate monitoring)[^2]
+  `dt_monitor`        | Monitor output time interval for recorded simulation results, 0 for no intermediate monitoring, or a negative number to output at solver-selected steps (default: 0)[^2]
   `tmax`              | A floating-point value for max time
   `ida`               | IDA solver options (optional; see [IDA options](#ida-options))
   `fault_bus`         | Bus where the study's bus fault is applied (optional; defaults to the bus in the system model)
   `events`            | An array of event groups (see [Events](#events) below)
-  `output_file`       | Path to output (CSV) file (optional)
+  `output_file`       | Path to monitor output (CSV) file; omitted means monitors are disabled (optional)
+  `ida_stats`         | Optional path to IDA aggregate statistics JSON
+  `ida_steps`         | Optional path to IDA accepted-step JSON
   `reference_file`    | A string containing the name of the case (optional)
   `error_type`        | One of { "relative" (default), "absolute" }
   `error_tolerance`   | A floating-point value for highest allowable total error (default: 1.0e-4)

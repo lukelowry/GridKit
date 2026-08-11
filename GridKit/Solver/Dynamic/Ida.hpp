@@ -2,9 +2,12 @@
 #pragma once
 
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <nvector/nvector_serial.h>
@@ -30,13 +33,36 @@ namespace AnalysisManager
 
     struct IdaStats
     {
-      long int num_steps_                       = 0;
-      long int num_residual_evals_              = 0;
-      long int num_jacobian_evals_              = 0;
-      long int num_linear_decompositions_       = 0;
-      long int num_error_test_fails_            = 0;
-      long int num_nonlinear_iters_             = 0;
-      long int num_nonlinear_convergence_fails_ = 0;
+      std::string sundials_version_;
+      int         sundials_logging_level_          = 0;
+      long int    num_steps_                       = 0;
+      long int    num_residual_evals_              = 0;
+      long int    num_linear_solver_setups_        = 0;
+      long int    num_error_test_fails_            = 0;
+      long int    num_backtrack_operations_        = 0;
+      long int    num_nonlinear_iters_             = 0;
+      long int    num_nonlinear_convergence_fails_ = 0;
+      long int    num_nonlinear_step_fails_        = 0;
+      long int    num_jacobian_evals_              = 0;
+      long int    last_jacobian_step_              = 0;
+      long int    num_linear_iters_                = 0;
+      long int    num_linear_convergence_fails_    = 0;
+      long int    num_linear_residual_evals_       = 0;
+      long int    num_preconditioner_evals_        = 0;
+      long int    num_preconditioner_solves_       = 0;
+      long int    num_jtimes_setup_evals_          = 0;
+      long int    num_jtimes_evals_                = 0;
+      long int    last_linear_flag_                = 0;
+      std::string last_linear_flag_name_;
+      int         last_order_          = 0;
+      int         current_order_       = 0;
+      sunrealtype actual_initial_step_ = 0.0;
+      sunrealtype last_step_           = 0.0;
+      sunrealtype current_step_        = 0.0;
+      sunrealtype current_time_        = 0.0;
+      sunrealtype current_cj_          = 0.0;
+      sunrealtype jacobian_time_       = 0.0;
+      sunrealtype jacobian_cj_         = 0.0;
 
       IdaStats&   operator+=(const IdaStats& other);
       std::string report() const;
@@ -104,6 +130,18 @@ namespace AnalysisManager
       std::optional<KluOrdering> klu_ordering;
     };
 
+    enum class IdaLogLevel
+    {
+      Error   = 1,
+      Warning = 2
+    };
+
+    struct IdaLogOptions
+    {
+      std::filesystem::path file;
+      IdaLogLevel           level{IdaLogLevel::Warning};
+    };
+
     template <class ScalarT, typename IdxT>
     class Ida : public DynamicSolver<ScalarT, IdxT>
     {
@@ -114,9 +152,12 @@ namespace AnalysisManager
       using VectorT    = typename EvaluatorT::VectorT;
 
     public:
-      using Options = IdaOptions<RealT>;
+      using Options              = IdaOptions<RealT>;
+      using OutputCallback       = std::function<void(RealT)>;
+      using InternalStepCallback = std::function<void(const IdaStats&)>;
 
-      Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model);
+      Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model,
+          std::optional<IdaLogOptions>              log_options = {});
       ~Ida();
 
       int configureSimulation();
@@ -126,9 +167,19 @@ namespace AnalysisManager
 #endif
       int configureLinearSolverDense();
       int getDefaultInitialCondition();
-      int initializeSimulation(RealT t0, bool findConsistent = true);
+      int setMaxOrder(int max_order);
+      int setMaxStep(RealT hmax);
+      int initializeSimulation(RealT                t0,
+                               bool                 findConsistent  = true,
+                               std::optional<RealT> consistent_tout = {});
 
-      int runSimulation(RealT tf, RealT dt_monitor = 0, std::optional<std::function<void(RealT)>> step_callback = {});
+      int runSimulation(RealT                         tf,
+                        std::optional<RealT>          dt_monitor    = RealT{0},
+                        std::optional<OutputCallback> step_callback = {});
+      int runSimulationWithStepHistory(RealT                         tf,
+                                       std::optional<RealT>          dt_monitor,
+                                       const InternalStepCallback&   internal_step_callback,
+                                       std::optional<OutputCallback> step_callback = {});
       int deleteSimulation();
 
       int configureQuadrature();
@@ -293,7 +344,8 @@ namespace AnalysisManager
       N_Vector ypB_{}; ///< Adjoint solution derivatives vector
       N_Vector qB_{};  ///< Backward integrand vector
 
-      int backwardID_{};
+      int       backwardID_{};
+      SUNLogger logger_{};
 
       Options options_{};
 
@@ -315,9 +367,12 @@ namespace AnalysisManager
 
     private:
       // static void copyMat(Model::Evaluator::Mat& J, SlsMat Jida);
+      void        configureLogger(const IdaLogOptions& options);
       static void copyVec(const N_Vector x, VectorT& y);
       static void copyVec(const VectorT& x, N_Vector y);
       static void copyVec(const std::vector<bool>& x, N_Vector y);
+      void        interpolateSolution(RealT t);
+      void        publishOutput(RealT t, const std::optional<OutputCallback>& step_callback);
 
       // int check_flag(void *flagvalue, const char *funcname, int opt);
       static void checkAllocation(void* v, const char* functionName);
