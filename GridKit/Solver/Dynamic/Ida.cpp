@@ -2,11 +2,13 @@
 #include "Ida.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 
 #include <idas/idas.h>
 #include <idas/idas_ls.h>
@@ -19,6 +21,72 @@ namespace AnalysisManager
 
   namespace Sundials
   {
+    namespace
+    {
+      using ProfileClock = std::chrono::steady_clock;
+
+      struct ProfileData
+      {
+        double   consistent_ic_seconds      = 0.0;
+        double   ida_solve_seconds          = 0.0;
+        double   residual_seconds           = 0.0;
+        double   residual_input_seconds     = 0.0;
+        double   residual_model_seconds     = 0.0;
+        double   residual_output_seconds    = 0.0;
+        double   jacobian_seconds           = 0.0;
+        double   jacobian_input_seconds     = 0.0;
+        double   jacobian_model_seconds     = 0.0;
+        double   jacobian_structure_seconds = 0.0;
+        double   jacobian_values_seconds    = 0.0;
+        double   linear_setup_seconds       = 0.0;
+        double   linear_solve_seconds       = 0.0;
+        double   state_update_seconds       = 0.0;
+        double   monitor_print_seconds      = 0.0;
+        long int consistent_ic_calls        = 0;
+        long int ida_solve_calls            = 0;
+        long int residual_calls             = 0;
+        long int jacobian_calls             = 0;
+        long int linear_setup_calls         = 0;
+        long int linear_solve_calls         = 0;
+        long int state_update_calls         = 0;
+        long int monitor_print_calls        = 0;
+      };
+
+      ProfileData profile;
+
+      double elapsedSeconds(ProfileClock::time_point start)
+      {
+        return std::chrono::duration<double>(ProfileClock::now() - start).count();
+      }
+
+#ifdef GRIDKIT_ENABLE_SUNDIALS_SPARSE
+      int profileKluSetup(SUNLinearSolver solver, SUNMatrix matrix)
+      {
+        const auto start              = ProfileClock::now();
+        const int  status             = SUNLinSolSetup_KLU(solver, matrix);
+        profile.linear_setup_seconds += elapsedSeconds(start);
+        ++profile.linear_setup_calls;
+        return status;
+      }
+
+      int profileKluSolve(SUNLinearSolver solver,
+                          SUNMatrix       matrix,
+                          N_Vector        solution,
+                          N_Vector        right_hand_side,
+                          sunrealtype     tolerance)
+      {
+        const auto start              = ProfileClock::now();
+        const int  status             = SUNLinSolSolve_KLU(solver,
+                                              matrix,
+                                              solution,
+                                              right_hand_side,
+                                              tolerance);
+        profile.linear_solve_seconds += elapsedSeconds(start);
+        ++profile.linear_solve_calls;
+        return status;
+      }
+#endif
+    } // namespace
 
     template <class ScalarT, typename IdxT>
     Ida<ScalarT, IdxT>::Ida(GridKit::Model::Evaluator<ScalarT, IdxT>* model)
@@ -61,6 +129,8 @@ namespace AnalysisManager
     {
       int retval = 0;
 
+      validateOptions(options_);
+
       // Allocate solution vectors
       yy_ = N_VNew_Serial(static_cast<sunindextype>(model_->size()), context_);
       checkAllocation((void*) yy_, "N_VNew_Serial");
@@ -96,7 +166,13 @@ namespace AnalysisManager
       retval = IDASetId(solver_, tag_);
       checkOutput(retval, "IDASetId");
 
-      setIDAOptions(solver_, time_step_, rel_tol_, abs_tol_override_, max_steps_, suppress_alg_);
+      setIDAOptions(solver_,
+                    options_.fixed_step.value_or(0),
+                    options_.rel_tol,
+                    options_.abs_tol,
+                    options_.max_num_steps.value_or(0),
+                    options_.suppress_alg.value_or(false));
+      applyIDAOptions(solver_, options_);
 
       // Set up linear solver
       return this->configureLinearSolver();
@@ -124,9 +200,17 @@ namespace AnalysisManager
       }
       else
       {
+        if (options_.klu_ordering.has_value())
+        {
+          throw std::invalid_argument("ida.klu_ordering requires the KLU linear solver");
+        }
         this->configureLinearSolverDense();
       }
 #else
+      if (options_.klu_ordering.has_value())
+      {
+        throw std::invalid_argument("ida.klu_ordering requires GridKit to be built with KLU support");
+      }
       /// Todo - Improve error handling capabilities and hasJacobian_ ownership
       if (model_->hasJacobian())
       {
@@ -166,11 +250,24 @@ namespace AnalysisManager
       linearSolver_ = SUNLinSol_KLU(yy_, JacobianMat_, context_);
       checkAllocation((void*) linearSolver_, "SUNLinSol_KLU");
 
+      // Power system Jacobians are structurally near-symmetric network matrices
+      // that form a single irreducible block, so AMD on A+A' is the appropriate
+      // fill-reducing ordering. SUNDIALS defaults to COLAMD, which minimizes
+      // fill for A'A, and produces both more fill and a worse growth rate here.
+      const KluOrdering ordering = options_.klu_ordering.value_or(KluOrdering::AMD);
+      retval                     = SUNLinSol_KLUSetOrdering(linearSolver_, static_cast<int>(ordering));
+      checkOutput(retval, "SUNLinSol_KLUSetOrdering");
+
+      linearSolver_->ops->setup = profileKluSetup;
+      linearSolver_->ops->solve = profileKluSolve;
+
       retval = IDASetLinearSolver(solver_, linearSolver_, JacobianMat_);
       checkOutput(retval, "IDASetLinearSolver");
 
       retval = IDASetJacFn(solver_, this->Jac);
       checkOutput(retval, "IDASetJacFn");
+
+      applyLinearSolverOptions(solver_, options_);
 
       return retval;
     }
@@ -197,6 +294,8 @@ namespace AnalysisManager
 
       retval = IDASetLinearSolver(solver_, linearSolver_, JacobianMat_);
       checkOutput(retval, "IDASetLinearSolver");
+
+      applyLinearSolverOptions(solver_, options_);
 
       return retval;
     }
@@ -243,7 +342,10 @@ namespace AnalysisManager
         if (tag_)
           initType = IDA_YA_YDP_INIT;
 
-        retval = IDACalcIC(solver_, initType, t0 + 0.1);
+        const auto start               = ProfileClock::now();
+        retval                         = IDACalcIC(solver_, initType, t0 + 0.1);
+        profile.consistent_ic_seconds += elapsedSeconds(start);
+        ++profile.consistent_ic_calls;
         checkOutput(retval, "IDACalcIC");
 
         retval = IDAGetConsistentIC(solver_, yy_, yp_);
@@ -310,6 +412,11 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     int Ida<ScalarT, IdxT>::runSimulation(RealT tf, RealT dt_monitor, const std::optional<std::function<void(RealT)>> step_callback)
     {
+      if (trace_enabled_)
+      {
+        return runSimulationTraced(tf, dt_monitor);
+      }
+
       int retval = 0;
       int nsteps = getMonitorStepCount(tf, dt_monitor);
 
@@ -317,7 +424,10 @@ namespace AnalysisManager
       {
         const RealT tout = getMonitorTime(tf, dt_monitor, i, nsteps);
         RealT       tret;
-        retval = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
+        const auto  solve_start    = ProfileClock::now();
+        retval                     = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_NORMAL);
+        profile.ida_solve_seconds += elapsedSeconds(solve_start);
+        ++profile.ida_solve_calls;
         checkOutput(retval, "IDASolve");
 
         if (step_callback.has_value() || model_->monitoring())
@@ -325,11 +435,17 @@ namespace AnalysisManager
           // The callback may try to observe upated values in the model, so we
           // should update them here (At this point, the model's values are one
           // internal integrator step out of date)
+          const auto update_start = ProfileClock::now();
           updateModelState(tret);
+          profile.state_update_seconds += elapsedSeconds(update_start);
+          ++profile.state_update_calls;
 
           if (model_->monitoring())
           {
+            const auto monitor_start = ProfileClock::now();
             model_->printMonitoredVariables();
+            profile.monitor_print_seconds += elapsedSeconds(monitor_start);
+            ++profile.monitor_print_calls;
           }
           if (step_callback.has_value())
           {
@@ -338,9 +454,82 @@ namespace AnalysisManager
         }
       }
 
+      const auto update_start = ProfileClock::now();
       updateModelState(tf);
+      profile.state_update_seconds += elapsedSeconds(update_start);
+      ++profile.state_update_calls;
 
       return retval;
+    }
+
+    /**
+     * @brief Run to `tf` one internal step at a time, recording integrator
+     * state after each step.
+     *
+     * No stop time is set on the solver, so `IDA_ONE_STEP` follows the same
+     * error-controlled step sequence `IDA_NORMAL` would and the trace
+     * describes an untraced run. The monitor targets are still walked in
+     * order because IDA sizes its first step from the first `tout` it is
+     * given. The last step lands past `tf`, so the model is handed the
+     * interpolated solution at `tf` to leave it where the monitored path
+     * would.
+     */
+    template <class ScalarT, typename IdxT>
+    int Ida<ScalarT, IdxT>::runSimulationTraced(RealT tf, RealT dt_monitor)
+    {
+      int   retval = 0;
+      int   nsteps = getMonitorStepCount(tf, dt_monitor);
+      RealT tret   = t_init_;
+
+      for (int i = 1; i <= nsteps; i++)
+      {
+        const RealT tout = getMonitorTime(tf, dt_monitor, i, nsteps);
+        while (tret < tout)
+        {
+          const auto solve_start     = ProfileClock::now();
+          retval                     = IDASolve(solver_, tout, &tret, yy_, yp_, IDA_ONE_STEP);
+          profile.ida_solve_seconds += elapsedSeconds(solve_start);
+          ++profile.ida_solve_calls;
+          checkOutput(retval, "IDASolve");
+          recordStep(tret);
+        }
+      }
+
+      retval = IDAGetDky(solver_, tf, 0, yy_);
+      checkOutput(retval, "IDAGetDky");
+      retval = IDAGetDky(solver_, tf, 1, yp_);
+      checkOutput(retval, "IDAGetDky");
+
+      const auto update_start = ProfileClock::now();
+      updateModelState(tf);
+      profile.state_update_seconds += elapsedSeconds(update_start);
+      ++profile.state_update_calls;
+
+      return retval;
+    }
+
+    /**
+     * @brief Append the integrator's current step size, order and work
+     * counters to the trace.
+     */
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::recordStep(RealT t)
+    {
+      auto& record   = step_trace_.emplace_back();
+      record.segment = trace_segment_;
+      record.t       = t;
+
+      IDAGetLastStep(solver_, &record.h);
+      IDAGetCurrentStep(solver_, &record.h_next);
+      IDAGetLastOrder(solver_, &record.order);
+      IDAGetCurrentOrder(solver_, &record.order_next);
+      IDAGetNumSteps(solver_, &record.num_steps);
+      IDAGetNumResEvals(solver_, &record.num_residual_evals);
+      IDAGetNumJacEvals(solver_, &record.num_jacobian_evals);
+      IDAGetNumErrTestFails(solver_, &record.num_error_test_fails);
+      IDAGetNonlinSolvStats(solver_,
+                            &record.num_nonlinear_iters,
+                            &record.num_nonlinear_convergence_fails);
     }
 
     /**
@@ -710,12 +899,24 @@ namespace AnalysisManager
     {
       GridKit::Model::Evaluator<ScalarT, IdxT>* model = static_cast<GridKit::Model::Evaluator<ScalarT, IdxT>*>(user_data);
 
+      const auto residual_start = ProfileClock::now();
+
+      const auto input_start = ProfileClock::now();
       copyVec(yy, model->y());
       copyVec(yp, model->yp());
       model->updateTime(tres, 0.0);
+      profile.residual_input_seconds += elapsedSeconds(input_start);
 
+      const auto model_start = ProfileClock::now();
       model->evaluateResidual();
+      profile.residual_model_seconds += elapsedSeconds(model_start);
+
+      const auto output_start = ProfileClock::now();
       copyVec(model->getResidual(), rr);
+      profile.residual_output_seconds += elapsedSeconds(output_start);
+
+      profile.residual_seconds += elapsedSeconds(residual_start);
+      ++profile.residual_calls;
 
       return 0;
     }
@@ -733,17 +934,23 @@ namespace AnalysisManager
     {
       GridKit::Model::Evaluator<ScalarT, IdxT>* model = static_cast<GridKit::Model::Evaluator<ScalarT, IdxT>*>(user_data);
 
+      const auto jacobian_start = ProfileClock::now();
+
+      const auto input_start = ProfileClock::now();
       copyVec(yy, model->y());
       copyVec(yp, model->yp());
       model->updateTime(t, cj);
+      profile.jacobian_input_seconds += elapsedSeconds(input_start);
 
+      const auto model_start = ProfileClock::now();
       model->evaluateJacobian();
+      profile.jacobian_model_seconds += elapsedSeconds(model_start);
 
       using CsrMatrixT = GridKit::LinearAlgebra::CsrMatrix<RealT, IdxT>;
       CsrMatrixT* Jac  = model->getCsrJacobian();
 
-      SUNMatZero(J);
-
+      // No zeroing pass: the copies below overwrite every index and every value
+      // the matrix holds, so anything left in it is dead before it is read.
       sunindextype* sun_row_ptrs = SUNSparseMatrix_IndexPointers(J);
       sunindextype* sun_cols     = SUNSparseMatrix_IndexValues(J);
       RealT*        sun_vals     = SUNSparseMatrix_Data(J);
@@ -757,9 +964,17 @@ namespace AnalysisManager
       RealT* vals     = Jac->getValues();
 
       // Copy data from model jac to sundials
+      const auto structure_start = ProfileClock::now();
       std::copy(row_ptrs, row_ptrs + n + 1, sun_row_ptrs);
       std::copy(cols, cols + nnz, sun_cols);
+      profile.jacobian_structure_seconds += elapsedSeconds(structure_start);
+
+      const auto values_start = ProfileClock::now();
       std::copy(vals, vals + nnz, sun_vals);
+      profile.jacobian_values_seconds += elapsedSeconds(values_start);
+
+      profile.jacobian_seconds += elapsedSeconds(jacobian_start);
+      ++profile.jacobian_calls;
 
       return 0;
     }
@@ -955,6 +1170,43 @@ namespace AnalysisManager
       checkOutput(retval, "IDAPrintAllStats");
     }
 
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::printPerformanceStats() const
+    {
+      const auto flags     = std::cout.flags();
+      const auto precision = std::cout.precision();
+
+      std::cout << std::fixed << std::setprecision(6)
+                << "\nGRIDKIT_PROFILE_BEGIN\n"
+                << "consistent_ic_calls=" << profile.consistent_ic_calls << '\n'
+                << "consistent_ic_seconds=" << profile.consistent_ic_seconds << '\n'
+                << "ida_solve_calls=" << profile.ida_solve_calls << '\n'
+                << "ida_solve_seconds=" << profile.ida_solve_seconds << '\n'
+                << "residual_calls=" << profile.residual_calls << '\n'
+                << "residual_seconds=" << profile.residual_seconds << '\n'
+                << "residual_input_seconds=" << profile.residual_input_seconds << '\n'
+                << "residual_model_seconds=" << profile.residual_model_seconds << '\n'
+                << "residual_output_seconds=" << profile.residual_output_seconds << '\n'
+                << "jacobian_calls=" << profile.jacobian_calls << '\n'
+                << "jacobian_seconds=" << profile.jacobian_seconds << '\n'
+                << "jacobian_input_seconds=" << profile.jacobian_input_seconds << '\n'
+                << "jacobian_model_seconds=" << profile.jacobian_model_seconds << '\n'
+                << "jacobian_structure_seconds=" << profile.jacobian_structure_seconds << '\n'
+                << "jacobian_values_seconds=" << profile.jacobian_values_seconds << '\n'
+                << "linear_setup_calls=" << profile.linear_setup_calls << '\n'
+                << "linear_setup_seconds=" << profile.linear_setup_seconds << '\n'
+                << "linear_solve_calls=" << profile.linear_solve_calls << '\n'
+                << "linear_solve_seconds=" << profile.linear_solve_seconds << '\n'
+                << "state_update_calls=" << profile.state_update_calls << '\n'
+                << "state_update_seconds=" << profile.state_update_seconds << '\n'
+                << "monitor_print_calls=" << profile.monitor_print_calls << '\n'
+                << "monitor_print_seconds=" << profile.monitor_print_seconds << '\n'
+                << "GRIDKIT_PROFILE_END\n";
+
+      std::cout.flags(flags);
+      std::cout.precision(precision);
+    }
+
     /**
      * @brief Accumulate another stats object into this one, allowing for stats to be kept
      *        across multiple simulations with IDA
@@ -963,6 +1215,7 @@ namespace AnalysisManager
     {
       num_steps_                       += other.num_steps_;
       num_residual_evals_              += other.num_residual_evals_;
+      num_jacobian_evals_              += other.num_jacobian_evals_;
       num_linear_decompositions_       += other.num_linear_decompositions_;
       num_error_test_fails_            += other.num_error_test_fails_;
       num_nonlinear_iters_             += other.num_nonlinear_iters_;
@@ -982,9 +1235,10 @@ namespace AnalysisManager
       int               stat_width  = 12;
       std::stringstream out;
 
-      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
-          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
-          << std::setw(label_width) << "Linear decompositions" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
+      out << std::setw(label_width) << "Steps" << " : " << std::setw(stat_width) << num_steps_ << '\n'
+          << std::setw(label_width) << "Residual evals" << " : " << std::setw(stat_width) << num_residual_evals_ << '\n'
+          << std::setw(label_width) << "Jacobian evals" << " : " << std::setw(stat_width) << num_jacobian_evals_ << '\n'
+          << std::setw(label_width) << "Linear solver setups" << " : " << std::setw(stat_width) << num_linear_decompositions_ << '\n'
           << std::setw(label_width) << "Error test failures" << " : " << std::setw(stat_width) << num_error_test_fails_ << '\n'
           << std::setw(label_width) << "Nonlinear iterations" << " : " << std::setw(stat_width) << num_nonlinear_iters_ << '\n'
           << std::setw(label_width) << "Nonlinear convergence failures" << " : " << std::setw(stat_width) << num_nonlinear_convergence_fails_;
@@ -1018,6 +1272,9 @@ namespace AnalysisManager
                                          &dummy2,
                                          &dummy2);
       checkOutput(retval, "IDAGetIntegratorStats");
+
+      retval = IDAGetNumJacEvals(solver_, &stats.num_jacobian_evals_);
+      checkOutput(retval, "IDAGetNumJacEvals");
 
       retval = IDAGetNonlinSolvStats(solver_, &stats.num_nonlinear_iters_, &stats.num_nonlinear_convergence_fails_);
       checkOutput(retval, "IDAGetNonlinSolvStats");
@@ -1069,7 +1326,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setFixedStep(ScalarT time_step)
     {
-      time_step_ = time_step;
+      options_.fixed_step = time_step > 0 ? std::optional<RealT>(time_step) : std::nullopt;
     }
 
     /**
@@ -1101,8 +1358,8 @@ namespace AnalysisManager
     void Ida<ScalarT, IdxT>::setTolerance(ScalarT rel_tol,
                                           ScalarT abs_tol_override)
     {
-      rel_tol_          = rel_tol;
-      abs_tol_override_ = abs_tol_override;
+      options_.rel_tol = rel_tol;
+      options_.abs_tol = abs_tol_override;
     }
 
     /**
@@ -1163,6 +1420,16 @@ namespace AnalysisManager
     }
 
     /**
+     * @brief Set forward IDA and linear solver options
+     */
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::setOptions(const Options& options)
+    {
+      validateOptions(options);
+      options_ = options;
+    }
+
+    /**
      * @brief Set whether IDA suppresses local error tests on algebraic variables
      *
      * @param suppress If true, algebraic variables are excluded from IDA's
@@ -1173,7 +1440,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setSuppressAlgebraicErrors(bool suppress)
     {
-      suppress_alg_ = suppress;
+      options_.suppress_alg = suppress;
     }
 
     /**
@@ -1201,7 +1468,7 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setMaxSteps(IdxT max_steps)
     {
-      max_steps_ = max_steps;
+      options_.max_num_steps = static_cast<long int>(max_steps);
     }
 
     /**
@@ -1214,7 +1481,182 @@ namespace AnalysisManager
     template <class ScalarT, typename IdxT>
     void Ida<ScalarT, IdxT>::setBackwardMaxSteps(IdxT max_steps)
     {
-      backward_max_steps_ = max_steps;
+      backward_max_steps_ = static_cast<long int>(max_steps);
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::validateOptions(const Options& options)
+    {
+      if (options.rel_tol <= 0 || options.abs_tol < 0)
+      {
+        throw std::invalid_argument("ida tolerances require rel_tol > 0 and abs_tol >= 0");
+      }
+
+      if (options.fixed_step.has_value()
+          && (options.init_step.has_value()
+              || options.min_step.has_value()
+              || options.max_step.has_value()))
+      {
+        throw std::invalid_argument("ida.fixed_step cannot be combined with init_step, min_step, or max_step");
+      }
+
+      if ((options.fixed_step.has_value() && *options.fixed_step <= 0)
+          || (options.init_step.has_value() && *options.init_step <= 0)
+          || (options.min_step.has_value() && *options.min_step <= 0)
+          || (options.max_step.has_value() && *options.max_step <= 0))
+      {
+        throw std::invalid_argument("specified IDA step sizes must be positive");
+      }
+
+      if (options.min_step.has_value()
+          && options.max_step.has_value()
+          && *options.min_step > *options.max_step)
+      {
+        throw std::invalid_argument("ida.min_step cannot exceed ida.max_step");
+      }
+
+      if (options.max_order.has_value()
+          && (*options.max_order < 1 || *options.max_order > 5))
+      {
+        throw std::invalid_argument("ida.max_order must be between 1 and 5");
+      }
+
+      if (options.fixed_step.has_value()
+          && options.max_order.has_value()
+          && *options.max_order > 2)
+      {
+        throw std::invalid_argument("ida.max_order cannot exceed 2 with fixed_step");
+      }
+
+      if (options.fixed_step.has_value() && options.nonlin_conv_coef.has_value())
+      {
+        throw std::invalid_argument("ida.nonlin_conv_coef is controlled by fixed_step");
+      }
+
+      if ((options.max_num_steps.has_value() && *options.max_num_steps <= 0)
+          || (options.max_err_test_fails.has_value() && *options.max_err_test_fails <= 0)
+          || (options.max_nonlin_iters.has_value() && *options.max_nonlin_iters <= 0)
+          || (options.max_conv_fails.has_value() && *options.max_conv_fails <= 0)
+          || (options.max_num_steps_ic.has_value() && *options.max_num_steps_ic <= 0)
+          || (options.max_num_jacs_ic.has_value() && *options.max_num_jacs_ic <= 0)
+          || (options.max_num_iters_ic.has_value() && *options.max_num_iters_ic <= 0)
+          || (options.max_backs_ic.has_value() && *options.max_backs_ic <= 0))
+      {
+        throw std::invalid_argument("specified IDA iteration limits must be positive");
+      }
+
+      if ((options.nonlin_conv_coef.has_value() && *options.nonlin_conv_coef <= 0)
+          || (options.nonlin_conv_coef_ic.has_value() && *options.nonlin_conv_coef_ic <= 0)
+          || (options.step_tolerance_ic.has_value() && *options.step_tolerance_ic <= 0))
+      {
+        throw std::invalid_argument("specified IDA convergence settings must be positive");
+      }
+
+      if (options.delta_cj_lsetup.has_value()
+          && (*options.delta_cj_lsetup < 0 || *options.delta_cj_lsetup >= 1))
+      {
+        throw std::invalid_argument("ida.delta_cj_lsetup must be in [0, 1)");
+      }
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::applyIDAOptions(void* mem, const Options& options)
+    {
+      int retval = 0;
+
+      if (options.init_step.has_value())
+      {
+        retval = IDASetInitStep(mem, *options.init_step);
+        checkOutput(retval, "IDASetInitStep");
+      }
+      if (options.min_step.has_value())
+      {
+        retval = IDASetMinStep(mem, *options.min_step);
+        checkOutput(retval, "IDASetMinStep");
+      }
+      if (options.max_step.has_value())
+      {
+        retval = IDASetMaxStep(mem, *options.max_step);
+        checkOutput(retval, "IDASetMaxStep");
+      }
+      if (options.max_order.has_value())
+      {
+        retval = IDASetMaxOrd(mem, *options.max_order);
+        checkOutput(retval, "IDASetMaxOrd");
+      }
+      if (options.max_err_test_fails.has_value())
+      {
+        retval = IDASetMaxErrTestFails(mem, *options.max_err_test_fails);
+        checkOutput(retval, "IDASetMaxErrTestFails");
+      }
+      if (options.max_nonlin_iters.has_value())
+      {
+        retval = IDASetMaxNonlinIters(mem, *options.max_nonlin_iters);
+        checkOutput(retval, "IDASetMaxNonlinIters");
+      }
+      if (options.max_conv_fails.has_value())
+      {
+        retval = IDASetMaxConvFails(mem, *options.max_conv_fails);
+        checkOutput(retval, "IDASetMaxConvFails");
+      }
+      if (options.nonlin_conv_coef.has_value())
+      {
+        retval = IDASetNonlinConvCoef(mem, *options.nonlin_conv_coef);
+        checkOutput(retval, "IDASetNonlinConvCoef");
+      }
+      if (options.max_num_steps_ic.has_value())
+      {
+        retval = IDASetMaxNumStepsIC(mem, *options.max_num_steps_ic);
+        checkOutput(retval, "IDASetMaxNumStepsIC");
+      }
+      if (options.max_num_jacs_ic.has_value())
+      {
+        retval = IDASetMaxNumJacsIC(mem, *options.max_num_jacs_ic);
+        checkOutput(retval, "IDASetMaxNumJacsIC");
+      }
+      if (options.max_num_iters_ic.has_value())
+      {
+        retval = IDASetMaxNumItersIC(mem, *options.max_num_iters_ic);
+        checkOutput(retval, "IDASetMaxNumItersIC");
+      }
+      if (options.max_backs_ic.has_value())
+      {
+        retval = IDASetMaxBacksIC(mem, *options.max_backs_ic);
+        checkOutput(retval, "IDASetMaxBacksIC");
+      }
+      if (options.line_search_off_ic.has_value())
+      {
+        retval = IDASetLineSearchOffIC(mem, *options.line_search_off_ic ? SUNTRUE : SUNFALSE);
+        checkOutput(retval, "IDASetLineSearchOffIC");
+      }
+      if (options.nonlin_conv_coef_ic.has_value())
+      {
+        retval = IDASetNonlinConvCoefIC(mem, *options.nonlin_conv_coef_ic);
+        checkOutput(retval, "IDASetNonlinConvCoefIC");
+      }
+      if (options.step_tolerance_ic.has_value())
+      {
+        retval = IDASetStepToleranceIC(mem, *options.step_tolerance_ic);
+        checkOutput(retval, "IDASetStepToleranceIC");
+      }
+    }
+
+    template <class ScalarT, typename IdxT>
+    void Ida<ScalarT, IdxT>::applyLinearSolverOptions(void* mem, const Options& options)
+    {
+      int retval = 0;
+
+      if (options.linear_solution_scaling.has_value())
+      {
+        retval = IDASetLinearSolutionScaling(mem,
+                                             *options.linear_solution_scaling ? SUNTRUE : SUNFALSE);
+        checkOutput(retval, "IDASetLinearSolutionScaling");
+      }
+      if (options.delta_cj_lsetup.has_value())
+      {
+        retval = IDASetDeltaCjLSetup(mem, *options.delta_cj_lsetup);
+        checkOutput(retval, "IDASetDeltaCjLSetup");
+      }
     }
 
     /**
@@ -1233,19 +1675,19 @@ namespace AnalysisManager
      * @tparam IdxT Index data type
      */
     template <class ScalarT, typename IdxT>
-    void Ida<ScalarT, IdxT>::setIDAOptions(void*   mem,
-                                           ScalarT time_step,
-                                           ScalarT rel_tol,
-                                           ScalarT abs_tol_override,
-                                           IdxT    max_steps,
-                                           bool    suppress_alg)
+    void Ida<ScalarT, IdxT>::setIDAOptions(void*    mem,
+                                           ScalarT  time_step,
+                                           ScalarT  rel_tol,
+                                           ScalarT  abs_tol_override,
+                                           long int max_steps,
+                                           bool     suppress_alg)
     {
       int retval = 0;
       retval     = IDASetMinStep(mem, time_step);
       checkOutput(retval, "IDASetMinStep");
       retval = IDASetMaxStep(mem, time_step);
       checkOutput(retval, "IDASetMaxStep");
-      retval = IDASetMaxNumSteps(mem, static_cast<long int>(max_steps));
+      retval = IDASetMaxNumSteps(mem, max_steps);
       checkOutput(retval, "IDASetMaxNumSteps");
       retval = IDASetSuppressAlg(mem, suppress_alg ? SUNTRUE : SUNFALSE);
       checkOutput(retval, "IDASetSuppressAlg");

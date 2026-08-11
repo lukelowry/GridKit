@@ -15,6 +15,22 @@ namespace GridKit
     using Log = ::GridKit::Utilities::Logger;
 
     /**
+     * @brief One constant entry of the network admittance matrix.
+     *
+     * A stamp says "row bus draws (g + jb) times the voltage of column bus".
+     * Indices are global system indices of the real parts, so the imaginary
+     * parts live at `row + 1` and `col + 1`.
+     */
+    template <typename real_type, typename index_type>
+    struct AdmittanceStamp
+    {
+      index_type row; ///< Global residual index of the row bus Ir entry
+      index_type col; ///< Global variable index of the column bus Vr entry
+      real_type  g;   ///< Conductance
+      real_type  b;   ///< Susceptance
+    };
+
+    /**
      * @brief Component model implementation base class.
      */
     template <class scalar_type, typename index_type>
@@ -27,6 +43,13 @@ namespace GridKit
       using CsrMatrixT = typename Model::Evaluator<ScalarT, IdxT>::CsrMatrixT;
       using CooMatrixT = typename Model::Evaluator<ScalarT, IdxT>::CooMatrixT;
       using VectorT    = typename Model::Evaluator<ScalarT, IdxT>::VectorT;
+      using StampT     = AdmittanceStamp<RealT, IdxT>;
+
+      struct EvaluationContext
+      {
+        RealT time{0.0};
+        RealT alpha{0.0};
+      };
 
       Component() = default;
 
@@ -62,6 +85,32 @@ namespace GridKit
       }
 
       virtual int verify() const = 0;
+
+      /**
+       * @brief Report this component's constant admittance stamps.
+       *
+       * A component whose entire residual contribution is a constant admittance
+       * on the bus equations reports it here instead of evaluating it. The
+       * system pre-assembles all such stamps into one network admittance matrix
+       * and excludes the reporting component from the residual sweep.
+       *
+       * The contract is all-or-nothing: a non-zero return means the stamps are
+       * the component's *complete* residual contribution. A component with any
+       * state-dependent or time-dependent contribution must return 0.
+       *
+       * @param[out] out - Buffer of at least the returned count, or nullptr to
+       *                   query the count only.
+       *
+       * @pre The component and its terminal buses are bound, so global variable
+       * and residual indices are final.
+       *
+       * @return Number of stamps; 0 if the component evaluates its own residual.
+       */
+      virtual IdxT admittanceStamps(StampT* out)
+      {
+        (void) out;
+        return 0;
+      }
 
       IdxT size() override final
       {
@@ -146,6 +195,9 @@ namespace GridKit
        * @pre System vectors hold current HOST data of at least offset + size()
        * elements. This component's vectors are unallocated or already bound.
        * @post allocated_ is true and y_, yp_, f_, abs_tol_ alias system storage.
+       * The aliases also share the system vectors' update flags, so the system
+       * marking its residual HOST-current marks this component's residual
+       * current too.
        *
        * @return 0 if successful, non-zero otherwise.
        */
@@ -161,22 +213,10 @@ namespace GridKit
           return 1;
         }
 
-        auto* y_data       = y.getData(memory::HOST);
-        auto* yp_data      = yp.getData(memory::HOST);
-        auto* f_data       = f.getData(memory::HOST);
-        auto* abs_tol_data = abs_tol.getData(memory::HOST);
-
-        if (y_data == nullptr || yp_data == nullptr
-            || f_data == nullptr || abs_tol_data == nullptr)
-        {
-          Log::error() << "Component::bind - system vector data is null or stale\n";
-          return 1;
-        }
-
-        const int y_status       = y_.setData(y_data + offset, size_, memory::HOST);
-        const int yp_status      = yp_.setData(yp_data + offset, size_, memory::HOST);
-        const int f_status       = f_.setData(f_data + offset, size_, memory::HOST);
-        const int abs_tol_status = abs_tol_.setData(abs_tol_data + offset, size_, memory::HOST);
+        const int y_status       = y_.aliasOf(y, offset, size_, memory::HOST);
+        const int yp_status      = yp_.aliasOf(yp, offset, size_, memory::HOST);
+        const int f_status       = f_.aliasOf(f, offset, size_, memory::HOST);
+        const int abs_tol_status = abs_tol_.aliasOf(abs_tol, offset, size_, memory::HOST);
 
         if (y_status != 0 || yp_status != 0 || f_status != 0 || abs_tol_status != 0)
         {
@@ -185,6 +225,28 @@ namespace GridKit
         }
 
         allocated_ = true;
+        return 0;
+      }
+
+      /**
+       * @brief Bind this component's vectors and evaluation context to system storage.
+       *
+       * @pre evaluation_context remains valid while this component is bound.
+       */
+      int bind(VectorT&           y,
+               VectorT&           yp,
+               VectorT&           f,
+               VectorT&           abs_tol,
+               IdxT               offset,
+               EvaluationContext& evaluation_context)
+      {
+        const int status = bind(y, yp, f, abs_tol, offset);
+        if (status != 0)
+        {
+          return status;
+        }
+
+        evaluation_context_ = &evaluation_context;
         return 0;
       }
 
@@ -236,10 +298,10 @@ namespace GridKit
         return true;
       }
 
-      void updateTime(RealT t, RealT a) override
+      void updateTime(RealT t, RealT a) override final
       {
-        time_  = t;
-        alpha_ = a;
+        evaluation_context_->time  = t;
+        evaluation_context_->alpha = a;
       }
 
       /**
@@ -287,6 +349,21 @@ namespace GridKit
       }
 
     protected:
+      const RealT& time() const noexcept
+      {
+        return evaluation_context_->time;
+      }
+
+      const RealT& alpha() const noexcept
+      {
+        return evaluation_context_->alpha;
+      }
+
+      EvaluationContext& evaluationContext() noexcept
+      {
+        return *evaluation_context_;
+      }
+
       /**
        * @brief Allocate this component's state and residual vectors.
        */
@@ -364,8 +441,8 @@ namespace GridKit
       std::vector<ScalarT> wb_;
       std::vector<ScalarT> h_;
 
-      RealT time_;
-      RealT alpha_;
+      EvaluationContext  local_evaluation_context_{};
+      EvaluationContext* evaluation_context_{&local_evaluation_context_};
 
       RealT freq_system_base_{60.0};
       RealT va_system_base_{100.0e6};

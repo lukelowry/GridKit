@@ -1,0 +1,4 @@
+wall_seconds=7.54
+user_seconds=7.57
+sys_seconds=0.03
+maxrss_kb=60428

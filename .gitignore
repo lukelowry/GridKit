@@ -10,3 +10,22 @@ docs/_build/
 docs/api/reference/
 docs/xml/
 __pycache__
+
+# Generated simulation run output directories
+*.run/
+
+# Generated PhasorDynamics simulation figures
+examples/PhasorDynamics/**/*_delta.png
+examples/PhasorDynamics/**/*_omega.png
+examples/PhasorDynamics/**/*_voltage_magnitude.png
+examples/PhasorDynamics/**/*_ipcmd.png
+examples/PhasorDynamics/**/*_iqcmd.png
+examples/PhasorDynamics/**/*_lvpl_diagnostic.png
+examples/PhasorDynamics/**/*_comparison.png
+examples/PhasorDynamics/**/*_bus_frequency.png
+
+# Generated PhasorDynamics monitor output
+examples/PhasorDynamics/**/mon.csv
+
+# Generated step-trace study inputs and traces
+benchmark/step-trace/work/

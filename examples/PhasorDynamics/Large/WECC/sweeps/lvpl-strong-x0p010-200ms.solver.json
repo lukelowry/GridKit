@@ -1,0 +1,23 @@
+{
+  "system_model_file": "../sweeps/wecc-x0p010.case.json",
+  "dt": 0.008666666666666666,
+  "dt_monitor": 0.008666666666666666,
+  "tmax": 20.0,
+  "fault_bus": 3902,
+  "events": [
+    {
+      "time": 10.0,
+      "type": "fault_on",
+      "element_id": 0
+    },
+    {
+      "time": 10.2,
+      "type": "fault_off",
+      "element_id": 0
+    }
+  ],
+  "ida": {
+    "max_num_steps": 1000000,
+    "line_search_off_ic": true
+  }
+}

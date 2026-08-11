@@ -2,8 +2,9 @@
     "system_model_file": "ThreeBusConstantSource.case.json",
     "dt_monitor":   0.004166666666666667,
     "tmax":  10,
+    "fault_bus": 3,
     "events": [
-        {"time": 1, "type": "fault_on", "element_id": 0},
-        {"time": 1.1, "type": "fault_off", "element_id": 0}
+        {"time": 1, "type": "fault_on"},
+        {"time": 1.1, "type": "fault_off"}
     ]
 }

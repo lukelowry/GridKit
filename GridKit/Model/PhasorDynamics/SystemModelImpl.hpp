@@ -1,4 +1,6 @@
 #include <cassert>
+#include <chrono>
+#include <iomanip>
 #include <iostream>
 
 #include <GridKit/Definitions.hpp>
@@ -37,7 +39,7 @@ namespace GridKit
      */
     template <typename scalar_type, typename index_type>
     SystemModel<scalar_type, index_type>::SystemModel(const SystemModelData<RealT, IdxT>& data)
-      : monitor_(std::make_unique<MonitorT>(time_))
+      : monitor_(std::make_unique<MonitorT>(this->time()))
     {
       using namespace Governor;
       using namespace Exciter;
@@ -694,6 +696,18 @@ namespace GridKit
         addFault(fault);
       }
 
+      IdxT profile_end           = 0;
+      profile_component_ends_[0] = profile_end += static_cast<IdxT>(data.adapter.size());
+      profile_component_ends_[1] = profile_end += static_cast<IdxT>(data.branch.size());
+      profile_component_ends_[2] = profile_end += static_cast<IdxT>(data.loadz.size() + data.loadzip.size());
+      profile_component_ends_[3] = profile_end += static_cast<IdxT>(data.genrou.size() + data.gensal.size() + data.genclassical.size());
+      profile_component_ends_[4] = profile_end += static_cast<IdxT>(data.regca.size() + data.reecb.size() + data.repca.size());
+      profile_component_ends_[5] = profile_end += static_cast<IdxT>(data.gov.size() + data.hygov.size() + data.gastpti.size());
+      profile_component_ends_[6] = profile_end += static_cast<IdxT>(data.stabilizer.size());
+      profile_component_ends_[7] = profile_end += static_cast<IdxT>(data.exciter.size() + data.esdc1a.size() + data.sexspti.size());
+      profile_component_ends_[8] = profile_end += static_cast<IdxT>(data.constant_source.size());
+      profile_component_ends_[9] = profile_end += static_cast<IdxT>(data.bus_fault.size());
+
       for (const auto& sink : data.monitor_sink)
       {
         monitor_->addSink(sink);
@@ -832,7 +846,12 @@ namespace GridKit
 
       for (const auto& component : components_)
       {
-        const int bind_status = component->bind(y_, yp_, f_, abs_tol_, offset);
+        const int bind_status = component->bind(y_,
+                                                yp_,
+                                                f_,
+                                                abs_tol_,
+                                                offset,
+                                                this->evaluationContext());
         if (bind_status != 0)
         {
           Log::error() << "Failed to bind component vectors to system storage\n";
@@ -859,6 +878,10 @@ namespace GridKit
         Log::error() << "Bound vector sizes do not match the system size\n";
         throw std::runtime_error("SystemModel allocation failed");
       }
+
+      // Binding is complete, so global indices are final and the constant
+      // network can be folded out of the residual sweep.
+      assembleNetworkAdmittance();
 
       // Verify component configuration
       int errorCount = this->verify();
@@ -1074,224 +1097,397 @@ namespace GridKit
      * add to those values by in-place adition. This is why (for now) bus
      * residuals need to be computed first.
      */
+    /**
+     * @brief Pre-assemble the constant linear network and the evaluated sweep list.
+     *
+     * The linear part of the network is time invariant, so evaluating it element
+     * by element repeats known constants at every residual call. Components that
+     * report constant admittance stamps are folded into one sparse matrix here
+     * and dropped from the sweep; everything else is untouched.
+     *
+     * The list is shared with the Jacobian sweep. The stamp contract is that the
+     * stamps are the component's complete residual contribution, so a stamped
+     * component contributes a constant admittance to the Jacobian by the same
+     * token, and has nothing to re-evaluate there either.
+     *
+     * @pre All buses and components are bound, so global indices are final.
+     * @post network_, evaluated_components_, unmapped_buses_, and the cached
+     * HOST pointers are consistent with the current binding.
+     */
+    template <typename scalar_type, typename index_type>
+    void SystemModel<scalar_type, index_type>::assembleNetworkAdmittance()
+    {
+      network_y_data_ = y_.getData(memory::HOST);
+      network_f_data_ = f_.getData(memory::HOST);
+
+      // Rows are the buses that own a residual slice, ascending by bind offset.
+      // A bus without one, such as an infinite bus, is not a network row and so
+      // keeps clearing its own terminal currents.
+      std::vector<IdxT> row_offset;
+      row_offset.reserve(buses_.size());
+      unmapped_buses_.clear();
+      for (const auto& bus : buses_)
+      {
+        if (bus->size() > 0)
+        {
+          row_offset.push_back(bus->getResidualIndices()[0]);
+        }
+        else
+        {
+          unmapped_buses_.push_back(bus);
+        }
+      }
+
+      std::vector<IdxT> stamp_count(components_.size(), IdxT{0});
+      IdxT              total_stamps = 0;
+      for (std::size_t i = 0; i < components_.size(); ++i)
+      {
+        stamp_count[i]  = components_[i]->admittanceStamps(nullptr);
+        total_stamps   += stamp_count[i];
+      }
+
+      std::vector<AdmittanceStamp<RealT, IdxT>> stamps(static_cast<std::size_t>(total_stamps));
+
+      // Collect the stamps and, in the same pass, project the profile group
+      // boundaries from components_ onto the reduced sweep list.
+      evaluated_components_.clear();
+      evaluated_components_.reserve(components_.size());
+
+      std::size_t written = 0;
+      std::size_t group   = 0;
+      for (std::size_t i = 0; i < components_.size(); ++i)
+      {
+        while (group < profile_group_count_
+               && i >= static_cast<std::size_t>(profile_component_ends_[group]))
+        {
+          profile_sweep_ends_[group] = static_cast<IdxT>(evaluated_components_.size());
+          ++group;
+        }
+
+        if (stamp_count[i] == 0)
+        {
+          evaluated_components_.push_back(components_[i]);
+          continue;
+        }
+
+        components_[i]->admittanceStamps(stamps.data() + written);
+        written += static_cast<std::size_t>(stamp_count[i]);
+      }
+      while (group < profile_group_count_)
+      {
+        profile_sweep_ends_[group] = static_cast<IdxT>(evaluated_components_.size());
+        ++group;
+      }
+
+      network_.assemble(stamps, std::move(row_offset));
+    }
+
     template <typename scalar_type, typename index_type>
     int SystemModel<scalar_type, index_type>::evaluateResidual()
     {
-      for (const auto& bus : buses_)
+      using ProfileClock = std::chrono::steady_clock;
+
+      // Ordering invariant: the network product overwrites the current balance
+      // of every bus it owns a row for, which is what establishes the zero the
+      // components accumulate onto. Buses outside the network clear their own
+      // terminals. Do not reorder either against the component sweep.
+      const auto network_start = ProfileClock::now();
+      network_.multiply(network_y_data_, network_f_data_);
+      for (const auto& bus : unmapped_buses_)
       {
         bus->evaluateResidual();
       }
+      profile_network_residual_seconds_ += std::chrono::duration<double>(ProfileClock::now() - network_start).count();
 
-      for (const auto& component : components_)
+      IdxT profile_begin = 0;
+      for (std::size_t group = 0; group < profile_group_count_; ++group)
       {
-        component->evaluateResidual();
+        const auto group_start = ProfileClock::now();
+        for (IdxT i = profile_begin; i < profile_sweep_ends_[group]; ++i)
+        {
+          evaluated_components_[i]->evaluateResidual();
+        }
+        profile_residual_seconds_[group] += std::chrono::duration<double>(ProfileClock::now() - group_start).count();
+        profile_begin                     = profile_sweep_ends_[group];
+      }
+      for (IdxT i = profile_begin; i < static_cast<IdxT>(evaluated_components_.size()); ++i)
+      {
+        evaluated_components_[i]->evaluateResidual();
       }
 
+      // Components have finished writing the shared HOST residual storage.
       f_.setDataUpdated();
+      ++profile_residual_calls_;
 
       return 0;
+    }
+
+    template <typename scalar_type, typename index_type>
+    void SystemModel<scalar_type, index_type>::printResidualPerformanceStats() const
+    {
+      static constexpr std::array<const char*, profile_group_count_> labels = {
+          "adapter",
+          "branch",
+          "load",
+          "generator",
+          "converter",
+          "governor",
+          "stabilizer",
+          "exciter",
+          "source",
+          "fault"};
+
+      const auto flags     = std::cout.flags();
+      const auto precision = std::cout.precision();
+
+      std::cout << std::fixed << std::setprecision(6)
+                << "\nSYSTEM_RESIDUAL_PROFILE_BEGIN\n"
+                << "system_residual_calls=" << profile_residual_calls_ << '\n'
+                << "network_residual_seconds=" << profile_network_residual_seconds_ << '\n'
+                << "network_rows=" << network_.rowCount() << '\n'
+                << "network_nnz=" << network_.nnz() << '\n';
+      for (std::size_t group = 0; group < profile_group_count_; ++group)
+      {
+        std::cout << labels[group] << "_residual_seconds=" << profile_residual_seconds_[group] << '\n';
+      }
+      std::cout << "SYSTEM_RESIDUAL_PROFILE_END\n";
+
+      std::cout.flags(flags);
+      std::cout.precision(precision);
+    }
+
+    /**
+     * @brief Build the system Jacobian sparsity pattern and the COO-to-CSR map.
+     *
+     * Every block contributes here, including the ones whose values are fixed,
+     * because all of them define pattern. Runs once per allocation, after a
+     * full sweep has given every block its final structure.
+     *
+     * @pre Every bus and component has evaluated its Jacobian at least once.
+     * @post csr_jac_, nnz_, and map_to_csr_ describe the assembled system.
+     */
+    template <typename scalar_type, typename index_type>
+    void SystemModel<scalar_type, index_type>::buildJacobianStructure()
+    {
+      // Count the number of non-zeros
+      IdxT nnz_dup = 0;
+      for (const auto& component : components_)
+      {
+        auto component_jacobian = component->getCooJacobian();
+
+        if (component_jacobian != nullptr)
+        {
+          nnz_dup += component_jacobian->getNnz();
+        }
+        else
+        {
+          Log::warning() << "A component has returned a nullptr Jacobian.\n";
+        }
+      }
+
+      for (const auto& bus : buses_)
+      {
+        auto bus_jacobian = bus->getCooJacobian();
+
+        if (bus_jacobian != nullptr)
+        {
+          nnz_dup += bus_jacobian->getNnz();
+        }
+        else
+        {
+          Log::warning() << "A bus has returned a nullptr Jacobian.\n";
+        }
+      }
+
+      // Allocate COO triplet arrays (we own these until we hand off to CsrMatrix)
+      IdxT*  rows_dup = new IdxT[static_cast<size_t>(nnz_dup)];
+      IdxT*  cols_dup = new IdxT[static_cast<size_t>(nnz_dup)];
+      RealT* vals_dup = new RealT[static_cast<size_t>(nnz_dup)];
+
+      IdxT counter = 0;
+      for (const auto& component : components_)
+      {
+        auto component_jacobian = component->getCooJacobian();
+
+        if (component_jacobian != nullptr)
+        {
+          const IdxT*  rows    = component_jacobian->getRowData();
+          const IdxT*  columns = component_jacobian->getColData();
+          const RealT* values  = component_jacobian->getValues();
+          for (IdxT i = 0; i < component_jacobian->getNnz(); ++i)
+          {
+            rows_dup[counter] = rows[i];
+            cols_dup[counter] = columns[i];
+            vals_dup[counter] = values[i];
+            counter++;
+          }
+        }
+        else
+        {
+          Log::warning() << "A component has returned a nullptr Jacobian.\n";
+        }
+      }
+
+      for (const auto& bus : buses_)
+      {
+        auto bus_jacobian = bus->getCooJacobian();
+
+        if (bus_jacobian != nullptr)
+        {
+          const IdxT*  rows    = bus_jacobian->getRowData();
+          const IdxT*  columns = bus_jacobian->getColData();
+          const RealT* values  = bus_jacobian->getValues();
+          for (IdxT i = 0; i < bus_jacobian->getNnz(); ++i)
+          {
+            rows_dup[counter] = rows[i];
+            cols_dup[counter] = columns[i];
+            vals_dup[counter] = values[i];
+            counter++;
+          }
+        }
+        else
+        {
+          Log::warning() << "A bus has returned a nullptr Jacobian.\n";
+        }
+      }
+
+      // Build the system COO Jacobian
+      CooMatrixT jac(size_, size_, nnz_dup, &rows_dup, &cols_dup, &vals_dup);
+
+      // Populate CSR data with sort and deduplicate
+      IdxT* row_ptrs = jac.getCsrRowData();
+
+      // Deduplicated nnz
+      nnz_ = jac.getNnz();
+
+      // Allocate cols/vals with deduplicated nnz
+      IdxT*  cols = new IdxT[static_cast<size_t>(nnz_)];
+      RealT* vals = new RealT[static_cast<size_t>(nnz_)];
+
+      std::copy(jac.getColData(), jac.getColData() + nnz_, cols);
+      std::copy(jac.getValues(), jac.getValues() + nnz_, vals);
+
+      // Create the CSR Jacobian
+      csr_jac_ = new CsrMatrixT(size_, size_, nnz_, &row_ptrs, &cols, &vals);
+
+      const IdxT* map_to_sorted = jac.getMapToSorted();
+      const IdxT* map_to_dedup  = jac.getMapToDeduplicated();
+
+      // Build a mappping from original COO index to CSR index
+      map_to_csr_ = new IdxT[static_cast<size_t>(nnz_dup)];
+      for (IdxT i = 0; i < nnz_dup; ++i)
+      {
+        map_to_csr_[map_to_sorted[i]] = map_to_dedup[i];
+      }
+    }
+
+    /**
+     * @brief Fold the invariant Jacobian contributions out of the per-call sweep.
+     *
+     * Two kinds of block never change once the pattern is built. A stamped
+     * component contributes its constant admittance, by the same contract that
+     * keeps it out of the residual sweep. A bus block is four structural zeros
+     * reserving its own diagonal, so it carries pattern and never a value.
+     * Both are summed into `constant_values_` here, once, and what remains is a
+     * flat map the sweep accumulates through with no per-block indirection.
+     *
+     * @pre buildJacobianStructure() has run, so map_to_csr_ is final.
+     * @post constant_values_, block_to_csr_, and block_source_ describe an
+     * assembly equivalent to summing every block on every call.
+     */
+    template <typename scalar_type, typename index_type>
+    void SystemModel<scalar_type, index_type>::snapshotConstantJacobian()
+    {
+      constant_values_.assign(static_cast<std::size_t>(nnz_), RealT{0});
+      block_to_csr_.clear();
+      block_source_.clear();
+
+      IdxT counter = 0;
+      for (const auto& component : components_)
+      {
+        auto component_jacobian = component->getCooJacobian();
+
+        if (component_jacobian == nullptr)
+        {
+          continue;
+        }
+
+        // The stamp contract makes a stamped component's whole contribution
+        // constant, which is the same test that kept it out of the residual sweep.
+        const bool   varies = component->admittanceStamps(nullptr) == 0;
+        const RealT* values = component_jacobian->getValues();
+
+        for (IdxT i = 0; i < component_jacobian->getNnz(); ++i, ++counter)
+        {
+          if (varies)
+          {
+            block_to_csr_.push_back(map_to_csr_[counter]);
+            block_source_.push_back(values + i);
+          }
+          else
+          {
+            constant_values_[map_to_csr_[counter]] += values[i];
+          }
+        }
+      }
+
+      // Bus blocks are structural zeros, so they need no term in the baseline.
+      for (const auto& bus : buses_)
+      {
+        auto bus_jacobian = bus->getCooJacobian();
+
+        if (bus_jacobian != nullptr)
+        {
+          counter += bus_jacobian->getNnz();
+        }
+      }
     }
 
     /**
      * @brief Evaluate system Jacobian.
      *
-     * First, initialize bus Jacobians to 0.
-     * Then, evaluate component Jacobians (internal block and bus Jacobian contributions).
-     * Once component Jacobians are evaluated, store the result in the system Jacobian.
-     * Finally, store bus Jacobians into the system Jacobian after all component have added their
-     * contributions.
+     * Sweeps the components that have something to evaluate, then assembles the
+     * system CSR by laying down the invariant values and accumulating the swept
+     * blocks through a flat map. Assembly cost is proportional to the entries
+     * that actually change rather than to the number of blocks in the system.
      *
+     * The first call is different only in that it has no pattern yet: it sweeps
+     * everything, builds the structure, and takes the constant snapshot.
      */
     template <typename scalar_type, typename index_type>
     int SystemModel<scalar_type, index_type>::evaluateJacobian()
     {
-      // Initialize bus Jacobians
-      for (const auto& bus : buses_)
+      if (csr_jac_ == nullptr)
       {
-        bus->evaluateJacobian();
+        for (const auto& bus : buses_)
+        {
+          bus->evaluateJacobian();
+        }
+
+        for (const auto& component : components_)
+        {
+          component->evaluateJacobian();
+        }
+
+        buildJacobianStructure();
+        snapshotConstantJacobian();
       }
 
-      // Evaluate component Jacobians, including contribution to the bus Jacobians
-      for (const auto& component : components_)
+      for (const auto& component : evaluated_components_)
       {
         component->evaluateJacobian();
       }
 
-      // Build or update system CSR Jacobian
-      if (csr_jac_ == nullptr)
+      RealT* vals = csr_jac_->getValues();
+      std::copy(constant_values_.begin(), constant_values_.end(), vals);
+
+      const std::size_t entries = block_to_csr_.size();
+      for (std::size_t i = 0; i < entries; ++i)
       {
-        // Count the number of non-zeros
-        IdxT nnz_dup = 0;
-        for (const auto& component : components_)
-        {
-          auto component_jacobian = component->getCooJacobian();
-
-          if (component_jacobian != nullptr)
-          {
-            nnz_dup += component_jacobian->getNnz();
-          }
-          else
-          {
-            Log::warning() << "A component has returned a nullptr Jacobian.\n";
-          }
-        }
-
-        for (const auto& bus : buses_)
-        {
-          auto bus_jacobian = bus->getCooJacobian();
-
-          if (bus_jacobian != nullptr)
-          {
-            nnz_dup += bus_jacobian->getNnz();
-          }
-          else
-          {
-            Log::warning() << "A bus has returned a nullptr Jacobian.\n";
-          }
-        }
-
-        // Allocate COO triplet arrays (we own these until we hand off to CsrMatrix)
-        IdxT*  rows_dup = new IdxT[static_cast<size_t>(nnz_dup)];
-        IdxT*  cols_dup = new IdxT[static_cast<size_t>(nnz_dup)];
-        RealT* vals_dup = new RealT[static_cast<size_t>(nnz_dup)];
-
-        IdxT counter = 0;
-        for (const auto& component : components_)
-        {
-          auto component_jacobian = component->getCooJacobian();
-
-          if (component_jacobian != nullptr)
-          {
-            const IdxT*  rows    = component_jacobian->getRowData();
-            const IdxT*  columns = component_jacobian->getColData();
-            const RealT* values  = component_jacobian->getValues();
-            for (IdxT i = 0; i < component_jacobian->getNnz(); ++i)
-            {
-              rows_dup[counter] = rows[i];
-              cols_dup[counter] = columns[i];
-              vals_dup[counter] = values[i];
-              counter++;
-            }
-          }
-          else
-          {
-            Log::warning() << "A component has returned a nullptr Jacobian.\n";
-          }
-        }
-
-        for (const auto& bus : buses_)
-        {
-          auto bus_jacobian = bus->getCooJacobian();
-
-          if (bus_jacobian != nullptr)
-          {
-            const IdxT*  rows    = bus_jacobian->getRowData();
-            const IdxT*  columns = bus_jacobian->getColData();
-            const RealT* values  = bus_jacobian->getValues();
-            for (IdxT i = 0; i < bus_jacobian->getNnz(); ++i)
-            {
-              rows_dup[counter] = rows[i];
-              cols_dup[counter] = columns[i];
-              vals_dup[counter] = values[i];
-              counter++;
-            }
-          }
-          else
-          {
-            Log::warning() << "A bus has returned a nullptr Jacobian.\n";
-          }
-        }
-
-        // Build the system COO Jacobian
-        CooMatrixT jac(size_, size_, nnz_dup, &rows_dup, &cols_dup, &vals_dup);
-
-        // Populate CSR data with sort and deduplicate
-        IdxT* row_ptrs = jac.getCsrRowData();
-
-        // Deduplicated nnz
-        nnz_ = jac.getNnz();
-
-        // Allocate cols/vals with deduplicated nnz
-        IdxT*  cols = new IdxT[static_cast<size_t>(nnz_)];
-        RealT* vals = new RealT[static_cast<size_t>(nnz_)];
-
-        std::copy(jac.getColData(), jac.getColData() + nnz_, cols);
-        std::copy(jac.getValues(), jac.getValues() + nnz_, vals);
-
-        // Create the CSR Jacobian
-        csr_jac_ = new CsrMatrixT(size_, size_, nnz_, &row_ptrs, &cols, &vals);
-
-        const IdxT* map_to_sorted = jac.getMapToSorted();
-        const IdxT* map_to_dedup  = jac.getMapToDeduplicated();
-
-        // Build a mappping from original COO index to CSR index
-        map_to_csr_ = new IdxT[static_cast<size_t>(nnz_dup)];
-        for (IdxT i = 0; i < nnz_dup; ++i)
-        {
-          map_to_csr_[map_to_sorted[i]] = map_to_dedup[i];
-        }
+        vals[block_to_csr_[i]] += *block_source_[i];
       }
-      else
-      {
-        // Zero out values
-        RealT* vals = csr_jac_->getValues();
-        for (IdxT i = 0; i < csr_jac_->getNnz(); ++i)
-        {
-          vals[i] = 0.0;
-        }
-
-        // Update CSR values from component and bus Jacobians
-        IdxT counter = 0;
-        for (const auto& component : components_)
-        {
-          auto component_jacobian = component->getCooJacobian();
-
-          if (component_jacobian != nullptr)
-          {
-            const RealT* values = component_jacobian->getValues();
-            for (IdxT i = 0; i < component_jacobian->getNnz(); ++i)
-            {
-              vals[map_to_csr_[counter]] += values[i];
-              counter++;
-            }
-          }
-        }
-
-        for (const auto& bus : buses_)
-        {
-          auto bus_jacobian = bus->getCooJacobian();
-
-          if (bus_jacobian != nullptr)
-          {
-            const RealT* values = bus_jacobian->getValues();
-            for (IdxT i = 0; i < bus_jacobian->getNnz(); ++i)
-            {
-              vals[map_to_csr_[counter]] += values[i];
-              counter++;
-            }
-          }
-        }
-      }
-
-      // std::cout << "System Jacobian\n";
-      // csr_jac_->print(std::cout);
 
       return 0;
-    }
-
-    /**
-     * @brief Update time
-     *
-     */
-    template <typename scalar_type, typename index_type>
-    void SystemModel<scalar_type, index_type>::updateTime(RealT t, RealT a)
-    {
-      time_  = t;
-      alpha_ = a;
-      for (const auto& component : components_)
-      {
-        component->updateTime(t, a);
-      }
     }
 
     /**

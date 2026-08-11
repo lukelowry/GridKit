@@ -1,4 +1,5 @@
 #include <cmath>
+#include <stdexcept>
 
 #include <GridKit/Model/Evaluator.hpp>
 #include <GridKit/Solver/Dynamic/Ida.hpp>
@@ -462,9 +463,11 @@ namespace GridKit
 
         Model::NullEvaluator<ScalarT, IdxT> model;
 
-        Ida<double, size_t> ida(&model);
-        ida.setFixedStep(1.0 / n_steps);
-        ida.setTolerance(1.0e-6);
+        Ida<double, size_t>                   ida(&model);
+        typename Ida<double, size_t>::Options options;
+        options.rel_tol    = 1.0e-6;
+        options.fixed_step = 1.0 / n_steps;
+        ida.setOptions(options);
         ida.configureSimulation();
 
         ida.initializeSimulation(0.0, false);
@@ -472,6 +475,28 @@ namespace GridKit
         auto stats = ida.getStats();
 
         success *= (stats.num_steps_ == n_steps);
+
+        return success.report(__func__);
+      }
+
+      TestOutcome invalidOptions()
+      {
+        TestStatus success = false;
+
+        Model::NullEvaluator<ScalarT, IdxT>  model;
+        Ida<ScalarT, IdxT>                   ida(&model);
+        typename Ida<ScalarT, IdxT>::Options options;
+        options.fixed_step = 0.01;
+        options.max_step   = 0.02;
+
+        try
+        {
+          ida.setOptions(options);
+        }
+        catch (const std::invalid_argument&)
+        {
+          success = true;
+        }
 
         return success.report(__func__);
       }

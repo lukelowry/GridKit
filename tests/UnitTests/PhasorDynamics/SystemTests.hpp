@@ -1,6 +1,8 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -96,6 +98,24 @@ namespace GridKit
         int evaluateJacobian() override final
         {
           return this->constructCoo();
+        }
+      };
+
+      class EvaluationContextProbe final : public PhasorDynamics::LoadZ<ScalarT, IdxT>
+      {
+        using BaseT = PhasorDynamics::LoadZ<ScalarT, IdxT>;
+
+      public:
+        using BaseT::BaseT;
+
+        const RealT& evaluationTime() const
+        {
+          return this->time();
+        }
+
+        const RealT& evaluationAlpha() const
+        {
+          return this->alpha();
         }
       };
 
@@ -222,6 +242,91 @@ namespace GridKit
         return success.report(__func__);
       }
 
+      TestOutcome residualAssemblyIsIdempotent()
+      {
+        using namespace PhasorDynamics;
+
+        TestStatus success = true;
+
+        SystemModel<ScalarT, IdxT> system;
+        Bus<ScalarT, IdxT>         bus1(ScalarT{10.0}, ScalarT{20.0});
+        Bus<ScalarT, IdxT>         bus2(ScalarT{30.0}, ScalarT{40.0});
+        Branch<ScalarT, IdxT>      branch(&bus1,
+                                     &bus2,
+                                     RealT{2.0},
+                                     RealT{4.0},
+                                     RealT{0.2},
+                                     RealT{1.2});
+
+        bus1.setBusID(IdxT{0});
+        bus2.setBusID(IdxT{1});
+        system.addBus(&bus1);
+        system.addBus(&bus2);
+        system.addComponent(&branch);
+
+        if (system.allocate() != 0 || system.initialize() != 0)
+        {
+          success = false;
+          return success.report(__func__);
+        }
+
+        const std::array<ScalarT, 4> expected{
+            ScalarT{17.0},
+            ScalarT{-10.0},
+            ScalarT{15.0},
+            ScalarT{-20.0}};
+
+        if (system.evaluateResidual() != 0)
+        {
+          success = false;
+          return success.report(__func__);
+        }
+
+        const auto* first_data = system.getResidual().getData(memory::HOST);
+        if (first_data == nullptr)
+        {
+          success = false;
+          return success.report(__func__);
+        }
+
+        std::array<ScalarT, 4> first{};
+        std::memcpy(first.data(), first_data, first.size() * sizeof(ScalarT));
+
+        if (system.evaluateResidual() != 0)
+        {
+          success = false;
+          return success.report(__func__);
+        }
+
+        const auto* second_data = system.getResidual().getData(memory::HOST);
+        if (second_data == nullptr)
+        {
+          success = false;
+          return success.report(__func__);
+        }
+
+        success *= std::memcmp(first.data(),
+                               second_data,
+                               first.size() * sizeof(ScalarT))
+                   == 0;
+        for (std::size_t i = 0; i < expected.size(); ++i)
+        {
+          success *= isEqual(second_data[i], expected[i]);
+        }
+
+        // System residual assembly restores HOST freshness at both alias levels.
+        system.getResidual().setDataUpdated(memory::DEVICE);
+        bus1.getResidual().setDataUpdated(memory::DEVICE);
+        bus2.getResidual().setDataUpdated(memory::DEVICE);
+
+        success *= system.evaluateResidual() == 0;
+        success *= system.getResidual().getData(memory::HOST) != nullptr;
+        success *= bus1.getResidual().getData(memory::HOST) != nullptr;
+        success *= bus2.getResidual().getData(memory::HOST) != nullptr;
+
+        return success.report(__func__);
+      }
+
       TestOutcome reallocateAfterTopologyChange()
       {
         TestStatus success = true;
@@ -281,13 +386,13 @@ namespace GridKit
         PhasorDynamics::BusInfinite<ScalarT, IdxT> infinite_bus;
         PhasorDynamics::Bus<ScalarT, IdxT>         bus2(3.0, 4.0);
         PhasorDynamics::Branch<ScalarT, IdxT>      branch(&bus1, &bus2);
-        PhasorDynamics::LoadZ<ScalarT, IdxT>       load(&bus2, 1.0, 1.0);
+        PhasorDynamics::BusFault<ScalarT, IdxT>    fault(&bus2);
 
         system.addBus(&bus1);
         system.addBus(&infinite_bus);
         system.addBus(&bus2);
         system.addComponent(&branch);
-        system.addComponent(&load);
+        system.addComponent(&fault);
 
         if (system.allocate() != 0
             || system.setAbsoluteTolerance(1e-4) != 0)
@@ -326,9 +431,9 @@ namespace GridKit
           checkAlias(system.absoluteTolerance(), model.absoluteTolerance(), offset);
         };
 
-        const IdxT bus2_offset = bus1.size();
-        const IdxT load_offset = bus1.size() + bus2.size();
-        const auto bus2_first  = static_cast<std::size_t>(bus2_offset);
+        const IdxT bus2_offset  = bus1.size();
+        const IdxT fault_offset = bus1.size() + bus2.size();
+        const auto bus2_first   = static_cast<std::size_t>(bus2_offset);
 
         auto rebind = [&](auto& model, IdxT offset)
         {
@@ -339,12 +444,22 @@ namespace GridKit
                             offset);
         };
 
-        // Rebinding the same slices is a no-op.
+        // Rebinding to a different slice refreshes the bus terminal aliases.
+        auto* const original_Vr  = &bus2.Vr();
+        success                 *= rebind(bus2, IdxT{0}) == 0;
+        success                 *= &bus2.Vr() == system.y().getData();
+        success                 *= &bus2.Ir() == system.getResidual().getData();
+        success                 *= &bus2.Vr() != original_Vr;
+
         success *= rebind(bus2, bus2_offset) == 0;
-        success *= rebind(load, load_offset) == 0;
+        success *= &bus2.Vr() == system.y().getData() + bus2_offset;
+        success *= &bus2.Ir() == system.getResidual().getData() + bus2_offset;
+
+        // Rebinding the remaining model to the same slice is a no-op.
+        success *= rebind(fault, fault_offset) == 0;
 
         checkModel(bus2, bus2_offset);
-        checkModel(load, load_offset);
+        checkModel(fault, fault_offset);
 
         // Tags remain model-owned and are collected separately.
         system.tag()[bus2_first]  = true;
@@ -353,6 +468,39 @@ namespace GridKit
 
         bus2.tag()[0]  = true;
         success       *= !system.tag()[bus2_first];
+
+        return success.report(__func__);
+      }
+
+      TestOutcome componentsShareEvaluationContext()
+      {
+        TestStatus success = true;
+
+        PhasorDynamics::SystemModel<ScalarT, IdxT> system;
+        PhasorDynamics::Bus<ScalarT, IdxT>         bus(1.0, 0.0);
+        EvaluationContextProbe                     load1(&bus, 1.0, 1.0);
+        EvaluationContextProbe                     load2(&bus, 1.0, 1.0);
+
+        load1.updateTime(0.25, 0.5);
+        success *= isEqual(load1.evaluationTime(), RealT{0.25});
+        success *= isEqual(load1.evaluationAlpha(), RealT{0.5});
+
+        system.addBus(&bus);
+        system.addComponent(&load1);
+        system.addComponent(&load2);
+        success *= system.allocate() == 0;
+
+        system.updateTime(1.25, 2.5);
+        success *= isEqual(load1.evaluationTime(), RealT{1.25});
+        success *= isEqual(load1.evaluationAlpha(), RealT{2.5});
+        success *= isEqual(load2.evaluationTime(), RealT{1.25});
+        success *= isEqual(load2.evaluationAlpha(), RealT{2.5});
+
+        system.updateTime(3.0, 4.0);
+        success *= isEqual(load1.evaluationTime(), RealT{3.0});
+        success *= isEqual(load1.evaluationAlpha(), RealT{4.0});
+        success *= isEqual(load2.evaluationTime(), RealT{3.0});
+        success *= isEqual(load2.evaluationAlpha(), RealT{4.0});
 
         return success.report(__func__);
       }
