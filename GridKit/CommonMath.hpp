@@ -11,15 +11,57 @@ namespace GridKit
   namespace Math
   {
     /**
+     * @brief Functional form used by the CommonMath primitives
+     *
+     * Selected per primitive instantiation through the leading template
+     * parameter. Smooth is the default everywhere, so existing call sites
+     * are unchanged; residuals that support both forms thread the parameter
+     * through and dispatch on @ref SMOOTHING_MODE outside the differentiated
+     * code path.
+     *
+     * Piecewise composes every primitive from std::fmax alone. That is
+     * deliberate: fmax is the one kink-producing operation with a matching
+     * DependencyTracking derivative rule and a validated Enzyme lowering
+     * (see the notes at @ref qramp). Do not introduce comparisons, selects,
+     * or abs-based groupings when extending this family.
+     *
+     * A third, event-driven hard-switching mode is deliberately not defined
+     * here. It requires integrator event detection and belongs to future
+     * work; reserve the next enumerator for it.
+     */
+    enum class Smoothing
+    {
+      Smooth,   ///< C-infinity tanh/softplus forms
+      Piecewise ///< exact fmax compositions; step becomes piecewise-linear
+    };
+
+    /**
+     * @brief Runtime-selected smoothing mode for code outside residuals
+     *
+     * Residual and Jacobian entry points read this once per evaluation to
+     * pick a primitive instantiation; initialization helpers read it to
+     * invert the matching functional form. Set it before a system model is
+     * constructed and do not change it mid-simulation.
+     */
+    inline Smoothing SMOOTHING_MODE = Smoothing::Smooth;
+
+    /**
      * @brief Smoothing scale shared by CommonMath primitives
      *
      * Used by @ref sigmoid, @ref ramp, and functions composed from them to set
-     * the width of smooth transitions.
+     * the width of smooth transitions. In the Piecewise mode the same value
+     * sets the slope of the piecewise-linear unit step, so both families
+     * share one sharpness scale.
+     *
+     * Runtime-assignable so parameter sweeps do not require a rebuild. Set
+     * it together with @ref SMOOTHING_MODE before a system model is
+     * constructed; exact-initialization inverses bake the active value into
+     * the initial state.
      *
      * @tparam RealT - real data type
      */
     template <typename RealT>
-    inline constexpr RealT MU = 240.0;
+    inline RealT MU = 240.0;
 
     /**
      * @brief Scaled sigmoid activation function
@@ -28,37 +70,66 @@ namespace GridKit
      * and finite derivatives. Large values more closely approximate a step
      * function, but can make the transition numerically stiff.
      *
+     * @note The Piecewise form is the piecewise-linear unit step
+     * fmax(mu x + 1/2, 0) - fmax(mu x - 1/2, 0): exactly 0 below
+     * x = -1/(2 mu), exactly 1 above x = +1/(2 mu), and linear with slope mu
+     * between, matching the smooth form's slope at the origin. It is built
+     * from fmax only; see @ref Smoothing for why.
+     *
+     * @tparam M - smoothing mode
      * @tparam ScalarT - scalar data type
      *
      * @param[in] x - expected to be of order 1
      * @return value of the sigmoid function
      */
-    template <class ScalarT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT>
     __attribute__((always_inline)) inline ScalarT sigmoid(const ScalarT x)
     {
       using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
-      return HALF<RealT> * (ONE<RealT> + std::tanh(HALF<RealT> * MU<RealT> * x));
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        const RealT mu = MU<RealT>;
+        return std::fmax(mu * x + HALF<RealT>, ScalarT{ZERO<RealT>})
+               - std::fmax(mu * x - HALF<RealT>, ScalarT{ZERO<RealT>});
+      }
+      else
+      {
+        return HALF<RealT> * (ONE<RealT> + std::tanh(HALF<RealT> * MU<RealT> * x));
+      }
     }
 
     /**
-     * @brief Smooth one-sided ramp function
+     * @brief One-sided ramp function
      *
      * Smooth approximation to max(x, 0), using a stable softplus form with
      * the same scale as the rest of CommonMath.
      *
+     * @note The Piecewise form is exact: fmax(x, 0), independent of mu.
+     * Every primitive composed from ramp (max, min, clamp, deadband2, slew,
+     * linseg) therefore becomes its exact piecewise counterpart under that
+     * mode. Written with fmax, never abs; see the notes at @ref qramp.
+     *
+     * @tparam M - smoothing mode
      * @tparam ScalarT - scalar data type
      *
      * @param[in] x - expected to be of order 1
-     * @return value of the smooth ramp function
+     * @return value of the ramp function
      */
-    template <class ScalarT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT>
     __attribute__((always_inline)) inline ScalarT ramp(const ScalarT x)
     {
       using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
 
-      RealT   mu = MU<RealT>;
-      ScalarT a  = std::abs(mu * x);
-      return HALF<RealT> * (x + a / mu) + std::log1p(std::exp(-a)) / mu;
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        return std::fmax(x, ScalarT{ZERO<RealT>});
+      }
+      else
+      {
+        RealT   mu = MU<RealT>;
+        ScalarT a  = std::abs(mu * x);
+        return HALF<RealT> * (x + a / mu) + std::log1p(std::exp(-a)) / mu;
+      }
     }
 
     /**
@@ -114,44 +185,41 @@ namespace GridKit
      * fidelity without introducing stiffness. That is untested against step
      * count and is the first thing to try if the knee accuracy matters.
      *
+     * @note The Piecewise instantiation evaluates max(x, 0)^2 to the last
+     * bit. It is the reference the smooth form is judged against: running
+     * both isolates how much of a result depends on the smoothing rather
+     * than on the model. Re-run the step-count comparison in the notes above
+     * whenever the integrator, the tolerances, or the case mix change --
+     * that trade was measured, not derived, and it will not hold forever.
+     * The exact form is written with fmax, never with abs. Groupings built
+     * from x + |x| put x d|x|/dx next to |x| dx in the tangent, which LLVM
+     * fuses into a (1 + sign(x)) select; the resulting i1 either defeats
+     * Enzyme's sparsity solver outright ("No sparsification: not sparse
+     * solvable") or, in the groupings that do compile, silently yields a
+     * wrong partial below the knee. fmax keeps Enzyme and DependencyTracking
+     * in agreement, down to the structural zero at the knee -- which is why
+     * DependencyTracking carries an fmax rule.
+     *
+     * @tparam M - smoothing mode
      * @tparam ScalarT - scalar data type
      *
      * @param[in] x - input signal
      * @return value of the quadratic ramp
      */
-    template <class ScalarT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT>
     __attribute__((always_inline)) inline ScalarT qramp(const ScalarT x)
     {
-      return x * x * sigmoid(x);
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        using RealT     = typename GridKit::ScalarTraits<ScalarT>::RealT;
+        const ScalarT r = std::fmax(x, ScalarT{ZERO<RealT>});
+        return r * r;
+      }
+      else
+      {
+        return x * x * sigmoid<M>(x);
+      }
     }
-
-    /*
-     * Exact one-sided quadratic ramp -- deliberately kept, deliberately
-     * disabled. Swap this body into qramp() above to evaluate max(x, 0)^2 to
-     * the last bit. It is the reference the smooth form is judged against:
-     * running both isolates how much of a result depends on the smoothing
-     * rather than on the model. Keep it for saturation studies, and re-run the
-     * step-count comparison in qramp()'s notes whenever the integrator, the
-     * tolerances, or the case mix change -- that trade was measured, not
-     * derived, and it will not hold forever.
-     *
-     * Write the exact form with fmax, never with abs. Groupings built from
-     * x + |x| put x d|x|/dx next to |x| dx in the tangent, which LLVM fuses
-     * into a (1 + sign(x)) select; the resulting i1 either defeats Enzyme's
-     * sparsity solver outright ("No sparsification: not sparse solvable") or,
-     * in the groupings that do compile, silently yields a wrong partial below
-     * the knee. fmax keeps Enzyme and DependencyTracking in agreement, down to
-     * the structural zero at the knee -- which is why DependencyTracking
-     * carries an fmax rule that nothing else currently uses.
-     *
-     *   template <class ScalarT>
-     *   __attribute__((always_inline)) inline ScalarT qramp(const ScalarT x)
-     *   {
-     *     using RealT     = typename GridKit::ScalarTraits<ScalarT>::RealT;
-     *     const ScalarT r = std::fmax(x, ScalarT{ZERO<RealT>});
-     *     return r * r;
-     *   }
-     */
 
     /**
      * @brief Smooth binary maximum function
@@ -172,12 +240,12 @@ namespace GridKit
      * lets the expression promote to the differentiable scalar type without
      * forcing callers to cast every parameter.
      */
-    template <class LeftT, class RightT>
+    template <Smoothing M = Smoothing::Smooth, class LeftT, class RightT>
     __attribute__((always_inline)) inline auto max(
         const LeftT  x,
         const RightT y)
     {
-      return y + ramp(x - y);
+      return y + ramp<M>(x - y);
     }
 
     /**
@@ -199,12 +267,12 @@ namespace GridKit
      * lets the expression promote to the differentiable scalar type without
      * forcing callers to cast every parameter.
      */
-    template <class LeftT, class RightT>
+    template <Smoothing M = Smoothing::Smooth, class LeftT, class RightT>
     __attribute__((always_inline)) inline auto min(
         const LeftT  x,
         const RightT y)
     {
-      return x - ramp(x - y);
+      return x - ramp<M>(x - y);
     }
 
     /**
@@ -223,14 +291,14 @@ namespace GridKit
      * @param[in] upper - Upper limit
      * @return value of the smooth clamp function
      */
-    template <class ScalarT, typename LowerT, typename UpperT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename LowerT, typename UpperT>
     __attribute__((always_inline)) inline auto clamp(
         const ScalarT x,
         const LowerT  lower,
         const UpperT  upper)
     {
       assert(lower <= upper);
-      return lower + ramp(x - lower) - ramp(x - upper);
+      return lower + ramp<M>(x - lower) - ramp<M>(x - upper);
     }
 
     /**
@@ -247,14 +315,14 @@ namespace GridKit
      * @param[in] upper - Upper breakpoint
      * @return Smooth no-offset deadbanded value
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT deadband1(
         const ScalarT x,
         const RealT   lower,
         const RealT   upper)
     {
       assert(lower <= upper);
-      return x * (sigmoid(lower - x) + sigmoid(x - upper));
+      return x * (sigmoid<M>(lower - x) + sigmoid<M>(x - upper));
     }
 
     /**
@@ -271,14 +339,14 @@ namespace GridKit
      * @param[in] upper - Upper breakpoint
      * @return Smooth offset deadbanded value
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT deadband2(
         const ScalarT x,
         const RealT   lower,
         const RealT   upper)
     {
       assert(lower <= upper);
-      return ramp(x - upper) - ramp(-(x - lower));
+      return ramp<M>(x - upper) - ramp<M>(-(x - lower));
     }
 
     /**
@@ -293,13 +361,13 @@ namespace GridKit
      * @param[in] rate - Symmetric positive rate limit
      * @return Slew-rate-limited value of f
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT slew(
         const ScalarT f,
         const RealT   rate)
     {
       assert(rate >= ZERO<RealT>);
-      return clamp(f, -rate, rate);
+      return clamp<M>(f, -rate, rate);
     }
 
     /**
@@ -318,7 +386,7 @@ namespace GridKit
      * @param[in] height - Saturated value above the upper breakpoint
      * @return Smooth linear segment contribution
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT linseg(
         const ScalarT x,
         const RealT   lower,
@@ -326,7 +394,7 @@ namespace GridKit
         const RealT   height)
     {
       assert(lower < upper);
-      return height / (upper - lower) * (ramp(x - lower) - ramp(x - upper));
+      return height / (upper - lower) * (ramp<M>(x - lower) - ramp<M>(x - upper));
     }
 
     /**
@@ -339,12 +407,12 @@ namespace GridKit
      * @param[in] limit_min - Minimum limit
      * @return Smooth indicator that x is above limit_min
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT above(
         const ScalarT x,
         const RealT   limit_min)
     {
-      return sigmoid(x - limit_min);
+      return sigmoid<M>(x - limit_min);
     }
 
     /**
@@ -357,12 +425,12 @@ namespace GridKit
      * @param[in] limit_max - Maximum limit
      * @return Smooth indicator that x is below limit_max
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT below(
         const ScalarT x,
         const RealT   limit_max)
     {
-      return sigmoid(limit_max - x);
+      return sigmoid<M>(limit_max - x);
     }
 
     /**
@@ -376,14 +444,14 @@ namespace GridKit
      * @param[in] limit_max - Maximum limit
      * @return Smooth indicator that x is inside [limit_min, limit_max]
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT inside(
         const ScalarT x,
         const RealT   limit_min,
         const RealT   limit_max)
     {
       assert(limit_min <= limit_max);
-      return above(x, limit_min) + below(x, limit_max) - ONE<RealT>;
+      return above<M>(x, limit_min) + below<M>(x, limit_max) - ONE<RealT>;
     }
 
     /**
@@ -397,14 +465,14 @@ namespace GridKit
      * @param[in] limit_max - Maximum limit
      * @return Smooth indicator that x is outside [limit_min, limit_max]
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT outside(
         const ScalarT x,
         const RealT   limit_min,
         const RealT   limit_max)
     {
       assert(limit_min <= limit_max);
-      return below(x, limit_min) + above(x, limit_max);
+      return below<M>(x, limit_min) + above<M>(x, limit_max);
     }
 
     /**
@@ -420,7 +488,7 @@ namespace GridKit
      * @return Scalar value in [0, 1]: 1 when dynamics should pass through,
      *         0 when integration should be blocked.
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT indicator(
         const ScalarT x,
         const ScalarT f,
@@ -429,12 +497,12 @@ namespace GridKit
     {
       assert(limit_min <= limit_max);
 
-      ScalarT above_min = above(x, limit_min);
-      ScalarT below_max = below(x, limit_max);
+      ScalarT above_min = above<M>(x, limit_min);
+      ScalarT below_max = below<M>(x, limit_max);
 
-      return above_min * below_max +                  //
-             (ONE<RealT> - below_max) * sigmoid(-f) + //
-             (ONE<RealT> - above_min) * sigmoid(f);
+      return above_min * below_max +                     //
+             (ONE<RealT> - below_max) * sigmoid<M>(-f) + //
+             (ONE<RealT> - above_min) * sigmoid<M>(f);
     }
 
     /**
@@ -454,14 +522,14 @@ namespace GridKit
      * @param[in] limit_max - Maximum limit
      * @return Smooth anti-windup limited derivative
      */
-    template <class ScalarT, typename RealT>
+    template <Smoothing M = Smoothing::Smooth, class ScalarT, typename RealT>
     __attribute__((always_inline)) inline ScalarT antiwindup(
         const ScalarT x,
         const ScalarT f,
         const RealT   limit_min,
         const RealT   limit_max)
     {
-      return indicator(x, f, limit_min, limit_max) * f;
+      return indicator<M>(x, f, limit_min, limit_max) * f;
     }
   } // namespace Math
 } // namespace GridKit
