@@ -211,6 +211,7 @@ namespace GridKit
       }
 
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int SexsPti<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
           const ScalarT* yp,
@@ -230,7 +231,7 @@ namespace GridKit
         ScalarT func = (-efd + (K_ / Tb_) * (-vr + Ta_ * vtr)) / Te_;
 
         f[0] = -vr_dot + (-vr + Ta_ * vtr) / Tb_ - vtr;
-        f[1] = -efd_dot + Math::antiwindup(efd, func, Efdmin_, Efdmax_);
+        f[1] = -efd_dot + Math::antiwindup<M>(efd, func, Efdmin_, Efdmax_);
         f[2] = -vtr - Ec + vref_ + vs + vOEL_ + vUEL_;
 
         return 0;
@@ -253,7 +254,14 @@ namespace GridKit
         const auto* y  = y_.getData();
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
 
         f_.setDataUpdated();
 

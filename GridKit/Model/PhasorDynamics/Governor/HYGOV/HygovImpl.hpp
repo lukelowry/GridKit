@@ -383,10 +383,25 @@ namespace GridKit
         const RealT Gmin_response = std::min(Gmin_, gate0);
         const RealT Gmax_response = std::max(Gmax_, gate0);
 
+        // Initialization follows the active smoothing mode so the resolved
+        // steady state zeros the residual form the simulation evaluates.
+        const auto deadband1_rt = [](const ScalarT value, const RealT lower, const RealT upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::deadband1<Math::Smoothing::Piecewise>(value, lower, upper)
+                     : Math::deadband1(value, lower, upper);
+        };
+        const auto gate_power_rt = [this](const ScalarT gate)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? gatePower<Math::Smoothing::Piecewise>(gate)
+                     : gatePower(gate);
+        };
+
         const ScalarT h0       = static_cast<ScalarT>(Hdam0);
-        const ScalarT pgv0     = gatePower(static_cast<ScalarT>(gate0));
+        const ScalarT pgv0     = gate_power_rt(static_cast<ScalarT>(gate0));
         const ScalarT q0       = std::sqrt(Hdam0) * pgv0;
-        const ScalarT omegadb0 = Math::deadband1(omega0, -db1_, db1_);
+        const ScalarT omegadb0 = deadband1_rt(omega0, -db1_, db1_);
         const ScalarT xn0      = omegadb0;
         const ScalarT yomega0  = xn0 + leadlag_gain_ * (omegadb0 - xn0);
         const ScalarT pref0    = toSystemBase(yomega0 + Rperm_ * gate0 - paux0);
@@ -532,7 +547,14 @@ namespace GridKit
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
 
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
         f_.setDataUpdated();
         return 0;
       }
@@ -555,8 +577,8 @@ namespace GridKit
        * Evaluates the five governor states and the seven algebraic rows
        * documented in the model README. The body is kept free of branches
        * and loops so that sparse automatic differentiation resolves a fixed
-       * structure; the gate curve enters as a fixed sum of smooth linear
-       * segments.
+       * structure; the gate curve enters as a fixed sum of linear segments
+       * in the selected smoothing form.
        *
        * @param[in] y Internal variables.
        * @param[in] yp Internal variable derivatives.
@@ -566,6 +588,7 @@ namespace GridKit
        * @return int 0 on success.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int
       Hygov<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT*                  y,
@@ -618,14 +641,14 @@ namespace GridKit
 
         f[XN]      = -xn_dot + (omegadb - xn) / Tnp_;
         f[XF]      = -xf_dot + (ef - xf) / Tf_;
-        f[C]       = -c_dot + Math::antiwindup(c, rc, Gmin_response_, Gmax_response_);
+        f[C]       = -c_dot + Math::antiwindup<M>(c, rc, Gmin_response_, Gmax_response_);
         f[G]       = -g_dot + (c - g) / Tg_;
         f[Q]       = -q_dot + (Hdam_eff_ - head) / Tw_;
-        f[OMEGADB] = -omegadb + Math::deadband1(omega, -db1_, db1_);
+        f[OMEGADB] = -omegadb + Math::deadband1<M>(omega, -db1_, db1_);
         f[EF]      = -ef + toComponentBase(pref + paux) - yomega - Rperm_ * c;
         f[FC]      = -Rtemp_ * fc + xf / Tr_ + (ef - xf) / Tf_;
-        f[RC]      = -rc + Math::clamp(fc, -Velm_, Velm_);
-        f[PGV]     = -pgv + gatePower(g);
+        f[RC]      = -rc + Math::clamp<M>(fc, -Velm_, Velm_);
+        f[PGV]     = -pgv + gatePower<M>(g);
         f[H]       = -q * q + head * pgv * pgv;
         f[PMECH]   = -toComponentBase(pmech) + At_ * head * (q - Qnl_) - Dturb_ * omega * g;
 
@@ -839,25 +862,50 @@ namespace GridKit
       /**
        * @brief Evaluate the nonlinear gate-to-power curve
        *
-       * Sums the five smooth CommonMath linear segments spanned by the
-       * `Gv`/`Pgv` points, so the same fixed expression serves the residual
-       * and both scalar instantiations.
+       * Sums the five CommonMath linear segments spanned by the `Gv`/`Pgv`
+       * points in the selected smoothing form, so the same fixed expression
+       * serves the residual and both scalar instantiations.
        *
        * @param[in] gate Gate position.
        * @return Turbine power at nominal head.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline scalar_type
       Hygov<scalar_type, index_type>::gatePower(scalar_type gate) const
       {
-        ScalarT retval = Pgv_[0]
-                         + Math::linseg(gate, Gv_[0], Gv_[1], Pgv_[1] - Pgv_[0])
-                         + Math::linseg(gate, Gv_[1], Gv_[2], Pgv_[2] - Pgv_[1])
-                         + Math::linseg(gate, Gv_[2], Gv_[3], Pgv_[3] - Pgv_[2])
-                         + Math::linseg(gate, Gv_[3], Gv_[4], Pgv_[4] - Pgv_[3])
-                         + Math::linseg(gate, Gv_[4], Gv_[5], Pgv_[5] - Pgv_[4]);
+        if constexpr (M == Math::Smoothing::Piecewise)
+        {
+          // Telescoped cumulative-slope form: one ramp per breakpoint with a
+          // distinct runtime slope-change coefficient. Exactly equal to the
+          // summed segments in this mode; the segment sum pairs ten
+          // same-variable selects in one row, which Enzyme's auto-sparsity
+          // pass silently mis-lowers.
+          const RealT s0 = (Pgv_[1] - Pgv_[0]) / (Gv_[1] - Gv_[0]);
+          const RealT s1 = (Pgv_[2] - Pgv_[1]) / (Gv_[2] - Gv_[1]);
+          const RealT s2 = (Pgv_[3] - Pgv_[2]) / (Gv_[3] - Gv_[2]);
+          const RealT s3 = (Pgv_[4] - Pgv_[3]) / (Gv_[4] - Gv_[3]);
+          const RealT s4 = (Pgv_[5] - Pgv_[4]) / (Gv_[5] - Gv_[4]);
 
-        return retval;
+          return Pgv_[0]
+                 + s0 * Math::ramp<M>(gate - Gv_[0])
+                 + (s1 - s0) * Math::ramp<M>(gate - Gv_[1])
+                 + (s2 - s1) * Math::ramp<M>(gate - Gv_[2])
+                 + (s3 - s2) * Math::ramp<M>(gate - Gv_[3])
+                 + (s4 - s3) * Math::ramp<M>(gate - Gv_[4])
+                 - s4 * Math::ramp<M>(gate - Gv_[5]);
+        }
+        else
+        {
+          ScalarT retval = Pgv_[0]
+                           + Math::linseg<M>(gate, Gv_[0], Gv_[1], Pgv_[1] - Pgv_[0])
+                           + Math::linseg<M>(gate, Gv_[1], Gv_[2], Pgv_[2] - Pgv_[1])
+                           + Math::linseg<M>(gate, Gv_[2], Gv_[3], Pgv_[3] - Pgv_[2])
+                           + Math::linseg<M>(gate, Gv_[3], Gv_[4], Pgv_[4] - Pgv_[3])
+                           + Math::linseg<M>(gate, Gv_[4], Gv_[5], Pgv_[5] - Pgv_[4]);
+
+          return retval;
+        }
       }
 
       /**
@@ -871,9 +919,9 @@ namespace GridKit
        *       \left(\sqrt{H_{\mathrm{dam}}}\,N_{\mathrm{GV}}(g)
        *             - q_{\mathrm{NL}}\right).
        * @f]
-       * The expression is composed exactly as those rows compose it, so a
-       * gate solved against it zeros the implemented residual at machine
-       * rounding.
+       * The expression is composed exactly as those rows compose it, and the
+       * gate curve follows the active smoothing mode, so a gate solved
+       * against it zeros the implemented residual at machine rounding.
        *
        * @param[in] gate Gate position.
        * @param[in] Hdam Dam head.
@@ -884,7 +932,12 @@ namespace GridKit
       Hygov<scalar_type, index_type>::initialMechanicalPower(RealT gate,
                                                              RealT Hdam) const
       {
-        const RealT pgv = static_cast<RealT>(gatePower(static_cast<ScalarT>(gate)));
+        const ScalarT pgv_value =
+            Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                ? gatePower<Math::Smoothing::Piecewise>(static_cast<ScalarT>(gate))
+                : gatePower(static_cast<ScalarT>(gate));
+
+        const RealT pgv = static_cast<RealT>(pgv_value);
         const RealT q   = std::sqrt(Hdam) * pgv;
         return At_ * Hdam * (q - Qnl_);
       }

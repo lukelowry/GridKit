@@ -173,8 +173,9 @@ namespace GridKit
       /**
        * @brief Calculate the initial HVRCM extra current.
        *
-       * Solves the smooth HVRCM residual for \f$I_q^\mathrm{extra}\f$ given the
-       * strictly positive voltage margin \f$V_\mathrm{hv}^{\max} - V_T\f$.
+       * Solves the HVRCM residual of the active smoothing mode for
+       * \f$I_q^\mathrm{extra}\f$ given the strictly positive voltage margin
+       * \f$V_\mathrm{hv}^{\max} - V_T\f$.
        *
        * @param[in] dv Strictly positive voltage margin.
        * @return Initial HVRCM extra current.
@@ -183,6 +184,13 @@ namespace GridKit
       scalar_type Regca<scalar_type, index_type>::initialHvrcmCurrent(
           scalar_type dv) const
       {
+        // The piecewise fixed point I = fmax(I - dv, 0) with dv > 0 lies on
+        // the flat fmax branch, so the extra current is exactly zero.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          return static_cast<ScalarT>(ZERO<RealT>);
+        }
+
         static constexpr RealT log_two = std::numbers::ln2_v<RealT>;
 
         const ScalarT x = Math::MU<RealT> * dv;
@@ -530,12 +538,27 @@ namespace GridKit
           VA1_ = static_cast<RealT>(vt);
         }
 
+        // Initialization follows the runtime smoothing mode so the resolved
+        // states satisfy the residual's active functional form.
+        const auto linseg_rt = [](const auto v, const RealT lower, const RealT upper, const RealT height)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::linseg<Math::Smoothing::Piecewise>(v, lower, upper, height)
+                     : Math::linseg(v, lower, upper, height);
+        };
+        const auto ramp_rt = [](const auto v)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::ramp<Math::Smoothing::Piecewise>(v)
+                     : Math::ramp(v);
+        };
+
         // P0 is a system-base power-flow injection. Resolve the component-base
         // active current through the LVACM network-interface gain.
-        const ScalarT lvacm = Math::linseg(vt, VA0_, VA1_, ONE<RealT>);
+        const ScalarT lvacm = linseg_rt(vt, VA0_, VA1_, ONE<RealT>);
         const ScalarT ip0   = toComponentBase(static_cast<ScalarT>(p0_) / vt) / lvacm;
-        const ScalarT il0   = Math::linseg(vt, VL0_, VL1_, IL1_)
-                            + KL_ * Math::ramp(vt - VL1_);
+        const ScalarT il0   = linseg_rt(vt, VL0_, VL1_, IL1_)
+                            + KL_ * ramp_rt(vt - VL1_);
 
         if (sL_ && ip0 > il0)
         {
@@ -544,9 +567,9 @@ namespace GridKit
         }
         const ScalarT ipcmd0 = ip0;
 
-        // Solve the smooth HVRCM constraint and preserve the requested Q0. The
-        // Vhvmax check above keeps the voltage margin strictly positive, so the
-        // solve is always finite.
+        // Solve the active-mode HVRCM constraint and preserve the requested
+        // Q0. The Vhvmax check above keeps the voltage margin strictly
+        // positive, so the solve is always finite.
         const ScalarT dv       = Vhvmax_ - vt;
         const ScalarT iqextra0 = initialHvrcmCurrent(dv);
         const ScalarT qnet0    = toComponentBase(static_cast<ScalarT>(q0_) / vt);
@@ -624,6 +647,7 @@ namespace GridKit
        * @param[out] f Internal residuals.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int
       Regca<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
@@ -673,30 +697,33 @@ namespace GridKit
         const ScalarT fp = (ipcmd - ip) / Tg_;
 
         // A disabled limit or Q0 = 0 leaves the corresponding correction off.
-        const ScalarT iq_rate = fq + use_rqmax_ * (Math::min(fq, Rqmax_) - fq)
-                                + use_rqmin_ * (Math::max(fq, Rqmin_) - fq);
-        const ScalarT fp_limited = rrpwr(ip, fp, Rpmax_);
+        const ScalarT iq_rate = fq + use_rqmax_ * (Math::min<M>(fq, Rqmax_) - fq)
+                                + use_rqmin_ * (Math::max<M>(fq, Rqmin_) - fq);
+        const ScalarT fp_limited = rrpwr<M>(ip, fp, Rpmax_);
 
         // The LVPL ceiling IL = linseg(VM) moves with the sensed voltage; its
         // rate is the exact chain rule (inside() is the linseg slope mask
         // since ramp' = sigmoid), and a pinned Ip tracks the moving ceiling.
         const ScalarT vm_rate = (vt - vm) / TM_;
-        const ScalarT il_rate = (IL1_ / (VL1_ - VL0_) * Math::inside(vm, VL0_, VL1_)
-                                 + KL_ * Math::sigmoid(vm - VL1_))
+        const ScalarT il_rate = (IL1_ / (VL1_ - VL0_) * Math::inside<M>(vm, VL0_, VL1_)
+                                 + KL_ * Math::sigmoid<M>(vm - VL1_))
                                 * vm_rate;
-        const ScalarT lvacm = Math::linseg(vt, VA0_, VA1_, ONE<RealT>);
+        const ScalarT lvacm = Math::linseg<M>(vt, VA0_, VA1_, ONE<RealT>);
         const ScalarT qnet  = iq - iqextra;
 
         f[VM] = -vm_dot + vm_rate;
         f[IQ] = -iq_dot + iq_rate;
         f[IP] = -ip_dot + bypass_lvpl_ * fp_limited
-                + use_lvpl_ * awmax(ip, fp_limited, il, il_rate);
+                + use_lvpl_ * awmax<M>(ip, fp_limited, il, il_rate);
         f[VT]      = -vt * vt + vr * vr + vi * vi;
         f[IR]      = -toComponentBase(vt * ir) + vi * qnet + vr * ip * lvacm;
         f[II]      = -toComponentBase(vt * ii) - vr * qnet + vi * ip * lvacm;
-        f[IQEXTRA] = -iqextra + Math::ramp(iqextra - (Vhvmax_ - vt));
-        f[IL]      = -il + Math::linseg(vm, VL0_, VL1_, IL1_)
-                + KL_ * Math::ramp(vm - VL1_);
+        // Written through min so the piecewise passthrough carries the
+        // PW_UNIT scale; the smooth instantiation expands to the identical
+        // -iqextra + ramp(iqextra - (Vhvmax_ - vt)) operations.
+        f[IQEXTRA] = -Math::min<M>(iqextra, Vhvmax_ - vt);
+        f[IL]      = -il + Math::linseg<M>(vm, VL0_, VL1_, IL1_)
+                + KL_ * Math::ramp<M>(vm - VL1_);
         f[PBR] = -pbr + vr * ir + vi * ii;
         f[QBR] = -qbr + vi * ir - vr * ii;
 
@@ -768,7 +795,14 @@ namespace GridKit
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
 
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
         evaluateBusResidual(y, yp, wb_.data(), h_.data());
         f_.setDataUpdated();
 

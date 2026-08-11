@@ -15,6 +15,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/Stabilizer/IEEEST/IeeestData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 namespace GridKit
 {
@@ -104,6 +105,7 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT*,
             const ScalarT*,
@@ -112,6 +114,10 @@ namespace GridKit
             ScalarT*);
 
       private:
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         void initializeParameters(const ModelDataT& data);
         void initializeMonitor();
         void setDerivedParameters();

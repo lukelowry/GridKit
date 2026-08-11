@@ -11,6 +11,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/SynchronousMachine/GENSAL/GensalData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 // Forward declarations.
 namespace GridKit
@@ -165,12 +166,17 @@ namespace GridKit
       }
 
     public:
+      template <Math::Smoothing M = Math::Smoothing::Smooth>
       __attribute__((always_inline)) inline int evaluateInternalResidual(
           const ScalarT*, const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
       __attribute__((always_inline)) inline int evaluateBusResidual(
           const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
 
     private:
+      /// Enzyme Jacobian block sequence for one smoothing mode
+      template <Math::Smoothing M>
+      int evaluateJacobianBlocks();
+
       /* Identification */
       BusT* bus_;
 

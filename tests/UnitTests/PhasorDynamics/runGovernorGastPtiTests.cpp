@@ -20,6 +20,7 @@ int main()
   result += test.temperatureLimiting();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
+  result += test.jacobianPiecewise();
 #endif
 
   Log::setVerbosity(previous_verbosity);

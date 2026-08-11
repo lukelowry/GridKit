@@ -273,6 +273,15 @@ namespace GridKit
     template <typename scalar_type, typename index_type>
     int Gensal<scalar_type, index_type>::initialize()
     {
+      // Saturation must match the residual's active smoothing form bit for
+      // bit, so dispatch qramp on the runtime mode.
+      const auto qramp_rt = [](const auto v)
+      {
+        return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                   ? Math::qramp<Math::Smoothing::Piecewise>(v)
+                   : Math::qramp(v);
+      };
+
       // Network frame terminal values
       ScalarT vr  = Vr();
       ScalarT vi  = Vi();
@@ -295,7 +304,7 @@ namespace GridKit
       ScalarT psidpp = vq / (ONE<RealT> + omega);
       ScalarT psidp  = psidpp - (Xdpp_ - Xl_) * id;
       ScalarT Eqp    = psidp + Xd2_ * id;
-      ScalarT ksat   = SB_ * Math::qramp(Eqp - SA_);
+      ScalarT ksat   = SB_ * qramp_rt(Eqp - SA_);
       ScalarT Te     = (psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id;
 
       auto* y  = y_.getData();
@@ -381,6 +390,7 @@ namespace GridKit
      *
      */
     template <typename scalar_type, typename index_type>
+    template <Math::Smoothing M>
     __attribute__((always_inline)) inline int Gensal<scalar_type, index_type>::evaluateInternalResidual(
         const ScalarT* y,
         const ScalarT* yp,
@@ -432,7 +442,7 @@ namespace GridKit
 
       /* 9 Gensal algebraic equations */
       f[5]  = psidpp - (psidp * Xd4_ + Eqp * Xd5_);
-      f[6]  = ksat - SB_ * Math::qramp(Eqp - SA_);
+      f[6]  = ksat - SB_ * Math::qramp<M>(Eqp - SA_);
       f[7]  = vd + psiqpp * (ONE<RealT> + omega);
       f[8]  = vq - psidpp * (ONE<RealT> + omega);
       f[9]  = telec - ((psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id);
@@ -500,7 +510,14 @@ namespace GridKit
       const auto* y  = y_.getData();
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
-      evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+      if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+      {
+        evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+      }
+      else
+      {
+        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+      }
       evaluateBusResidual(y, yp, wb_.data(), h_.data());
 
       // Gensal contribution to bus algebraic equations

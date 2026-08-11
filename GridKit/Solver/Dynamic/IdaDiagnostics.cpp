@@ -67,7 +67,8 @@ namespace AnalysisManager
             {"last_step", stats.last_step_},
             {"current_step", stats.current_step_},
             {"current_time", stats.current_time_},
-            {"current_cj", stats.current_cj_}};
+            {"current_cj", stats.current_cj_},
+            {"last_step_lte_wrms", stats.last_step_lte_wrms_}};
       }
 
       nlohmann::json idaStepCounterDeltaJson(const IdaStats& stats)
@@ -103,6 +104,7 @@ namespace AnalysisManager
             {"last_order", sample.last_order},
             {"current_order", sample.current_order},
             {"current_cj", sample.current_cj},
+            {"lte_wrms", sample.lte_wrms},
             {"counter_delta", idaStepCounterDeltaJson(sample.counter_delta)}};
       }
 
@@ -187,6 +189,7 @@ namespace AnalysisManager
       sample.last_order         = stats.last_order_;
       sample.current_order      = stats.current_order_;
       sample.current_cj         = stats.current_cj_;
+      sample.lte_wrms           = stats.last_step_lte_wrms_;
       sample.counter_delta      = std::move(counter_delta);
 
       current_segment_->steps.push_back(std::move(sample));

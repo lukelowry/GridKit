@@ -14,6 +14,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/Exciter/ESDC1A/Esdc1aData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 namespace GridKit
 {
@@ -115,6 +116,7 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT* y,
             const ScalarT* yp,
@@ -123,16 +125,21 @@ namespace GridKit
             ScalarT*       f);
 
       private:
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         void initializeParameters(const ModelDataT& data);
         void initializeMonitor();
         void setDerivedParameters();
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         static __attribute__((always_inline)) inline ScalarT awmin(
             ScalarT x,
             ScalarT f,
             RealT   xmin);
 
-        /// Recover the input that the smooth CommonMath ramp maps to a
+        /// Recover the input that the active-mode CommonMath ramp maps to a
         /// requested strictly positive output.
         RealT inverseRamp(RealT ramp_output) const;
 

@@ -255,11 +255,12 @@ namespace GridKit
        *
        * Reads the required system-base `pmech` seed and optional speed input,
        * resolves the response limits and valve mask, and seats every
-       * algebraic row. For an active response interval, it inverts the smooth
-       * low-value selector so its output reproduces the initialized flow; this
-       * requires a positive temperature margin. A collapsed response interval
-       * holds the valve at its initial position, so its algebraic selector is
-       * seated without that active-flow constraint.
+       * algebraic row. For an active response interval, it inverts the
+       * active-mode low-value selector so its output reproduces the
+       * initialized flow; this requires a positive temperature margin. A
+       * collapsed response interval holds the valve at its initial position,
+       * so its algebraic selector is seated without that active-flow
+       * constraint.
        * Every seed, candidate, response bound, and mask is checked before
        * state, response limits, latches, derivatives, or attached signals are
        * modified.
@@ -359,9 +360,10 @@ namespace GridKit
             return 1;
           }
 
-          // Invert the smooth LV gate so its output reproduces the active
-          // initial fuel flow. This stable form avoids subtracting two large,
-          // nearly equal values when the temperature margin is large.
+          // Invert the LV gate so its output reproduces the active initial
+          // fuel flow; iramp follows the runtime smoothing mode. This stable
+          // form avoids subtracting two large, nearly equal values when the
+          // temperature margin is large.
           vload0 = xflow0 + (margin - iramp(margin));
           vlv0   = xflow0;
         }
@@ -369,7 +371,13 @@ namespace GridKit
         {
           // A fixed valve does not require the selector output to equal xflow.
           // Seat the selector and reference equations at the operating point.
-          vlv0 = static_cast<RealT>(Math::min(vload0, vtemp0));
+          const auto min_rt = [](const RealT left, const RealT right)
+          {
+            return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                       ? Math::min<Math::Smoothing::Piecewise>(left, right)
+                       : Math::min(left, right);
+          };
+          vlv0 = static_cast<RealT>(min_rt(vload0, vtemp0));
         }
 
         const RealT pref_component0 = vload0 + omega0 / R_;
@@ -480,7 +488,14 @@ namespace GridKit
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
 
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
         f_.setDataUpdated();
         return 0;
       }
@@ -532,6 +547,7 @@ namespace GridKit
        * @param[out] f Model-owned residuals in `GastPtiInternalVariables` order.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       [[gnu::always_inline]] inline int
       GastPti<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
@@ -569,14 +585,14 @@ namespace GridKit
         const ScalarT pref  = toComponentBase(ws[PREF]);
 
         const ScalarT valve_target =
-            Math::antiwindup(xvalve, vlv - xvalve, Vmin_response_, Vmax_response_);
+            Math::antiwindup<M>(xvalve, vlv - xvalve, Vmin_response_, Vmax_response_);
 
         f[XVALVE] = -xvalve_dot + s_valve_ * valve_target / T1_;
         f[XFLOW]  = -xflow_dot + (-xflow + xvalve) / T2_;
         f[XTEMP]  = -xtemp_dot + (-xtemp + xflow) / T3_;
         f[VLOAD]  = -omega + R_ * (pref - vload);
         f[VTEMP]  = -vtemp + At_ + Kt_ * (At_ - xtemp);
-        f[VLV]    = -vlv + Math::min(vload, vtemp);
+        f[VLV]    = -vlv + Math::min<M>(vload, vtemp);
         f[PMECH]  = -toComponentBase(pmech) + xflow - Dturb_ * omega;
 
         return 0;
@@ -752,13 +768,13 @@ namespace GridKit
       }
 
       /**
-       * @brief Invert the smooth ramp on its positive range
+       * @brief Invert the active-mode ramp on its positive range
        *
        * This initialization-only helper is not called by the differentiated
-       * residual path.
+       * residual path, so it may branch on the runtime smoothing mode.
        *
-       * @param[in] value Positive smooth-ramp output.
-       * @return Input whose smooth-ramp output equals `value`.
+       * @param[in] value Positive ramp output.
+       * @return Input whose active-mode ramp output equals `value`.
        *
        * @pre `value` is finite and strictly positive.
        */
@@ -766,6 +782,13 @@ namespace GridKit
       auto GastPti<scalar_type, index_type>::iramp(RealT value) -> RealT
       {
         assert(std::isfinite(value) && value > ZERO<RealT>);
+
+        // The piecewise ramp is exactly fmax(x, 0), so on its strictly
+        // positive range the inverse is the identity.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          return value;
+        }
 
         const RealT mu = Math::MU<RealT>;
         return value + std::log(-std::expm1(-mu * value)) / mu;

@@ -14,6 +14,67 @@ namespace GridKit
   {
     namespace Governor
     {
+      /**
+       * @brief Enzyme Jacobian block sequence for one smoothing mode
+       *
+       * @return int 0 on success.
+       */
+      template <typename scalar_type, typename index_type>
+      template <GridKit::Math::Smoothing M>
+      int Hygov<scalar_type, index_type>::evaluateJacobianBlocks()
+      {
+        using ModelT       = GridKit::PhasorDynamics::Governor::Hygov<scalar_type, index_type>;
+        using Fn           = GridKit::Enzyme::Sparse::MemberFunctions;
+        constexpr auto fun = M == GridKit::Math::Smoothing::Piecewise
+                                 ? Fn::InternalResidualWithSignalPiecewise
+                                 : Fn::InternalResidualWithSignal;
+
+        GridKit::Enzyme::Sparse::DfDy<ModelT, fun>::eval(this,
+                                                         static_cast<size_t>(f_.getSize()),
+                                                         static_cast<size_t>(y_.getSize()),
+                                                         (this->getResidualIndices()).data(),
+                                                         (this->getVariableIndices()).data(),
+                                                         y_.getData(),
+                                                         yp_.getData(),
+                                                         wb_.data(),
+                                                         ws_.data(),
+                                                         J_rows_buffer_,
+                                                         J_cols_buffer_,
+                                                         J_vals_buffer_,
+                                                         nnz_);
+
+        GridKit::Enzyme::Sparse::DfDyp<ModelT, fun>::eval(this,
+                                                          static_cast<size_t>(f_.getSize()),
+                                                          static_cast<size_t>(y_.getSize()),
+                                                          (this->getResidualIndices()).data(),
+                                                          (this->getVariableIndices()).data(),
+                                                          y_.getData(),
+                                                          yp_.getData(),
+                                                          wb_.data(),
+                                                          ws_.data(),
+                                                          alpha(),
+                                                          J_rows_buffer_,
+                                                          J_cols_buffer_,
+                                                          J_vals_buffer_,
+                                                          nnz_);
+
+        GridKit::Enzyme::Sparse::DfDws<ModelT, fun>::eval(this,
+                                                          static_cast<size_t>(f_.getSize()),
+                                                          ws_.size(),
+                                                          (this->getResidualIndices()).data(),
+                                                          ws_indices_.data(),
+                                                          y_.getData(),
+                                                          yp_.getData(),
+                                                          wb_.data(),
+                                                          ws_.data(),
+                                                          J_rows_buffer_,
+                                                          J_cols_buffer_,
+                                                          J_vals_buffer_,
+                                                          nnz_);
+
+        return 0;
+      }
+
       template <typename scalar_type, typename index_type>
       int Hygov<scalar_type, index_type>::evaluateJacobian()
       {
@@ -30,53 +91,16 @@ namespace GridKit
           J_vals_buffer_   = new RealT[buffer_size];
         }
 
-        using ModelT = GridKit::PhasorDynamics::Governor::Hygov<scalar_type, index_type>;
-        using Fn     = GridKit::Enzyme::Sparse::MemberFunctions;
-
         nnz_ = 0;
 
-        GridKit::Enzyme::Sparse::DfDy<ModelT, Fn::InternalResidualWithSignal>::eval(this,
-                                                                                    static_cast<size_t>(f_.getSize()),
-                                                                                    static_cast<size_t>(y_.getSize()),
-                                                                                    (this->getResidualIndices()).data(),
-                                                                                    (this->getVariableIndices()).data(),
-                                                                                    y_.getData(),
-                                                                                    yp_.getData(),
-                                                                                    wb_.data(),
-                                                                                    ws_.data(),
-                                                                                    J_rows_buffer_,
-                                                                                    J_cols_buffer_,
-                                                                                    J_vals_buffer_,
-                                                                                    nnz_);
-
-        GridKit::Enzyme::Sparse::DfDyp<ModelT, Fn::InternalResidualWithSignal>::eval(this,
-                                                                                     static_cast<size_t>(f_.getSize()),
-                                                                                     static_cast<size_t>(y_.getSize()),
-                                                                                     (this->getResidualIndices()).data(),
-                                                                                     (this->getVariableIndices()).data(),
-                                                                                     y_.getData(),
-                                                                                     yp_.getData(),
-                                                                                     wb_.data(),
-                                                                                     ws_.data(),
-                                                                                     alpha(),
-                                                                                     J_rows_buffer_,
-                                                                                     J_cols_buffer_,
-                                                                                     J_vals_buffer_,
-                                                                                     nnz_);
-
-        GridKit::Enzyme::Sparse::DfDws<ModelT, Fn::InternalResidualWithSignal>::eval(this,
-                                                                                     static_cast<size_t>(f_.getSize()),
-                                                                                     ws_.size(),
-                                                                                     (this->getResidualIndices()).data(),
-                                                                                     ws_indices_.data(),
-                                                                                     y_.getData(),
-                                                                                     yp_.getData(),
-                                                                                     wb_.data(),
-                                                                                     ws_.data(),
-                                                                                     J_rows_buffer_,
-                                                                                     J_cols_buffer_,
-                                                                                     J_vals_buffer_,
-                                                                                     nnz_);
+        if (GridKit::Math::SMOOTHING_MODE == GridKit::Math::Smoothing::Piecewise)
+        {
+          evaluateJacobianBlocks<GridKit::Math::Smoothing::Piecewise>();
+        }
+        else
+        {
+          evaluateJacobianBlocks<GridKit::Math::Smoothing::Smooth>();
+        }
 
         this->constructCoo();
 

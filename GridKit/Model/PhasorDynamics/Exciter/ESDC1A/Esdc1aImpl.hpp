@@ -313,7 +313,16 @@ namespace GridKit
           return 1;
         }
 
-        const ScalarT se0 = SB_ * Math::qramp(efdp0 - SA_);
+        // Initialization is not differentiated, so the seeded saturation
+        // follows the active smoothing mode through a runtime dispatch.
+        const auto qramp_rt = [](const auto v)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::qramp<Math::Smoothing::Piecewise>(v)
+                     : Math::qramp(v);
+        };
+
+        const ScalarT se0 = SB_ * qramp_rt(efdp0 - SA_);
 
         RealT ke0 = Ke_;
         if (ke0 == ZERO<RealT>)
@@ -497,7 +506,14 @@ namespace GridKit
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
 
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
         f_.setDataUpdated();
         return 0;
       }
@@ -532,6 +548,7 @@ namespace GridKit
        * @return Zero on success.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int
       Esdc1a<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
@@ -584,19 +601,19 @@ namespace GridKit
         const ScalarT ev_target         = vref + vs + uel_on_ * vuel - vc - vf;
         const ScalarT vfe_target        = (Ke_ + se) * efdp;
         const ScalarT efdp_rate         = (vr - vfe) / Te_;
-        const ScalarT limited_efdp_rate = awmin(efdp, efdp_rate, ZERO<RealT>);
+        const ScalarT limited_efdp_rate = awmin<M>(efdp, efdp_rate, ZERO<RealT>);
 
         f[EFDP] = -efdp_dot + (ONE<RealT> - lim_on_) * efdp_rate
                   + lim_on_ * limited_efdp_rate;
         f[VC]  = -vc_dot + (ec - vc) / Tr_;
-        f[VR]  = -vr_dot + Math::antiwindup(vr, -vr + Ka_ * vhv, Vrmin_, Vrmax_) / Ta_;
+        f[VR]  = -vr_dot + Math::antiwindup<M>(vr, -vr + Ka_ * vhv, Vrmin_, Vrmax_) / Ta_;
         f[VF]  = -vf_dot + (-vf + Kf_ * (vr - vfe) / Te_) / Tf1_;
         f[XLL] = -xll_dot + (ev - xll) / Tb_;
         f[EV]  = -ev + ev_target;
         f[VLL] = -vll + xll + (Tc_ / Tb_) * (ev - xll);
         f[VHV] = -vhv + uel_on_ * vll
-                 + (ONE<RealT> - uel_on_) * Math::max(vll, vuel);
-        f[SE]  = -se + SB_ * Math::qramp(efdp - SA_);
+                 + (ONE<RealT> - uel_on_) * Math::max<M>(vll, vuel);
+        f[SE]  = -se + SB_ * Math::qramp<M>(efdp - SA_);
         f[VFE] = -vfe + vfe_target;
         f[EFD] = -efd + (ONE<RealT> + spd_on_ * omega) * efdp;
 
@@ -608,26 +625,29 @@ namespace GridKit
       //
 
       /**
-       * @brief Smooth anti-windup derivative above a fixed lower bound
+       * @brief Anti-windup derivative above a fixed lower bound
        *
        * Passes the unconstrained rate above the bound, admits restoring
-       * motion from below it, and smoothly blocks outward motion.
+       * motion from below it, and blocks outward motion through the
+       * mode-selected step.
        *
+       * @tparam M Smoothing mode of the composed primitives.
        * @param[in] x State limited from below.
        * @param[in] f Unconstrained derivative of @p x.
        * @param[in] xmin Fixed lower bound on @p x.
        * @return Anti-windup-limited derivative.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline scalar_type
       Esdc1a<scalar_type, index_type>::awmin(
           const ScalarT x,
           const ScalarT f,
           const RealT   xmin)
       {
-        const ScalarT above = Math::above(x, xmin);
+        const ScalarT above = Math::above<M>(x, xmin);
 
-        return (above + (ONE<RealT> - above) * Math::sigmoid(f)) * f;
+        return (above + (ONE<RealT> - above) * Math::sigmoid<M>(f)) * f;
       }
 
       /**
@@ -862,14 +882,14 @@ namespace GridKit
       }
 
       /**
-       * @brief Invert the smooth CommonMath ramp
+       * @brief Invert the active-mode CommonMath ramp
        *
        * Initialization seeds the inactive high-value gate with the gate
        * *input*, so the residual reproduces the requested output through the
-       * same smooth ramp it evaluates.
+       * same ramp form it evaluates.
        *
        * @param[in] ramp_output Strictly positive requested ramp output.
-       * @return The input the smooth ramp maps to the requested output.
+       * @return The input the active ramp form maps to the requested output.
        *
        * @pre @p ramp_output is finite and strictly positive.
        */
@@ -877,6 +897,13 @@ namespace GridKit
       typename Esdc1a<scalar_type, index_type>::RealT
       Esdc1a<scalar_type, index_type>::inverseRamp(RealT ramp_output) const
       {
+        // The piecewise ramp fmax(x, 0) is the identity for x > 0, so the
+        // smooth inverse's softplus offset terms vanish.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          return ramp_output;
+        }
+
         const RealT mu = Math::MU<RealT>;
         return ramp_output + std::log(-std::expm1(-mu * ramp_output)) / mu;
       }

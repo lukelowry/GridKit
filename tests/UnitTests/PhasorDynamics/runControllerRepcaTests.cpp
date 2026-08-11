@@ -16,6 +16,7 @@ int main()
   result += test.dependencyTracking();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
+  result += test.jacobianPiecewise();
 #endif
 
   return result.summary();

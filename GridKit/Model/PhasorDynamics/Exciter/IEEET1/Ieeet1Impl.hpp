@@ -226,8 +226,17 @@ namespace GridKit
         ScalarT vimag = bus_->Vi();
         ScalarT Ec    = std::sqrt(vreal * vreal + vimag * vimag);
 
+        // Saturation follows the active smoothing mode so the initial ksat
+        // matches the residual's qramp form bit for bit.
+        const auto qramp_rt = [](const auto v)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::qramp<Math::Smoothing::Piecewise>(v)
+                     : Math::qramp(v);
+        };
+
         ScalarT efdp = efd0 / (ONE<RealT> + omega * Ispdlim_);
-        ScalarT ksat = SB_ * Math::qramp(efdp - SA_);
+        ScalarT ksat = SB_ * qramp_rt(efdp - SA_);
         ScalarT ve   = ksat * efdp;
 
         RealT ke0 = Ke_;
@@ -323,6 +332,7 @@ namespace GridKit
        *
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int Ieeet1<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
           const ScalarT* yp,
@@ -361,7 +371,7 @@ namespace GridKit
 
         // Internal Differential Equations
         f[0] = -vts_dot + (Ec - vts) / Tr_;
-        f[1] = -vr_dot + Math::antiwindup(vr, func, Vrmin_, Vrmax_);
+        f[1] = -vr_dot + Math::antiwindup<M>(vr, func, Vrmin_, Vrmax_);
         f[2] = -efdp_dot + (vr - ve - Ke_ * efdp) / Te_;
         f[3] = -vfx_dot + vf / Tf_;
 
@@ -370,7 +380,7 @@ namespace GridKit
         f[5] = -Tf_ * (vf + vfx) + Kf_ * efdp;
         f[6] = -ve + ksat * efdp;
         f[7] = -efd + efdp + omega * efdp * Ispdlim_;
-        f[8] = -ksat + SB_ * Math::qramp(efdp - SA_);
+        f[8] = -ksat + SB_ * Math::qramp<M>(efdp - SA_);
 
         return 0;
       }
@@ -406,7 +416,14 @@ namespace GridKit
         const auto* y  = y_.getData();
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
 
         f_.setDataUpdated();
 
@@ -542,7 +559,9 @@ namespace GridKit
         monitor_->set(Variable::efd, [this]
                       { return y_.getData()[7]; });
         monitor_->set(Variable::ksat, [this]
-                      { return SB_ * Math::qramp(y_.getData()[2] - SA_); });
+                      { return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                                   ? SB_ * Math::qramp<Math::Smoothing::Piecewise>(y_.getData()[2] - SA_)
+                                   : SB_ * Math::qramp(y_.getData()[2] - SA_); });
       }
     } // namespace Exciter
   } // namespace PhasorDynamics

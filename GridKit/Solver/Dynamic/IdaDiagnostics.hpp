@@ -45,6 +45,8 @@ namespace AnalysisManager
       int         last_order{};
       int         current_order{};
       double      current_cj{};
+      /// WRMS local truncation error of the accepted step, 1.0 = at tolerance
+      double      lte_wrms{};
       IdaStats    counter_delta;
     };
 

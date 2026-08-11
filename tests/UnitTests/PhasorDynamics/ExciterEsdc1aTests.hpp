@@ -940,26 +940,19 @@ namespace GridKit
       /// tracking.
       TestOutcome jacobian()
       {
-        TestStatus success = true;
+        return jacobianForMode("jacobian");
+      }
 
-        const auto data = makeResidualData();
-
-        const auto dependency_jacobian = dependencyTrackingJacobian(data, success);
-        const auto enzyme_jacobian     = enzymeJacobian(data, success);
-
-        success         *= (dependency_jacobian.size() == enzyme_jacobian.size());
-        const auto rows  = std::min(dependency_jacobian.size(), enzyme_jacobian.size());
-        for (size_t row = 0; row < rows; ++row)
-        {
-          if (!isEqual(dependency_jacobian[row], enzyme_jacobian[row], kTol))
-          {
-            std::cout << "ESDC1A Jacobian row " << row
-                      << " mismatch between dependency tracking and Enzyme\n";
-            success = false;
-          }
-        }
-
-        return success.report(__func__);
+      /// The same rich-state comparison as jacobian() with the runtime
+      /// smoothing mode set to Piecewise, exercising the fmax-based
+      /// residual through both autodiff paths.
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
       }
 #endif
 
@@ -1572,6 +1565,32 @@ namespace GridKit
       }
 
 #ifdef GRIDKIT_ENABLE_ENZYME
+      /// The dependency-tracking-vs-Enzyme comparison shared by jacobian()
+      /// and jacobianPiecewise(), reported under the caller's name.
+      TestOutcome jacobianForMode(const char* report_name)
+      {
+        TestStatus success = true;
+
+        const auto data = makeResidualData();
+
+        const auto dependency_jacobian = dependencyTrackingJacobian(data, success);
+        const auto enzyme_jacobian     = enzymeJacobian(data, success);
+
+        success         *= (dependency_jacobian.size() == enzyme_jacobian.size());
+        const auto rows  = std::min(dependency_jacobian.size(), enzyme_jacobian.size());
+        for (size_t row = 0; row < rows; ++row)
+        {
+          if (!isEqual(dependency_jacobian[row], enzyme_jacobian[row], kTol))
+          {
+            std::cout << "ESDC1A Jacobian row " << row
+                      << " mismatch between dependency tracking and Enzyme\n";
+            success = false;
+          }
+        }
+
+        return success.report(report_name);
+      }
+
       std::vector<DependencyTracking::Variable::DependencyMap> dependencyTrackingJacobian(
           const Data& data,
           TestStatus& success) const

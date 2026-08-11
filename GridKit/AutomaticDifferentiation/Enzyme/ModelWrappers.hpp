@@ -30,6 +30,7 @@ namespace GridKit
         InternalResidualPiecewise,
         InternalResidualWithSignalPiecewise,
         BusResidual,
+        BusResidualPiecewise,
         BusResidual11, //< Special case for branches that are connected to two buses
         BusResidual12, //< Special case for branches that are connected to two buses
         BusResidual21, //< Special case for branches that are connected to two buses
@@ -179,6 +180,32 @@ namespace GridKit
                          ScalarT*       h)
         {
           model->evaluateBusResidual(y, yp, wb, h);
+        }
+      };
+
+      /**
+       * @brief Residual wrapper partial template specialization for BusResidualPiecewise
+       *
+       */
+      template <typename ModelT>
+      struct ModelWrapper<ModelT, MemberFunctions::BusResidualPiecewise>
+      {
+        using ScalarT = typename ModelT::ScalarT;
+
+        /**
+         * @param[in] model - Pointer to the model to be differentiated
+         * @param[in] y - Internal variables
+         * @param[in] yp - Internal variable derivatives
+         * @param[in] wb - Bus variables
+         * @param[out] h - Bus residual
+         */
+        static void eval(ModelT*        model,
+                         const ScalarT* y,
+                         const ScalarT* yp,
+                         const ScalarT* wb,
+                         ScalarT*       h)
+        {
+          model->template evaluateBusResidual<GridKit::Math::Smoothing::Piecewise>(y, yp, wb, h);
         }
       };
 

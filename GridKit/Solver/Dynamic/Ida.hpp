@@ -64,6 +64,10 @@ namespace AnalysisManager
       sunrealtype jacobian_time_       = 0.0;
       sunrealtype jacobian_cj_         = 0.0;
 
+      /// WRMS norm of the last step's estimated local truncation error in
+      /// error-test units, so 1.0 sits exactly at the accepted-step limit
+      sunrealtype last_step_lte_wrms_ = 0.0;
+
       IdaStats&   operator+=(const IdaStats& other);
       std::string report() const;
     };
@@ -339,6 +343,9 @@ namespace AnalysisManager
 
       N_Vector yy0_{}; ///< Storage for initial values
       N_Vector yp0_{}; ///< Storage for initial derivatives
+
+      mutable N_Vector lte_scratch_{}; ///< Scratch for estimated local errors
+      mutable N_Vector ewt_scratch_{}; ///< Scratch for error weights
 
       N_Vector yyB_{}; ///< Adjoint solution vector
       N_Vector ypB_{}; ///< Adjoint solution derivatives vector

@@ -362,17 +362,18 @@ namespace GridKit
     /// Derivative of binary maximum with respect to first argument
     ///
     /// The selected branch is inactive, so its partial derivative is zero.
-    /// Ties resolve to the second argument, matching the strict comparison
-    /// used by @ref abs_derivative.
+    /// Ties resolve to the first argument, matching the subgradient Enzyme's
+    /// maxnum lowering selects at exact kinks; the piecewise CommonMath
+    /// primitives compare the two paths bit for bit at such points.
     inline double fmax_derivative1(double x, double y)
     {
-      return x > y ? 1.0 : 0.0;
+      return x >= y ? 1.0 : 0.0;
     }
 
     /// Derivative of binary maximum with respect to second argument
     inline double fmax_derivative2(double x, double y)
     {
-      return x > y ? 0.0 : 1.0;
+      return x >= y ? 0.0 : 1.0;
     }
 
   } // namespace DependencyTracking
@@ -430,9 +431,9 @@ namespace std
 
   IMPL_FUN_2(atan2, GridKit::DependencyTracking::atan2_derivative1, GridKit::DependencyTracking::atan2_derivative2)
 
-  // fmax has no active caller. It is required by the exact quadratic ramp kept
-  // commented out in CommonMath.hpp, which cannot be validated against this
-  // Jacobian path without it. Do not remove as dead code.
+  // fmax carries every piecewise CommonMath primitive through this Jacobian
+  // path; the Piecewise smoothing mode composes ramp, qramp, and the rest
+  // from it exclusively.
   IMPL_FUN_2(fmax, GridKit::DependencyTracking::fmax_derivative1, GridKit::DependencyTracking::fmax_derivative2)
 
 #undef IMPL_FUN_1

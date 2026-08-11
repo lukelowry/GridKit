@@ -416,12 +416,21 @@ namespace GridKit
       ScalarT ir  = (p * vr + q * vi) / vm2;
       ScalarT ii  = (p * vi - q * vr) / vm2;
 
+      // Saturation follows the active smoothing mode so the initial ksat
+      // matches the residual's qramp form bit for bit.
+      const auto qramp_rt = [](const auto v)
+      {
+        return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                   ? Math::qramp<Math::Smoothing::Piecewise>(v)
+                   : Math::qramp(v);
+      };
+
       // The subtransient-flux magnitude is invariant under the rotor-frame
       // rotation, so saturation is available directly from network quantities.
       const ScalarT Vint_r = vr + Ra_ * ir - Xqpp_ * ii;
       const ScalarT Vint_i = vi + Ra_ * ii + Xqpp_ * ir;
       ScalarT       psipp  = std::sqrt(Vint_r * Vint_r + Vint_i * Vint_i);
-      ScalarT       ksat   = SB_ * Math::qramp(psipp - SA_);
+      ScalarT       ksat   = SB_ * qramp_rt(psipp - SA_);
 
       const ScalarT ksat_prime = ONE<RealT> + Xqd_ * ksat;
       const ScalarT xsat_delta = ksat_prime * Xdpp_ + Xq_ - Xqpp_;
@@ -452,8 +461,8 @@ namespace GridKit
       // setpoints. @see evaluateAlgebraicState
       const ScalarT psiqpp = -psiqp * Xq4_ - Edp * Xq5_;
       const ScalarT psidpp = psidp * Xd4_ + Eqp * Xd5_;
-      psipp                 = std::sqrt(psiqpp * psiqpp + psidpp * psidpp);
-      ksat                  = SB_ * Math::qramp(psipp - SA_);
+      psipp                = std::sqrt(psiqpp * psiqpp + psidpp * psidpp);
+      ksat                 = SB_ * qramp_rt(psipp - SA_);
 
       ScalarT Te = (psidpp - id * Xdpp_) * iq - (psiqpp - iq * Xdpp_) * id;
       // Convert Te to system base for governor PM signal.
@@ -521,12 +530,16 @@ namespace GridKit
      * therefore evaluated here rather than carried as unknowns and solved for.
      *
      * Both residuals and the variable monitor go through this function, so the
-     * chain has exactly one definition for Enzyme to differentiate.
+     * chain has exactly one definition per smoothing mode for Enzyme to
+     * differentiate.
+     *
+     * @tparam M - smoothing mode used by the saturation qramp
      *
      * @param[in] y  - Internal variables
      * @param[in] wb - Bus variables
      */
     template <typename scalar_type, typename index_type>
+    template <Math::Smoothing M>
     __attribute__((always_inline)) inline typename Genrou<scalar_type, index_type>::AlgebraicState
     Genrou<scalar_type, index_type>::evaluateAlgebraicState(const ScalarT* y, const ScalarT* wb) const
     {
@@ -554,7 +567,7 @@ namespace GridKit
 
       // Saturation on the subtransient flux magnitude
       const ScalarT psipp = std::sqrt((s.psidpp * s.psidpp) + (s.psiqpp * s.psiqpp));
-      s.ksat              = SB_ * Math::qramp(psipp - SA_);
+      s.ksat              = SB_ * Math::qramp<M>(psipp - SA_);
 
       // Internal Voltage
       const ScalarT Vint_r = (-sin_delta * s.psiqpp + cos_delta * s.psidpp) * (ONE<RealT> + omega);
@@ -577,6 +590,7 @@ namespace GridKit
      *
      */
     template <typename scalar_type, typename index_type>
+    template <Math::Smoothing M>
     __attribute__((always_inline)) inline int Genrou<scalar_type, index_type>::evaluateInternalResidual(
         const ScalarT* y,
         const ScalarT* yp,
@@ -606,7 +620,7 @@ namespace GridKit
       static constexpr auto pi = std::numbers::pi_v<RealT>;
 
       // Algebraic quantities, evaluated rather than solved for
-      const AlgebraicState s = evaluateAlgebraicState(y, wb);
+      const AlgebraicState s = evaluateAlgebraicState<M>(y, wb);
 
       /* 6 Genrou differential equations */
       f[0] = delta_dot - omega * (TWO<RealT> * pi * freq_system_base_);
@@ -622,15 +636,18 @@ namespace GridKit
     /**
      * @brief Bus residual
      *
+     * The Norton injection follows the active smoothing mode so ksat in the
+     * terminal current matches the internal rows' form exactly.
      */
     template <typename scalar_type, typename index_type>
+    template <Math::Smoothing M>
     __attribute__((always_inline)) inline int Genrou<scalar_type, index_type>::evaluateBusResidual(
         const ScalarT*                  y,
         [[maybe_unused]] const ScalarT* yp,
         const ScalarT*                  wb,
         ScalarT*                        h)
     {
-      const AlgebraicState s = evaluateAlgebraicState(y, wb);
+      const AlgebraicState s = evaluateAlgebraicState<M>(y, wb);
 
       // Convert current injection to system base for the network.
       h[0] = toSystemBase(s.ir);
@@ -670,8 +687,16 @@ namespace GridKit
       const auto* y  = y_.getData();
       const auto* yp = yp_.getData();
       auto*       f  = f_.getData();
-      evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
-      evaluateBusResidual(y, yp, wb_.data(), h_.data());
+      if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+      {
+        evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        evaluateBusResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), h_.data());
+      }
+      else
+      {
+        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        evaluateBusResidual(y, yp, wb_.data(), h_.data());
+      }
 
       // Genrou contribution to bus algebraic equations
       Ir() += h_[0];

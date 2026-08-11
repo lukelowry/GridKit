@@ -405,6 +405,28 @@ namespace GridKit
 #ifdef GRIDKIT_ENABLE_ENZYME
       TestOutcome jacobian()
       {
+        return jacobianForMode("jacobian");
+      }
+
+      /**
+       * A test case to verify Jacobian values with piecewise primitives
+       *
+       * Runs the same DependencyTracking-vs-Enzyme comparison as jacobian()
+       * with the runtime smoothing mode set to Piecewise, exercising the
+       * fmax-based residual through both autodiff paths.
+       */
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
+      }
+
+    private:
+      TestOutcome jacobianForMode(const char* report_name)
+      {
         TestStatus success = true;
 
         std::vector<std::pair<Data, size_t>> cases;
@@ -457,7 +479,7 @@ namespace GridKit
           }
         }
 
-        return success.report(__func__);
+        return success.report(report_name);
       }
 #endif
 

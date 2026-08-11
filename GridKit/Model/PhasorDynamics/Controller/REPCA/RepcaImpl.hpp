@@ -332,6 +332,27 @@ namespace GridKit
         const ScalarT vldc_r = vr - Rc_ * ir + Xc_ * ii;
         const ScalarT vldc_i = vi - Rc_ * ii - Xc_ * ir;
 
+        // Initialization is not differentiated, so these dispatchers follow
+        // the runtime smoothing mode to match the residual's active form.
+        const auto above_rt = [](const auto x, const auto limit)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::above<Math::Smoothing::Piecewise>(x, limit)
+                     : Math::above(x, limit);
+        };
+        const auto antiwindup_rt = [](const auto x, const auto f, const auto lower, const auto upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::antiwindup<Math::Smoothing::Piecewise>(x, f, lower, upper)
+                     : Math::antiwindup(x, f, lower, upper);
+        };
+        const auto droop_rt = [](const auto error, const auto down, const auto up)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? droop<Math::Smoothing::Piecewise>(error, down, up)
+                     : droop(error, down, up);
+        };
+
         const ScalarT v0      = std::sqrt(vr * vr + vi * vi);
         const ScalarT vldc0   = std::sqrt(vldc_r * vldc_r + vldc_i * vldc_i);
         const ScalarT vdroop0 = v0 + Kc_ * q;
@@ -339,7 +360,7 @@ namespace GridKit
         const ScalarT vmeas0  = vctrl0;
         const ScalarT qmeas0  = q;
         const ScalarT pmeas0  = p;
-        const ScalarT sfrz0   = Math::above(v0, Vfrz_);
+        const ScalarT sfrz0   = above_rt(v0, Vfrz_);
 
         const ScalarT zero = static_cast<ScalarT>(ZERO<RealT>);
         ScalarT       erq0{};
@@ -364,7 +385,7 @@ namespace GridKit
           return 1;
         }
         const ScalarT xqpi0      = qpi_input0 - Kp_ * erqlim0;
-        const ScalarT q_aw_rate0 = Math::antiwindup(qpi0, Ki_ * erqlim0, qmin, qmax);
+        const ScalarT q_aw_rate0 = antiwindup_rt(qpi0, Ki_ * erqlim0, qmin, qmax);
         const ScalarT xqpi_rate0 = sfrz0 * q_aw_rate0;
         if (!is_finite(q_aw_rate0) || !is_finite(xqpi_rate0)
             || std::abs(static_cast<RealT>(xqpi_rate0)) > INITIALIZATION_TOLERANCE)
@@ -382,7 +403,7 @@ namespace GridKit
           return 1;
         }
         const ScalarT ef0    = zero;
-        const ScalarT pfreq0 = droop(ef0, Ddn_, Dup_);
+        const ScalarT pfreq0 = droop_rt(ef0, Ddn_, Dup_);
         const ScalarT eplim0 = zero;
         const ScalarT pref0  = Freqflag_ ? pext0 : pmeas0;
         const ScalarT ppi0   = pref0;
@@ -397,7 +418,7 @@ namespace GridKit
           return 1;
         }
         const ScalarT xppi0      = ppi_input0 - Kpg_ * eplim0;
-        const ScalarT p_aw_rate0 = Math::antiwindup(ppi0, Kig_ * eplim0, pmin, pmax);
+        const ScalarT p_aw_rate0 = antiwindup_rt(ppi0, Kig_ * eplim0, pmin, pmax);
         if (!is_finite(p_aw_rate0)
             || std::abs(static_cast<RealT>(p_aw_rate0)) > INITIALIZATION_TOLERANCE)
         {
@@ -674,7 +695,14 @@ namespace GridKit
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
 
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
         f_.setDataUpdated();
         return 0;
       }
@@ -722,6 +750,7 @@ namespace GridKit
        *               `RepcaInternalVariables` order.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       [[gnu::always_inline]] inline int
       Repca<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
@@ -809,31 +838,31 @@ namespace GridKit
 
         const ScalarT vldc_r = vr - Rc_ * ir + Xc_ * ii;
         const ScalarT vldc_i = vi - Rc_ * ii - Xc_ * ir;
-        const ScalarT pfreq  = droop(ef, Ddn_, Dup_);
+        const ScalarT pfreq  = droop<M>(ef, Ddn_, Dup_);
 
         f[VMEAS]      = -vmeas_dot + (vctrl - vmeas) / Tfltr_;
         f[QMEAS]      = -qmeas_dot + (q - qmeas) / Tfltr_;
-        f[XQPI]       = -xqpi_dot + sfrz * Math::antiwindup(qpi, Ki_ * erqlim, Qmin_, Qmax_);
+        f[XQPI]       = -xqpi_dot + sfrz * Math::antiwindup<M>(qpi, Ki_ * erqlim, Qmin_, Qmax_);
         f[XQLAG]      = -xqlag_dot + (qpi - xqlag) / Tfv_;
         f[PMEAS]      = -pmeas_dot + (p - pmeas) / Tp_;
-        f[XPPI]       = -xppi_dot + Math::antiwindup(ppi, Kig_ * eplim, Pmin_, Pmax_);
+        f[XPPI]       = -xppi_dot + Math::antiwindup<M>(ppi, Kig_ * eplim, Pmin_, Pmax_);
         f[PREF_STATE] = -pref_dot + (ppi - pref) / Tlag_;
 
         f[V]      = -v * v + vr * vr + vi * vi;
         f[VLDC]   = -vldc * vldc + vldc_r * vldc_r + vldc_i * vldc_i;
         f[VDROOP] = -vdroop + v + Kc_ * q;
         f[VCTRL]  = -vctrl + vcomp_on_ * vldc + vcomp_off_ * vdroop;
-        f[SFRZ]   = -sfrz + Math::above(v, Vfrz_);
+        f[SFRZ]   = -sfrz + Math::above<M>(v, Vfrz_);
         f[ERQ]    = -erq + ref_on_ * (vref - vmeas) + ref_off_ * (qref - qmeas);
-        f[ERQDB]  = -erqdb + Math::deadband2(erq, dbdlow_, dbdupper_);
-        f[ERQLIM] = -erqlim + Math::clamp(erqdb, emin_, emax_);
-        f[QPI]    = -qpi + Math::clamp(Kp_ * erqlim + xqpi, Qmin_, Qmax_);
+        f[ERQDB]  = -erqdb + Math::deadband2<M>(erq, dbdlow_, dbdupper_);
+        f[ERQLIM] = -erqlim + Math::clamp<M>(erqdb, emin_, emax_);
+        f[QPI]    = -qpi + Math::clamp<M>(Kp_ * erqlim + xqpi, Qmin_, Qmax_);
         f[QEXT]   = -Tfv_ * (qext - xqlag) + Tft_ * (qpi - xqlag);
 
-        f[EF]    = -ef + Math::deadband2(freqref - freq, fdbd1_, fdbd2_);
+        f[EF]    = -ef + Math::deadband2<M>(freqref - freq, fdbd1_, fdbd2_);
         f[EP]    = -ep + pref_in - pmeas + pfreq;
-        f[EPLIM] = -eplim + Math::clamp(ep, femin_, femax_);
-        f[PPI]   = -ppi + Math::clamp(Kpg_ * eplim + xppi, Pmin_, Pmax_);
+        f[EPLIM] = -eplim + Math::clamp<M>(ep, femin_, femax_);
+        f[PPI]   = -ppi + Math::clamp<M>(Kpg_ * eplim + xppi, Pmin_, Pmax_);
         f[PEXT]  = -pext + freq_on_ * pref;
 
         return 0;
@@ -844,7 +873,7 @@ namespace GridKit
       //
 
       /**
-       * @brief Smooth asymmetric frequency-droop response
+       * @brief Asymmetric frequency-droop response
        *
        * @param[in] error Deadbanded frequency error.
        * @param[in] down Down-regulation (overfrequency) gain.
@@ -852,10 +881,11 @@ namespace GridKit
        * @return Active-power frequency response.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline scalar_type
       Repca<scalar_type, index_type>::droop(ScalarT error, RealT down, RealT up)
       {
-        return error * (down + (up - down) * Math::sigmoid(error));
+        return error * (down + (up - down) * Math::sigmoid<M>(error));
       }
 
       /**
@@ -1081,6 +1111,14 @@ namespace GridKit
           return true;
         }
 
+        // The piecewise clamp is the exact clamp, so a strict-interior output
+        // is its own input; the branches above already cover the bounds.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          input = static_cast<ScalarT>(value);
+          return true;
+        }
+
         const RealT mu                    = Math::MU<RealT>;
         const RealT scaled_lower_distance = mu * distance_from_lower;
         const RealT scaled_upper_distance = mu * distance_from_upper;
@@ -1121,6 +1159,16 @@ namespace GridKit
         {
           input = static_cast<ScalarT>(midpoint);
           return true;
+        }
+
+        // The piecewise deadband is exactly x - clamp(x, lower, upper), so
+        // the active-branch inverse is x = y + upper for y > 0 and
+        // x = y + lower for y < 0.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          input = static_cast<ScalarT>(value > ZERO<RealT> ? upper + value
+                                                           : lower + value);
+          return std::isfinite(static_cast<RealT>(input));
         }
 
         RealT lower_input = midpoint;

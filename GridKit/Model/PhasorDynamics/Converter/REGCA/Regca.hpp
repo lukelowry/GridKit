@@ -14,6 +14,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/Converter/REGCA/RegcaData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 namespace GridKit
 {
@@ -121,6 +122,7 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT* y, const ScalarT* yp, const ScalarT* wb, const ScalarT* ws, ScalarT* f);
 
@@ -128,6 +130,10 @@ namespace GridKit
             const ScalarT* y, const ScalarT* yp, const ScalarT* wb, ScalarT* h);
 
       private:
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         void initializeParameters(const ModelDataT& data);
         void initializeMonitor();
         void setDerivedParameters();
@@ -140,8 +146,11 @@ namespace GridKit
          *
          * Limits motion that increases \f$|x|\f$ while smoothly releasing
          * restoring motion toward zero. At \f$x = 0\f$, the result is the
-         * symmetric smooth slew limit applied to @p f.
+         * symmetric smooth slew limit applied to @p f. The Piecewise
+         * instantiation replaces the tanh sign gates with the exact PWL
+         * step indicators of the sign of @p x.
          *
+         * @tparam M Smoothing mode.
          * @param[in] x State whose sign determines the limited direction.
          * @param[in] f Unconstrained derivative.
          * @param[in] rate Nonnegative symmetric rate limit.
@@ -149,6 +158,7 @@ namespace GridKit
          *
          * @todo Move this reusable limiter to CommonMath.
          */
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         static __attribute__((always_inline)) inline ScalarT rrpwr(
             const ScalarT x,
             const ScalarT f,
@@ -156,13 +166,26 @@ namespace GridKit
         {
           assert(rate >= ZERO<RealT>);
 
-          const ScalarT t     = std::tanh(HALF<RealT> * Math::MU<RealT> * x);
-          const ScalarT abs_t = std::abs(t);
-          const ScalarT w_pos = HALF<RealT> * t * (t + abs_t);
-          const ScalarT w_neg = HALF<RealT> * t * (t - abs_t);
+          if constexpr (M == Math::Smoothing::Piecewise)
+          {
+            // PWL sign gates: w_pos indicates x > 0 and its complement
+            // w_neg indicates x < 0.
+            const ScalarT w_pos = Math::sigmoid<M>(x);
+            const ScalarT w_neg = ONE<RealT> - w_pos;
 
-          return f + (ONE<RealT> - w_pos) * Math::ramp(-f - rate)
-                 - (ONE<RealT> - w_neg) * Math::ramp(f - rate);
+            return f + (ONE<RealT> - w_pos) * Math::ramp<M>(-f - rate)
+                   - (ONE<RealT> - w_neg) * Math::ramp<M>(f - rate);
+          }
+          else
+          {
+            const ScalarT t     = std::tanh(HALF<RealT> * Math::MU<RealT> * x);
+            const ScalarT abs_t = std::abs(t);
+            const ScalarT w_pos = HALF<RealT> * t * (t + abs_t);
+            const ScalarT w_neg = HALF<RealT> * t * (t - abs_t);
+
+            return f + (ONE<RealT> - w_pos) * Math::ramp(-f - rate)
+                   - (ONE<RealT> - w_neg) * Math::ramp(f - rate);
+          }
         }
 
         /**
@@ -173,6 +196,7 @@ namespace GridKit
          * drags the state down with it. Equivalent to fixed-bound anti-windup
          * on the gap x - xmax held below zero.
          *
+         * @tparam M Smoothing mode.
          * @param[in] x State limited from above.
          * @param[in] f Unconstrained derivative of x.
          * @param[in] xmax Moving upper bound on x.
@@ -181,6 +205,7 @@ namespace GridKit
          *
          * @todo Move this one-sided anti-windup helper to CommonMath.
          */
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         static __attribute__((always_inline)) inline ScalarT awmax(
             const ScalarT x,
             const ScalarT f,
@@ -188,10 +213,10 @@ namespace GridKit
             const ScalarT fmax)
         {
           const ScalarT gap_rate = f - fmax;
-          const ScalarT below    = Math::sigmoid(xmax - x);
+          const ScalarT below    = Math::sigmoid<M>(xmax - x);
 
           return fmax
-                 + (below + (ONE<RealT> - below) * Math::sigmoid(-gap_rate))
+                 + (below + (ONE<RealT> - below) * Math::sigmoid<M>(-gap_rate))
                        * gap_rate;
         }
 

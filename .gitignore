@@ -29,3 +29,4 @@ examples/PhasorDynamics/**/mon.csv
 
 # Generated step-trace study inputs and traces
 benchmark/step-trace/work/
+benchmark/smooth-vs-piecewise/*/work/

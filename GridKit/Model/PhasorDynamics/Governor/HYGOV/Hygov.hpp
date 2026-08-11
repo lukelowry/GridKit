@@ -16,6 +16,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/Governor/HYGOV/HygovData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 namespace GridKit
 {
@@ -115,6 +116,7 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT* y,
             const ScalarT* yp,
@@ -127,8 +129,13 @@ namespace GridKit
         void initializeMonitor();
         void setDerivedParameters();
 
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         /// Evaluate the nonlinear gate-to-power curve as a fixed sum of
-        /// smooth linear segments.
+        /// linear segments in the selected smoothing form.
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline ScalarT gatePower(ScalarT gate) const;
 
         /// Steady component-base mechanical power at a gate and dam head.

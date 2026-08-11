@@ -362,6 +362,46 @@ namespace GridKit
 
         const auto* y = y_.getData();
 
+        // Initialization is not differentiated, so each primitive follows the
+        // active smoothing mode at runtime; the constructed steady state must
+        // agree with the residual's active form.
+        const auto max_rt = [](const auto value, const auto bound)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::max<Math::Smoothing::Piecewise>(value, bound)
+                     : Math::max(value, bound);
+        };
+        const auto deadband2_rt = [](const auto value, const auto lower, const auto upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::deadband2<Math::Smoothing::Piecewise>(value, lower, upper)
+                     : Math::deadband2(value, lower, upper);
+        };
+        const auto clamp_rt = [](const auto value, const auto lower, const auto upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::clamp<Math::Smoothing::Piecewise>(value, lower, upper)
+                     : Math::clamp(value, lower, upper);
+        };
+        const auto inside_rt = [](const auto value, const auto lower, const auto upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::inside<Math::Smoothing::Piecewise>(value, lower, upper)
+                     : Math::inside(value, lower, upper);
+        };
+        const auto antiwindup_rt = [](const auto state, const auto rate, const auto lower, const auto upper)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::antiwindup<Math::Smoothing::Piecewise>(state, rate, lower, upper)
+                     : Math::antiwindup(state, rate, lower, upper);
+        };
+        const auto awband_rt = [](const auto state, const auto rate, const auto band)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? awband<Math::Smoothing::Piecewise>(state, rate, band)
+                     : awband(state, rate, band);
+        };
+
         const RealT ipcmd0_system = static_cast<RealT>(y[IPCMD]);
         const RealT iqcmd0_system = static_cast<RealT>(y[IQCMD]);
         const RealT ipcmd0        = toComponentBase(ipcmd0_system);
@@ -370,7 +410,7 @@ namespace GridKit
         const RealT vi0           = static_cast<RealT>(Vi());
         const RealT vt0           = std::sqrt(vr0 * vr0 + vi0 * vi0);
         const RealT vmeas0        = vt0;
-        const RealT vmeas_safe0   = Math::max(vmeas0, VMEAS_MINIMUM);
+        const RealT vmeas_safe0   = max_rt(vmeas0, VMEAS_MINIMUM);
 
         RealT pe0_system   = toSystemBase(ipcmd0 * vmeas_safe0);
         RealT qgen0_system = toSystemBase(iqcmd0 * vmeas_safe0);
@@ -413,13 +453,18 @@ namespace GridKit
           return false;
         }
 
-        const RealT verr0   = Math::deadband2(vref0 - vmeas0, dbd1_, dbd2_);
-        const RealT iqv0    = Math::clamp(kqv_ * verr0, Iql1_, Iqh1_);
+        const RealT verr0   = deadband2_rt(vref0 - vmeas0, dbd1_, dbd2_);
+        const RealT iqv0    = clamp_rt(kqv_ * verr0, Iql1_, Iqh1_);
         const RealT iqabs0  = std::abs(iqcmd0);
         RealT       iqneed0 = iqabs0;
         if (QFlag_ && iqabs0 > ZERO<RealT>)
         {
-          iqneed0 += std::numbers::ln2_v<RealT> / Math::MU<RealT> + INITIALIZATION_TOLERANCE;
+          // The piecewise clamp reproduces its bounds exactly; only the smooth
+          // clamp tail needs the ln2/mu recovery margin.
+          if (Math::SMOOTHING_MODE != Math::Smoothing::Piecewise)
+          {
+            iqneed0 += std::numbers::ln2_v<RealT> / Math::MU<RealT> + INITIALIZATION_TOLERANCE;
+          }
         }
 
         RealT high0 = iqabs0;
@@ -537,7 +582,7 @@ namespace GridKit
           qref0      = toComponentBase(qext0_port);
         }
 
-        const RealT eq0   = Math::clamp(qref0, qmin, qmax) - qgen0;
+        const RealT eq0   = clamp_rt(qref0, qmin, qmax) - qgen0;
         RealT       xpiq0 = ZERO<RealT>;
         if (QFlag_ && VFlag_)
         {
@@ -550,7 +595,7 @@ namespace GridKit
           xpiq0 = vpiq_input0 - Kqp_ * eq0;
         }
 
-        const RealT vpiq0 = Math::clamp(Kqp_ * eq0 + xpiq0, vmin, vmax);
+        const RealT vpiq0 = clamp_rt(Kqp_ * eq0 + xpiq0, vmin, vmax);
         RealT       epiv0 = ZERO<RealT>;
         RealT       qv0   = ZERO<RealT>;
         RealT       xpiv0 = ZERO<RealT>;
@@ -586,11 +631,11 @@ namespace GridKit
           qv0 = qref0 / vmeas_safe0;
         }
 
-        const RealT sdip0  = Math::inside(vt0, Vdip_, Vup_);
+        const RealT sdip0  = inside_rt(vt0, Vdip_, Vup_);
         RealT       qrate0 = ZERO<RealT>;
         if (QFlag_ && VFlag_)
         {
-          qrate0 = sdip0 * Math::antiwindup(Kqp_ * eq0 + xpiq0, Kqi_ * eq0, vmin, vmax);
+          qrate0 = sdip0 * antiwindup_rt(Kqp_ * eq0 + xpiq0, Kqi_ * eq0, vmin, vmax);
         }
 
         const ScalarT vstate0{Kvp_ * epiv0 + xpiv0};
@@ -598,18 +643,18 @@ namespace GridKit
         RealT         vrate0 = ZERO<RealT>;
         if (QFlag_)
         {
-          vrate0 = sdip0 * static_cast<RealT>(awband(vstate0, vderiv0, ScalarT{iqmax0}));
+          vrate0 = sdip0 * static_cast<RealT>(awband_rt(vstate0, vderiv0, ScalarT{iqmax0}));
         }
 
-        const RealT iqbase0     = Math::clamp(Kvp_ * epiv0 + xpiv0, -iqmax0, iqmax0);
+        const RealT iqbase0     = clamp_rt(Kvp_ * epiv0 + xpiv0, -iqmax0, iqmax0);
         RealT       iqraw_check = qv0 + iqv0;
         if (QFlag_)
         {
           iqraw_check = iqbase0 + iqv0;
         }
 
-        const RealT iqcmd_check = Math::clamp(iqraw_check, -iqmax0, iqmax0);
-        const RealT ipcmd_check = Math::clamp(pord0 / vmeas_safe0, ZERO<RealT>, ipmax0);
+        const RealT iqcmd_check = clamp_rt(iqraw_check, -iqmax0, iqmax0);
+        const RealT ipcmd_check = clamp_rt(pord0 / vmeas_safe0, ZERO<RealT>, ipmax0);
 
         if (!std::isfinite(imax) || !std::isfinite(ilmax0) || !std::isfinite(ilcap0)
             || !std::isfinite(iqmax0) || !std::isfinite(ipmax0)
@@ -849,7 +894,14 @@ namespace GridKit
         wb_[0] = Vr();
         wb_[1] = Vi();
 
-        evaluateInternalResidual(y_.getData(), yp_.getData(), wb_.data(), ws_.data(), f_.getData());
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y_.getData(), yp_.getData(), wb_.data(), ws_.data(), f_.getData());
+        }
+        else
+        {
+          evaluateInternalResidual(y_.getData(), yp_.getData(), wb_.data(), ws_.data(), f_.getData());
+        }
         f_.setDataUpdated();
         return 0;
       }
@@ -894,6 +946,7 @@ namespace GridKit
        * @param[out] f Internal residuals.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       [[gnu::always_inline]] inline int
       Reecb<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT* y,
@@ -974,18 +1027,18 @@ namespace GridKit
         const ScalarT iqcmd  = toComponentBase(iqcmd_system);
         const ScalarT ipcmd  = toComponentBase(ipcmd_system);
 
-        const ScalarT verr        = Math::deadband2(Vref0_ - vmeas, dbd1_, dbd2_);
+        const ScalarT verr        = Math::deadband2<M>(Vref0_ - vmeas, dbd1_, dbd2_);
         const ScalarT q_pi_state  = Kqp_ * eq + xpiq;
         const ScalarT v_pi_state  = Kvp_ * epiv + xpiv;
         const ScalarT fpord       = (pref - pord) / Tpord_;
         const ScalarT ilnorm      = std::sqrt(ilmax * ilmax + INITIALIZATION_TOLERANCE);
         // Select before the factored square to avoid 0 * inf on the inactive path.
         const ScalarT high        = pq_on_ * ipcmd + pq_off_ * iqcmd;
-        const ScalarT q_pi_rate   = q_pi_on_ * sdip * Math::antiwindup(q_pi_state, Kqi_ * eq, Vmin_, Vmax_);
-        const ScalarT v_pi_rate   = q_on_ * sdip * awband(v_pi_state, Kvi_ * epiv, iqmax);
+        const ScalarT q_pi_rate   = q_pi_on_ * sdip * Math::antiwindup<M>(q_pi_state, Kqi_ * eq, Vmin_, Vmax_);
+        const ScalarT v_pi_rate   = q_on_ * sdip * awband<M>(v_pi_state, Kvi_ * epiv, iqmax);
         const ScalarT qv_rate     = q_off_ * sdip * (qref / vsafe - qv) / Tiq_;
-        const ScalarT pord_rate   = sdip * Math::antiwindup(pord, rpord, Pmin_, Pmax_);
-        const ScalarT iqv_target  = Math::clamp(kqv_ * verr, Iql1_, Iqh1_);
+        const ScalarT pord_rate   = sdip * Math::antiwindup<M>(pord, rpord, Pmin_, Pmax_);
+        const ScalarT iqv_target  = Math::clamp<M>(kqv_ * verr, Iql1_, Iqh1_);
         // The Volt/VAr channel is a system-base reactive power unless
         // direct-voltage mode selects it as a terminal-voltage reference,
         // which takes no power-base conversion.
@@ -998,22 +1051,22 @@ namespace GridKit
         f[QV]     = -qv_dot + qv_rate;
         f[PORD]   = -pord_dot + pord_rate;
         f[VT]     = -vt * vt + vr * vr + vi * vi;
-        f[VSAFE]  = -vsafe + Math::max(vmeas, VMEAS_MINIMUM);
-        f[SDIP]   = -sdip + Math::inside(vt, Vdip_, Vup_);
+        f[VSAFE]  = -vsafe + Math::max<M>(vmeas, VMEAS_MINIMUM);
+        f[SDIP]   = -sdip + Math::inside<M>(vt, Vdip_, Vup_);
         f[IQV]    = -iqv + iqv_target;
         f[QREF]   = -qref + qref_target;
-        f[EQ]     = -eq + Math::clamp(qref, Qmin_, Qmax_) - qgen;
-        f[VPIQ]   = -vpiq + Math::clamp(q_pi_state, Vmin_, Vmax_);
+        f[EQ]     = -eq + Math::clamp<M>(qref, Qmin_, Qmax_) - qgen;
+        f[VPIQ]   = -vpiq + Math::clamp<M>(q_pi_state, Vmin_, Vmax_);
         f[EPIV]   = -epiv + q_pi_on_ * vpiq + v_ref_on_ * extref - q_on_ * vmeas;
-        f[RPORD]  = -rpord + aslew(fpord, dPmin_, dPmax_);
+        f[RPORD]  = -rpord + aslew<M>(fpord, dPmin_, dPmax_);
         f[ILMAX]  = -ilmax * ilnorm + (Imax_ - high) * (Imax_ + high);
         f[ILCAP]  = -ilcap + (ilmax / ilnorm) * ilmax;
         f[IQMAX]  = -iqmax + pq_on_ * ilcap + pq_off_ * Imax_;
         f[IPMAX]  = -ipmax + pq_on_ * Imax_ + pq_off_ * ilcap;
-        f[IQBASE] = -iqbase + Math::clamp(v_pi_state, -iqmax, iqmax);
+        f[IQBASE] = -iqbase + Math::clamp<M>(v_pi_state, -iqmax, iqmax);
         f[IQRAW]  = -iqraw + q_on_ * iqbase + q_off_ * qv + iqv;
-        f[IQCMD]  = -iqcmd + Math::clamp(iqraw, -iqmax, iqmax);
-        f[IPCMD]  = -ipcmd + Math::clamp(pord / vsafe, ZERO<RealT>, ipmax);
+        f[IQCMD]  = -iqcmd + Math::clamp<M>(iqraw, -iqmax, iqmax);
+        f[IPCMD]  = -ipcmd + Math::clamp<M>(pord / vsafe, ZERO<RealT>, ipmax);
 
         return 0;
       }
@@ -1031,12 +1084,13 @@ namespace GridKit
        * @return Limited rate.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       [[gnu::always_inline]] inline scalar_type
       Reecb<scalar_type, index_type>::aslew(ScalarT rate, RealT lower, RealT upper)
       {
         assert(lower < ZERO<RealT> && ZERO<RealT> < upper);
         return rate
-               / (ONE<RealT> + Math::ramp(rate / upper - ONE<RealT>) + Math::ramp(rate / lower - ONE<RealT>));
+               / (ONE<RealT> + Math::ramp<M>(rate / upper - ONE<RealT>) + Math::ramp<M>(rate / lower - ONE<RealT>));
       }
 
       /**
@@ -1054,13 +1108,14 @@ namespace GridKit
        * @todo Fold moving-limit support into Math::antiwindup in CommonMath.
        */
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       [[gnu::always_inline]] inline scalar_type
       Reecb<scalar_type, index_type>::awband(ScalarT state, ScalarT rate, ScalarT band)
       {
-        const ScalarT above_min = Math::above(state, -band);
-        const ScalarT below_max = Math::below(state, band);
-        return (above_min * below_max + (ONE<RealT> - below_max) * Math::sigmoid(-rate)
-                + (ONE<RealT> - above_min) * Math::sigmoid(rate))
+        const ScalarT above_min = Math::above<M>(state, -band);
+        const ScalarT below_max = Math::below<M>(state, band);
+        return (above_min * below_max + (ONE<RealT> - below_max) * Math::sigmoid<M>(-rate)
+                + (ONE<RealT> - above_min) * Math::sigmoid<M>(rate))
                * rate;
       }
 
@@ -1522,10 +1577,12 @@ namespace GridKit
       }
 
       /**
-       * @brief Recover the input that produces a requested smooth-clamp output
+       * @brief Recover the input that produces a requested clamp output
        *
-       * Exact bounds use a finite offset derived from the initialization
-       * tolerance; collapsed bounds are reproduced directly.
+       * For the smooth clamp, exact bounds use a finite offset derived from the
+       * initialization tolerance; collapsed bounds are reproduced directly. The
+       * piecewise clamp is the identity on its closed interval, so the clamped
+       * output is its own recovered input.
        *
        * @param[in] output Requested output.
        * @param[in] lower Lower smooth-clamp limit.
@@ -1548,6 +1605,14 @@ namespace GridKit
         if (upper == lower)
         {
           input = lower;
+          return true;
+        }
+
+        // The piecewise clamp is exact on [lower, upper], bounds included, so
+        // its inverse is the identity and the smooth tail offsets vanish.
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          input = output;
           return true;
         }
 

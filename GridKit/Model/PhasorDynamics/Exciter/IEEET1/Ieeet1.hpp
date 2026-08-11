@@ -12,6 +12,7 @@
 #include <GridKit/Model/PhasorDynamics/Component.hpp>
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 // Forward declarations
 namespace GridKit
@@ -119,10 +120,15 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         __attribute__((always_inline)) inline int evaluateInternalResidual(
             const ScalarT*, const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
 
       private:
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
         static constexpr RealT TIME_CONSTANT_MINIMUM = static_cast<RealT>(1.0e-3);
 
         // Signal pointers

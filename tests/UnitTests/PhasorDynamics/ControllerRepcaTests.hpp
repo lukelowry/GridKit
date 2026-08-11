@@ -1237,32 +1237,19 @@ namespace GridKit
       /// sensitivity paths; every Enzyme CSR row must match dependency tracking.
       TestOutcome jacobian()
       {
-        TestStatus success = true;
+        return jacobianForMode("jacobian");
+      }
 
-        const auto data = makeResidualData();
-
-        success *= jacobianMatches(enzymeJacobian(data, success),
-                                   dependencyTrackingJacobian(data, success),
-                                   "Enzyme versus dependency tracking",
-                                   kTol);
-
-        auto all_flags_off_data                           = data;
-        all_flags_off_data.parameters[Params::VcompFlag]  = false;
-        all_flags_off_data.parameters[Params::RefFlag]    = false;
-        all_flags_off_data.parameters[Params::Freqflag]   = false;
-        success                                          *= jacobianMatches(
-            enzymeJacobian(all_flags_off_data, success),
-            dependencyTrackingJacobian(all_flags_off_data, success),
-            "all-flags-off Enzyme versus dependency tracking",
-            kTol);
-
-        success *= jacobianMatches(
-            enzymeJacobian(data, success, kNonunitAlpha),
-            dependencyTrackingJacobian(data, success, kNonunitAlpha),
-            "non-unit-alpha Enzyme versus dependency tracking",
-            kTol);
-
-        return success.report(__func__);
+      /// Runs the same DependencyTracking-vs-Enzyme comparison as jacobian()
+      /// with the runtime smoothing mode set to Piecewise, exercising the
+      /// fmax-based residual through both autodiff paths.
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
       }
 #endif
 
@@ -2333,6 +2320,36 @@ namespace GridKit
       }
 
 #ifdef GRIDKIT_ENABLE_ENZYME
+      TestOutcome jacobianForMode(const char* report_name)
+      {
+        TestStatus success = true;
+
+        const auto data = makeResidualData();
+
+        success *= jacobianMatches(enzymeJacobian(data, success),
+                                   dependencyTrackingJacobian(data, success),
+                                   "Enzyme versus dependency tracking",
+                                   kTol);
+
+        auto all_flags_off_data                           = data;
+        all_flags_off_data.parameters[Params::VcompFlag]  = false;
+        all_flags_off_data.parameters[Params::RefFlag]    = false;
+        all_flags_off_data.parameters[Params::Freqflag]   = false;
+        success                                          *= jacobianMatches(
+            enzymeJacobian(all_flags_off_data, success),
+            dependencyTrackingJacobian(all_flags_off_data, success),
+            "all-flags-off Enzyme versus dependency tracking",
+            kTol);
+
+        success *= jacobianMatches(
+            enzymeJacobian(data, success, kNonunitAlpha),
+            dependencyTrackingJacobian(data, success, kNonunitAlpha),
+            "non-unit-alpha Enzyme versus dependency tracking",
+            kTol);
+
+        return success.report(report_name);
+      }
+
       std::vector<DependencyTracking::Variable::DependencyMap> enzymeJacobian(
           const Data& data,
           TestStatus& success,

@@ -8,6 +8,7 @@
   `dt_monitor`        | Monitor output time interval for recorded simulation results, 0 for no intermediate monitoring, or a negative number to output at solver-selected steps (default: 0)[^2]
   `tmax`              | A floating-point value for max time
   `ida`               | IDA solver options (optional; see [IDA options](#ida-options))
+  `math`              | Runtime CommonMath configuration (optional; see [Math options](#math-options))
   `fault_bus`         | Bus where the study's bus fault is applied (optional; defaults to the bus in the system model)
   `events`            | An array of event groups (see [Events](#events) below)
   `output_file`       | Path to monitor output (CSV) file; omitted means monitors are disabled (optional)
@@ -21,6 +22,18 @@
 [^1]: See system model [case format](../../GridKit/Model/PhasorDynamics/INPUT_FORMAT.md)
 
 [^2]: Accepted under the deprecated name `dt` for backward compatibility. `dt_monitor` takes precedence when both are given.
+
+## Math options
+
+Both options are optional and apply to every model in the run. They must be
+chosen before the system is built, so they live in the study file rather than
+an environment knob; supported models dispatch on them at runtime and no
+rebuild is required.
+
+ Name   | Default
+ -------|-----------------------
+ `mode` | `"smooth"`; use `"piecewise"` for exact fmax-composed primitives with a piecewise-linear step
+ `mu`   | `240.0`; sharpness scale shared by the smooth transitions and the piecewise-linear step slope
 
 ## IDA options
 

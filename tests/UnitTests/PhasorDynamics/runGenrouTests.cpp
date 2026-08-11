@@ -14,6 +14,7 @@ int main()
   result += test.monitor_system_base();
 #ifdef GRIDKIT_ENABLE_ENZYME
   result += test.jacobian();
+  result += test.jacobianPiecewise();
 #endif
 
   return result.summary();

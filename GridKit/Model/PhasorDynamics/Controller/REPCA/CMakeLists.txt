@@ -22,7 +22,10 @@ if(GRIDKIT_ENABLE_ENZYME)
       PRIVATE
       -mllvm
       -enzyme-auto-sparsity=1
-      -fno-math-errno)
+      # Preserve runtime-order stores for Enzyme sparsification.
+      "SHELL:-mllvm -simplifycfg-sink-common=false"
+      -fno-math-errno
+      -fno-vectorize)
 else()
   gridkit_add_library(
     phasor_dynamics_controller_repca

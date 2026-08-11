@@ -745,6 +745,13 @@ namespace AnalysisManager
       N_VDestroy(tag_);
       N_VDestroy(yy0_);
       N_VDestroy(yp0_);
+      if (lte_scratch_ != nullptr)
+      {
+        N_VDestroy(lte_scratch_);
+        N_VDestroy(ewt_scratch_);
+        lte_scratch_ = nullptr;
+        ewt_scratch_ = nullptr;
+      }
       SUNLinSolFree(linearSolver_);
       SUNMatDestroy(JacobianMat_);
       IDAFree(&solver_);
@@ -1500,6 +1507,7 @@ namespace AnalysisManager
       current_cj_            = other.current_cj_;
       jacobian_time_         = other.jacobian_time_;
       jacobian_cj_           = other.jacobian_cj_;
+      last_step_lte_wrms_    = other.last_step_lte_wrms_;
 
       return *this;
     }
@@ -1593,6 +1601,24 @@ namespace AnalysisManager
       if (char* flag_name = IDAGetLinReturnFlagName(stats.last_linear_flag_))
       {
         stats.last_linear_flag_name_ = flag_name;
+      }
+
+      // The local error estimate is only defined once a step has been taken
+      if (stats.num_steps_ > 0)
+      {
+        if (lte_scratch_ == nullptr)
+        {
+          lte_scratch_ = N_VClone(yy_);
+          ewt_scratch_ = N_VClone(yy_);
+          checkAllocation((void*) lte_scratch_, "N_VClone");
+          checkAllocation((void*) ewt_scratch_, "N_VClone");
+        }
+        const int lte_flag = IDAGetEstLocalErrors(solver_, lte_scratch_);
+        const int ewt_flag = IDAGetErrWeights(solver_, ewt_scratch_);
+        if (lte_flag == IDA_SUCCESS && ewt_flag == IDA_SUCCESS)
+        {
+          stats.last_step_lte_wrms_ = N_VWrmsNorm(lte_scratch_, ewt_scratch_);
+        }
       }
 
       return stats;

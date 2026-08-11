@@ -872,35 +872,19 @@ namespace GridKit
       /// carry the PGV row's gate dependence.
       TestOutcome jacobian()
       {
-        TestStatus success = true;
+        return jacobianForMode("jacobian");
+      }
 
-        const auto                 data = makeResidualData();
-        const std::array<RealT, 9> gate_points{{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9}};
-
-        for (const RealT gate : gate_points)
-        {
-          const auto dependency_jacobian = dependencyTrackingJacobian(data, gate, success);
-          const auto enzyme_jacobian     = enzymeJacobian(data, gate, success);
-
-          success         *= (dependency_jacobian.size() == enzyme_jacobian.size());
-          const auto rows  = std::min(dependency_jacobian.size(), enzyme_jacobian.size());
-          for (size_t row = 0; row < rows; ++row)
-          {
-            if (!isEqual(dependency_jacobian[row], enzyme_jacobian[row], kTol))
-            {
-              std::cout << "HYGOV Jacobian row " << row << " at gate " << gate
-                        << " mismatch between dependency tracking and Enzyme\n";
-              success = false;
-            }
-          }
-
-          // Guard the required PGV/G dependency even if both paths agree.
-          success *= jacobianContains(
-              dependency_jacobian, Internal::PGV, Internal::G, "dependency-tracking");
-          success *= jacobianContains(enzyme_jacobian, Internal::PGV, Internal::G, "Enzyme");
-        }
-
-        return success.report(__func__);
+      /// The same DependencyTracking-vs-Enzyme comparison as jacobian() with
+      /// the runtime smoothing mode set to Piecewise, exercising the
+      /// fmax-based residual through both autodiff paths.
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
       }
 #endif
 
@@ -1576,6 +1560,41 @@ namespace GridKit
       }
 
 #ifdef GRIDKIT_ENABLE_ENZYME
+      /// The DependencyTracking-vs-Enzyme comparison shared by both
+      /// smoothing modes.
+      TestOutcome jacobianForMode(const char* report_name)
+      {
+        TestStatus success = true;
+
+        const auto                 data = makeResidualData();
+        const std::array<RealT, 9> gate_points{{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9}};
+
+        for (const RealT gate : gate_points)
+        {
+          const auto dependency_jacobian = dependencyTrackingJacobian(data, gate, success);
+          const auto enzyme_jacobian     = enzymeJacobian(data, gate, success);
+
+          success         *= (dependency_jacobian.size() == enzyme_jacobian.size());
+          const auto rows  = std::min(dependency_jacobian.size(), enzyme_jacobian.size());
+          for (size_t row = 0; row < rows; ++row)
+          {
+            if (!isEqual(dependency_jacobian[row], enzyme_jacobian[row], kTol))
+            {
+              std::cout << "HYGOV Jacobian row " << row << " at gate " << gate
+                        << " mismatch between dependency tracking and Enzyme\n";
+              success = false;
+            }
+          }
+
+          // Guard the required PGV/G dependency even if both paths agree.
+          success *= jacobianContains(
+              dependency_jacobian, Internal::PGV, Internal::G, "dependency-tracking");
+          success *= jacobianContains(enzyme_jacobian, Internal::PGV, Internal::G, "Enzyme");
+        }
+
+        return success.report(report_name);
+      }
+
       template <typename JacobianRowsT>
       bool jacobianContains(const JacobianRowsT& rows,
                             Internal             row_variable,

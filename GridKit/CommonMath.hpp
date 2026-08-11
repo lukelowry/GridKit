@@ -19,8 +19,8 @@ namespace GridKit
      * and finite derivatives. Large values more closely approximate a step
      * function, but can make the transition numerically stiff.
      *
-     * @note The Piecewise form is the piecewise-linear unit step
-     * fmax(mu x + 1/2, 0) - fmax(mu x - 1/2, 0): exactly 0 below
+     * @note The Piecewise form is the piecewise-linear unit step, the unit
+     * clamp of mu x + 1/2 written as nested direct fmax: exactly 0 below
      * x = -1/(2 mu), exactly 1 above x = +1/(2 mu), and linear with slope mu
      * between, matching the smooth form's slope at the origin. It is built
      * from fmax only; see @ref Smoothing for why.
@@ -37,9 +37,12 @@ namespace GridKit
       using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
       if constexpr (M == Smoothing::Piecewise)
       {
-        const RealT mu = MU<RealT>;
-        return std::fmax(mu * x + HALF<RealT>, ScalarT{ZERO<RealT>})
-               - std::fmax(mu * x - HALF<RealT>, ScalarT{ZERO<RealT>});
+        // Piecewise-linear unit step of slope mu as a difference of single
+        // fmax terms. Nesting fmax inside fmax defeats Enzyme's sparsity
+        // solver; the difference form is validated through both AD paths.
+        const ScalarT t = MU<RealT> * x;
+        return std::fmax(t + HALF<RealT>, ScalarT{ZERO<RealT>})
+               - std::fmax(t - HALF<RealT>, ScalarT{ZERO<RealT>});
       }
       else
       {
@@ -71,6 +74,10 @@ namespace GridKit
 
       if constexpr (M == Smoothing::Piecewise)
       {
+        // Deliberately unscaled: compositions that pair this ramp with a
+        // passthrough term scale the passthrough by PW_UNIT instead, so the
+        // two tangent coefficients stay distinct and cannot be re-factored
+        // into the fused select form Enzyme's sparsity solver rejects.
         return std::fmax(x, ScalarT{ZERO<RealT>});
       }
       else
@@ -194,7 +201,19 @@ namespace GridKit
         const LeftT  x,
         const RightT y)
     {
-      return y + ramp<M>(x - y);
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        // Direct fmax keeps the tangent a bare select, the one kink shape
+        // Enzyme's auto-sparsity pass lowers correctly; recombining ramp
+        // selects with passthrough terms is rejected or silently
+        // miscompiled. Promotion mirrors the smooth composition's type.
+        using PromT = decltype(y + ramp<M>(x - y));
+        return std::fmax(PromT{x}, PromT{y});
+      }
+      else
+      {
+        return y + ramp<M>(x - y);
+      }
     }
 
     /**
@@ -221,7 +240,17 @@ namespace GridKit
         const LeftT  x,
         const RightT y)
     {
-      return x - ramp<M>(x - y);
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        // See max: direct fmax on negated arguments is the exact minimum
+        // with a bare-select tangent; IEEE negation keeps it bit-exact.
+        using PromT = decltype(x - ramp<M>(x - y));
+        return -std::fmax(-PromT{x}, -PromT{y});
+      }
+      else
+      {
+        return x - ramp<M>(x - y);
+      }
     }
 
     /**
@@ -247,6 +276,9 @@ namespace GridKit
         const UpperT  upper)
     {
       assert(lower <= upper);
+      // The ramp composition is exact in the Piecewise mode and its
+      // difference-form tangent is validated through both AD paths; do not
+      // rewrite it with nested fmax, which Enzyme's sparsity solver rejects.
       return lower + ramp<M>(x - lower) - ramp<M>(x - upper);
     }
 
@@ -295,7 +327,19 @@ namespace GridKit
         const RealT   upper)
     {
       assert(lower <= upper);
-      return ramp<M>(x - upper) - ramp<M>(-(x - lower));
+      if constexpr (M == Smoothing::Piecewise)
+      {
+        // The exact clamp complement with a PW_UNIT-scaled passthrough. The
+        // direct two-sided ramp difference sums same-coefficient selects and
+        // the literal-unit complement fuses with them; both defeat Enzyme's
+        // sparsity solver. PW_UNIT is exactly one, so values are exact.
+        using RealTLocal = typename GridKit::ScalarTraits<ScalarT>::RealT;
+        return PW_UNIT<RealTLocal> * x - clamp<M>(x, lower, upper);
+      }
+      else
+      {
+        return ramp<M>(x - upper) - ramp<M>(-(x - lower));
+      }
     }
 
     /**

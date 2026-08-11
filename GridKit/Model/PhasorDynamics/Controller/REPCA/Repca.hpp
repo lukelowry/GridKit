@@ -14,6 +14,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/Controller/REPCA/RepcaData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 namespace GridKit
 {
@@ -133,6 +134,7 @@ namespace GridKit
 
         const Model::VariableMonitorBase* getMonitor() const override;
 
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         [[gnu::always_inline]] inline int evaluateInternalResidual(
             const ScalarT* y,
             const ScalarT* yp,
@@ -141,7 +143,12 @@ namespace GridKit
             ScalarT*       f);
 
       private:
-        /// Smooth asymmetric frequency-droop response.
+        /// Enzyme Jacobian block sequence for one smoothing mode
+        template <Math::Smoothing M>
+        int evaluateJacobianBlocks();
+
+        /// Asymmetric frequency-droop response.
+        template <Math::Smoothing M = Math::Smoothing::Smooth>
         static __attribute__((always_inline)) inline ScalarT droop(ScalarT error, RealT down, RealT up);
 
         void initializeParameters(const ModelDataT& data);

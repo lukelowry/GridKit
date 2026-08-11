@@ -56,5 +56,20 @@ namespace GridKit
      */
     template <typename RealT>
     inline RealT MU = 240.0;
+
+    /**
+     * @brief Runtime unit factor for piecewise tangent symmetry breaking
+     *
+     * Always exactly 1.0; multiplying by it never changes a value. Piecewise
+     * forms whose tangent would otherwise carry several identical literal
+     * unit coefficients in one residual row multiply one term by this
+     * factor. LLVM fuses same-literal select coefficients into i1 arithmetic
+     * that Enzyme's auto-sparsity solver rejects as not sparse solvable; a
+     * runtime load keeps the coefficient symbolic. Never assign to it.
+     *
+     * @tparam RealT - real data type
+     */
+    template <typename RealT>
+    inline RealT PW_UNIT = 1.0;
   } // namespace Math
 } // namespace GridKit

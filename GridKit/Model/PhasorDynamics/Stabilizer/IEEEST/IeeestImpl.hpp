@@ -212,6 +212,15 @@ namespace GridKit
           break;
         }
 
+        // The output limit follows the active smoothing mode so the initial
+        // VSS matches the residual's clamp form bit for bit.
+        const auto clamp_rt = [&](const auto v)
+        {
+          return Math::SMOOTHING_MODE == Math::Smoothing::Piecewise
+                     ? Math::clamp<Math::Smoothing::Piecewise>(v, Lsmin_, Lsmax_)
+                     : Math::clamp(v, Lsmin_, Lsmax_);
+        };
+
         y[X5]  = u;
         y[X6]  = u;
         y[X7]  = u;
@@ -219,7 +228,7 @@ namespace GridKit
         y[V5]  = u;
         y[V6]  = u;
         y[V7]  = ZERO<RealT>;
-        y[VSS] = Math::clamp(y[V7], Lsmin_, Lsmax_);
+        y[VSS] = clamp_rt(y[V7]);
 
         y_.setDataUpdated();
         yp_.setDataUpdated();
@@ -257,6 +266,7 @@ namespace GridKit
       }
 
       template <typename scalar_type, typename index_type>
+      template <Math::Smoothing M>
       __attribute__((always_inline)) inline int Ieeest<scalar_type, index_type>::evaluateInternalResidual(
           const ScalarT*                  y,
           const ScalarT*                  yp,
@@ -363,7 +373,7 @@ namespace GridKit
         f[V5]  = -v5 + x5 + T1_ * x5_rhs;
         f[V6]  = -v6 + x6 + T3_ * x6_rhs;
         f[V7]  = -v7 + Ks_ * T5_ * x7_rhs;
-        f[VSS] = -vss + Math::clamp(v7, Lsmin_, Lsmax_);
+        f[VSS] = -vss + Math::clamp<M>(v7, Lsmin_, Lsmax_);
 
         return 0;
       }
@@ -379,7 +389,14 @@ namespace GridKit
         const auto* y  = y_.getData();
         const auto* yp = yp_.getData();
         auto*       f  = f_.getData();
-        evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          evaluateInternalResidual<Math::Smoothing::Piecewise>(y, yp, wb_.data(), ws_.data(), f);
+        }
+        else
+        {
+          evaluateInternalResidual(y, yp, wb_.data(), ws_.data(), f);
+        }
 
         f_.setDataUpdated();
 

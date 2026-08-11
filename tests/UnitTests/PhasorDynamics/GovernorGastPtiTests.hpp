@@ -817,6 +817,26 @@ namespace GridKit
       /// anti-windup, and collapsed-limit configurations.
       TestOutcome jacobian()
       {
+        return jacobianForMode("jacobian");
+      }
+
+      /// The same DependencyTracking-vs-Enzyme comparison as jacobian() with
+      /// the runtime smoothing mode set to Piecewise, exercising the
+      /// fmax-based residual through both autodiff paths.
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode      = GridKit::Math::SMOOTHING_MODE;
+        GridKit::Math::SMOOTHING_MODE = GridKit::Math::Smoothing::Piecewise;
+        TestOutcome outcome           = jacobianForMode("jacobianPiecewise");
+        GridKit::Math::SMOOTHING_MODE = previous_mode;
+        return outcome;
+      }
+
+    private:
+      /// The DependencyTracking-vs-Enzyme comparison shared by both smoothing
+      /// modes.
+      TestOutcome jacobianForMode(const char* report_name)
+      {
         TestStatus success = true;
 
         constexpr RealT initial_pmech    = 0.4;
@@ -857,11 +877,18 @@ namespace GridKit
                 initial_pmech,
                 "temperature-limited Enzyme versus dependency tracking",
                 {{Internal::VLOAD, 1.5}, {Internal::VTEMP, 0.3}});
+        // At an exact fmax tie the two AD paths may return different valid
+        // subgradients (Enzyme's maxnum tie side is formulation dependent),
+        // so the piecewise comparison probes just off the kink instead.
+        const RealT vtemp_equal =
+            GridKit::Math::SMOOTHING_MODE == GridKit::Math::Smoothing::Piecewise
+                ? 0.9 + 1.0e-9
+                : 0.9;
         compare(enzyme,
                 data,
                 initial_pmech,
                 "equal-selector Enzyme versus dependency tracking",
-                {{Internal::VLOAD, 0.9}, {Internal::VTEMP, 0.9}});
+                {{Internal::VLOAD, 0.9}, {Internal::VTEMP, vtemp_equal}});
         compare(enzyme,
                 data,
                 initial_pmech,
@@ -909,7 +936,7 @@ namespace GridKit
                 "reinitialized Enzyme versus dependency tracking",
                 {});
 
-        return success.report(__func__);
+        return success.report(report_name);
       }
 #endif
 

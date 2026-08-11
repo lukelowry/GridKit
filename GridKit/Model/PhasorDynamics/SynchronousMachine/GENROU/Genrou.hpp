@@ -12,6 +12,7 @@
 #include <GridKit/Model/PhasorDynamics/ComponentSignals.hpp>
 #include <GridKit/Model/PhasorDynamics/SynchronousMachine/GENROU/GenrouData.hpp>
 #include <GridKit/Model/VariableMonitor.hpp>
+#include <GridKit/Smoothing.hpp>
 
 // Forward declarations.
 namespace GridKit
@@ -209,6 +210,7 @@ namespace GridKit
         ScalarT telec;  ///< \f$T_e\f$
       };
 
+      template <Math::Smoothing M = Math::Smoothing::Smooth>
       __attribute__((always_inline)) inline AlgebraicState evaluateAlgebraicState(
           const ScalarT*, const ScalarT*) const;
 
@@ -216,16 +218,26 @@ namespace GridKit
       AlgebraicState algebraicState()
       {
         const ScalarT wb[2] = {Vr(), Vi()};
+        if (Math::SMOOTHING_MODE == Math::Smoothing::Piecewise)
+        {
+          return evaluateAlgebraicState<Math::Smoothing::Piecewise>(y_.getData(), wb);
+        }
         return evaluateAlgebraicState(y_.getData(), wb);
       }
 
     public:
+      template <Math::Smoothing M = Math::Smoothing::Smooth>
       __attribute__((always_inline)) inline int evaluateInternalResidual(
           const ScalarT*, const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
+      template <Math::Smoothing M = Math::Smoothing::Smooth>
       __attribute__((always_inline)) inline int evaluateBusResidual(
           const ScalarT*, const ScalarT*, const ScalarT*, ScalarT*);
 
     private:
+      /// Enzyme Jacobian block sequence for one smoothing mode
+      template <Math::Smoothing M>
+      int evaluateJacobianBlocks();
+
       /* Identification */
       BusT* bus_;
       IdxT  bus_id_{0};

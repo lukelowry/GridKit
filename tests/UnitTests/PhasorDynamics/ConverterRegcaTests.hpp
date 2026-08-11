@@ -718,51 +718,19 @@ namespace GridKit
       /// compared rows cannot drift apart between hand-built fixtures.
       TestOutcome jacobian()
       {
-        TestStatus success = true;
+        return jacobianForMode("jacobian");
+      }
 
-        const RealT                transition_current = 1.0 / Math::MU<RealT>;
-        const std::array<RealT, 3> currents{{
-            -transition_current,
-            0.0,
-            transition_current,
-        }};
-
-        for (const bool lvpl_enabled : {false, true})
-        {
-          auto data                   = makeJacobianData();
-          data.parameters[Params::sL] = lvpl_enabled;
-
-          for (const RealT current : currents)
-          {
-            const auto dependency_tracking_jacobian =
-                dependencyTrackingJacobian(data, current, success);
-            const auto enzyme_jacobian = enzymeJacobian(data, current, success);
-
-            const auto ip_row  = index(Vars::IP);
-            const auto il_col  = index(Vars::IL);
-            success           *= dependency_tracking_jacobian[ip_row].contains(il_col);
-            success           *= enzyme_jacobian[ip_row].contains(il_col);
-
-            success          *= (dependency_tracking_jacobian.size() == enzyme_jacobian.size());
-            const auto nrows  = std::min(dependency_tracking_jacobian.size(),
-                                        enzyme_jacobian.size());
-
-            for (size_t i = 0; i < nrows; ++i)
-            {
-              if (!isEqual(dependency_tracking_jacobian[i],
-                           enzyme_jacobian[i],
-                           kTol))
-              {
-                std::cout << "Jacobian row " << i
-                          << " mismatch between dependency tracking and Enzyme"
-                          << " at IP = " << current << "\n";
-                success = false;
-              }
-            }
-          }
-        }
-
-        return success.report(__func__);
+      /// Runs the same DependencyTracking-vs-Enzyme comparison as jacobian()
+      /// with the runtime smoothing mode set to Piecewise, exercising the
+      /// fmax-based residual through both autodiff paths.
+      TestOutcome jacobianPiecewise()
+      {
+        const auto previous_mode = Math::SMOOTHING_MODE;
+        Math::SMOOTHING_MODE     = Math::Smoothing::Piecewise;
+        TestOutcome outcome      = jacobianForMode("jacobianPiecewise");
+        Math::SMOOTHING_MODE     = previous_mode;
+        return outcome;
       }
 #endif
 
@@ -1133,6 +1101,57 @@ namespace GridKit
         success *= (fixture.regca.constructCsr() == 0);
 
         return MapFromCsr(fixture.regca.getCsrJacobian());
+      }
+
+      /// DependencyTracking-vs-Enzyme comparison shared by jacobian() and
+      /// jacobianPiecewise(); report_name labels the reported outcome.
+      TestOutcome jacobianForMode(const char* report_name)
+      {
+        TestStatus success = true;
+
+        const RealT                transition_current = 1.0 / Math::MU<RealT>;
+        const std::array<RealT, 3> currents{{
+            -transition_current,
+            0.0,
+            transition_current,
+        }};
+
+        for (const bool lvpl_enabled : {false, true})
+        {
+          auto data                   = makeJacobianData();
+          data.parameters[Params::sL] = lvpl_enabled;
+
+          for (const RealT current : currents)
+          {
+            const auto dependency_tracking_jacobian =
+                dependencyTrackingJacobian(data, current, success);
+            const auto enzyme_jacobian = enzymeJacobian(data, current, success);
+
+            const auto ip_row  = index(Vars::IP);
+            const auto il_col  = index(Vars::IL);
+            success           *= dependency_tracking_jacobian[ip_row].contains(il_col);
+            success           *= enzyme_jacobian[ip_row].contains(il_col);
+
+            success          *= (dependency_tracking_jacobian.size() == enzyme_jacobian.size());
+            const auto nrows  = std::min(dependency_tracking_jacobian.size(),
+                                        enzyme_jacobian.size());
+
+            for (size_t i = 0; i < nrows; ++i)
+            {
+              if (!isEqual(dependency_tracking_jacobian[i],
+                           enzyme_jacobian[i],
+                           kTol))
+              {
+                std::cout << "Jacobian row " << i
+                          << " mismatch between dependency tracking and Enzyme"
+                          << " at IP = " << current << "\n";
+                success = false;
+              }
+            }
+          }
+        }
+
+        return success.report(report_name);
       }
 #endif
     };
