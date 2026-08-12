@@ -58,6 +58,21 @@ namespace GridKit
     inline RealT MU = 240.0;
 
     /**
+     * @brief Slope of the piecewise-linear unit step
+     *
+     * The Piecewise family's ramp compositions are exact and mu independent;
+     * only its step gates carry a sharpness, and it is this one. Keeping it
+     * separate from @ref MU lets a study sweep the smooth family's mu while
+     * the piecewise arm stays one fixed reference model. Defaults to the
+     * same value as MU; set both together before a system model is
+     * constructed.
+     *
+     * @tparam RealT - real data type
+     */
+    template <typename RealT>
+    inline RealT GATE_MU = 240.0;
+
+    /**
      * @brief Runtime unit factor for piecewise tangent symmetry breaking
      *
      * Always exactly 1.0; multiplying by it never changes a value. Piecewise

@@ -30,10 +30,11 @@ chosen before the system is built, so they live in the study file rather than
 an environment knob; supported models dispatch on them at runtime and no
 rebuild is required.
 
- Name   | Default
- -------|-----------------------
- `mode` | `"smooth"`; use `"piecewise"` for exact fmax-composed primitives with a piecewise-linear step
- `mu`   | `240.0`; sharpness scale shared by the smooth transitions and the piecewise-linear step slope
+ Name      | Default
+ ----------|-----------------------
+ `mode`    | `"smooth"`; use `"piecewise"` for exact fmax-composed primitives with a piecewise-linear step
+ `mu`      | `240.0`; sharpness scale of the smooth transitions
+ `gate_mu` | `mu`; slope of the piecewise-linear step gates, letting the piecewise arm stay fixed while `mu` sweeps
 
 ## IDA options
 

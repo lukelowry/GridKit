@@ -34,8 +34,9 @@ int main(int argc, const char* argv[])
 
   // Configure the CommonMath primitives before any component is constructed
   // or initialized so residuals and exact-init inverses agree on one form.
-  GridKit::Math::SMOOTHING_MODE = study.math.mode;
-  GridKit::Math::MU<real_type>  = study.math.mu;
+  GridKit::Math::SMOOTHING_MODE     = study.math.mode;
+  GridKit::Math::MU<real_type>      = study.math.mu;
+  GridKit::Math::GATE_MU<real_type> = study.math.gate_mu.value_or(study.math.mu);
 
   if (study.fault_bus && !study.model_data.bus_fault.empty())
   {
@@ -52,6 +53,7 @@ int main(int argc, const char* argv[])
             << "jacobian_nnz=" << sys.nnz() << '\n'
             << "math_mode=" << magic_enum::enum_name(study.math.mode) << '\n'
             << "math_mu=" << study.math.mu << '\n'
+            << "math_gate_mu=" << study.math.gate_mu.value_or(study.math.mu) << '\n'
             << "GRIDKIT_SYSTEM_END\n";
 
   // Set up simulation

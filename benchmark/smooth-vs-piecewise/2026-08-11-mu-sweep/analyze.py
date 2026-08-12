@@ -4,11 +4,11 @@
 Per run: solver work counters (ida_stats.json), step/LTE statistics
 (ida_steps.json), wall time and profile buckets (stdout.txt), and trajectory
 errors against two references on the shared monitor grid:
-  ref_model : tight-tol piecewise at the same mu   (model + integration error)
+  ref_model : the case's pinned tight-tol piecewise arm (model + integration error)
   ref_self  : tight-tol same-mode same-mu          (pure integration error)
 
 Trajectory error is reported per run as the WRMS and max of the pointwise
-relative difference over all shared numeric columns of mon.csv, with a
+relative difference over all shared numeric columns of study_out.csv, with a
 per-column absolute floor to keep near-zero signals from dominating.
 """
 
@@ -53,8 +53,8 @@ def read_mon(path: Path):
 
 def trajectory_error(run_dir: Path, ref_dir: Path):
     """WRMS/max relative error between the two runs' mon.csv on shared columns."""
-    h1, r1 = read_mon(run_dir / "mon.csv")
-    h2, r2 = read_mon(ref_dir / "mon.csv")
+    h1, r1 = read_mon(run_dir / "study_out.csv")
+    h2, r2 = read_mon(ref_dir / "study_out.csv")
     if h1 is None or h2 is None or h1 != h2 or not r1 or len(r1) != len(r2):
         return None, None
     total = 0.0
@@ -138,7 +138,10 @@ def main() -> None:
         row.update(load_stats(run_dir))
 
         if not e["tight"] and result.get("returncode") == 0:
-            ref_model = by_key.get((e["case"], "piecewise", e["mu"], True))
+            # The piecewise reference arm is pinned, one per case
+            ref_model = next((x for x in manifest
+                              if x["case"] == e["case"] and x["mode"] == "piecewise"
+                              and x["tight"]), None)
             ref_self = by_key.get((e["case"], e["mode"], e["mu"], True))
             for tag, ref in (("ref_model", ref_model), ("ref_self", ref_self)):
                 if ref is None:

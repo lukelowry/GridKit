@@ -37,10 +37,11 @@ namespace GridKit
       using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
       if constexpr (M == Smoothing::Piecewise)
       {
-        // Piecewise-linear unit step of slope mu as a difference of single
-        // fmax terms. Nesting fmax inside fmax defeats Enzyme's sparsity
-        // solver; the difference form is validated through both AD paths.
-        const ScalarT t = MU<RealT> * x;
+        // Piecewise-linear unit step of slope GATE_MU as a difference of
+        // single fmax terms. Nesting fmax inside fmax defeats Enzyme's
+        // sparsity solver; the difference form is validated through both AD
+        // paths.
+        const ScalarT t = GATE_MU<RealT> * x;
         return std::fmax(t + HALF<RealT>, ScalarT{ZERO<RealT>})
                - std::fmax(t - HALF<RealT>, ScalarT{ZERO<RealT>});
       }

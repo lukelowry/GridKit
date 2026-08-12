@@ -4,13 +4,15 @@
 Each variant is a self-contained run directory with a generated solver.json:
   work/<case>/<mode>-mu<tag>[-tight]/<case>.solver.json
 
-Modes x mu grid per tier:
-  dense : smooth/piecewise x 9 half-decade mu in [1e0, 1e4], default and tight tolerance
-  coarse: smooth/piecewise x {1e0, 1e2, 1e4},               default and tight tolerance
+Grid per tier:
+  dense : smooth x 9 half-decade mu in [1e0, 1e4], default and tight tolerance
+  coarse: smooth x {1e0, 1e2, 1e4},                default and tight tolerance
+  both  : one pinned piecewise reference arm per case (gates at GATE_MU_PIN),
+          default and tight tolerance
 
-The tight-tolerance piecewise run doubles as the accuracy reference for its
-(case, mu) cell; tight-tolerance runs of the same (mode, mu) isolate pure
-integration error from smoothing/model error.
+The tight-tolerance piecewise run is the exact-model accuracy reference for
+every smooth run of its case; tight-tolerance runs of the same (mode, mu)
+isolate pure integration error from smoothing/model error.
 """
 
 import argparse
@@ -27,6 +29,10 @@ MU_COARSE = [1.0, 100.0, 10000.0]
 
 TIGHT_REL_TOL = 1.0e-9
 TIGHT_ABS_TOL = 1.0e-11
+
+# The piecewise arm is one fixed reference model per case: its ramp family is
+# exact at any mu and its PWL step gates are pinned to this slope.
+GATE_MU_PIN = 10000.0
 
 # case name -> (source solver.json, tier)
 CASES = {
@@ -61,10 +67,15 @@ def make_variant(case: str, src: Path, mode: str, mu: float, tight: bool, out_ro
 
     cfg = dict(base)
     cfg["system_model_file"] = str(model)
-    cfg["math"] = {"mode": mode, "mu": mu}
+    if mode == "piecewise":
+        cfg["math"] = {"mode": mode, "mu": mu, "gate_mu": GATE_MU_PIN}
+    else:
+        cfg["math"] = {"mode": mode, "mu": mu}
     cfg["ida_stats"] = "ida_stats.json"
     cfg["ida_steps"] = "ida_steps.json"
-    cfg["output_file"] = "mon.csv"
+    # Must not collide with any case's own monitor-sink file name; the app
+    # reconciles the two by symlinking, and equal names produce a self-link.
+    cfg["output_file"] = "study_out.csv"
     # Accuracy is judged by analyze.py against study-internal references, not
     # the shipped regression reference (whose tolerance assumes mu = 240).
     for key in ("reference_file", "error_tolerance", "error_type", "abs_err_threshold"):
@@ -98,17 +109,27 @@ def main() -> None:
         src = REPO / rel_src
         mus = MU_DENSE if tier == "dense" else MU_COARSE
         for mu in mus:
-            for mode in ("smooth", "piecewise"):
-                for tight in (False, True):
-                    run_dir = make_variant(case, src, mode, mu, tight, out_root)
-                    manifest.append({
-                        "case": case,
-                        "tier": tier,
-                        "mode": mode,
-                        "mu": mu,
-                        "tight": tight,
-                        "dir": str(run_dir.relative_to(out_root)),
-                    })
+            for tight in (False, True):
+                run_dir = make_variant(case, src, "smooth", mu, tight, out_root)
+                manifest.append({
+                    "case": case,
+                    "tier": tier,
+                    "mode": "smooth",
+                    "mu": mu,
+                    "tight": tight,
+                    "dir": str(run_dir.relative_to(out_root)),
+                })
+        # One pinned piecewise reference arm per case
+        for tight in (False, True):
+            run_dir = make_variant(case, src, "piecewise", GATE_MU_PIN, tight, out_root)
+            manifest.append({
+                "case": case,
+                "tier": tier,
+                "mode": "piecewise",
+                "mu": GATE_MU_PIN,
+                "tight": tight,
+                "dir": str(run_dir.relative_to(out_root)),
+            })
 
     with open(out_root / "manifest.json", "w") as f:
         json.dump(manifest, f, indent=2)
