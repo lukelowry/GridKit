@@ -1,0 +1,19 @@
+{
+  "rows": 2403,
+  "columns": 104,
+  "max_absolute_response_difference": 4.1222255325872904e-05,
+  "max_difference_column": "Genrou_1032_G_genrou_omega",
+  "max_difference_time": 1.5416666666666663,
+  "case": "WECC240",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 0,
+    "delta": 0,
+    "omega": 20
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 0.0,
+    "delta": 0.0,
+    "omega": 0.0024443379606709503
+  }
+}

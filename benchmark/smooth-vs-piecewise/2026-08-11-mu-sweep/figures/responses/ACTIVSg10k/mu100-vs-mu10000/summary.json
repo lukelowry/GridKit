@@ -1,0 +1,19 @@
+{
+  "rows": 1003,
+  "columns": 20001,
+  "max_absolute_response_difference": 0.004710236389023681,
+  "max_difference_column": "Bus_LORDSBURG 2 2_Va",
+  "max_difference_time": 6.2700000000000005,
+  "case": "ACTIVSg10k",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 20,
+    "delta": 0,
+    "omega": 0
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 0.00026997594165778516,
+    "delta": 0.0,
+    "omega": 0.0
+  }
+}

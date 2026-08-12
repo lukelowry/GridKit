@@ -1,0 +1,19 @@
+{
+  "rows": 7203,
+  "columns": 6,
+  "max_absolute_response_difference": 14.209796640153343,
+  "max_difference_column": "Gensal_gensal_1_1_delta",
+  "max_difference_time": 30.0,
+  "case": "TwoBusGensalBnd",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 0,
+    "delta": 1,
+    "omega": 1
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 0.0,
+    "delta": 814.1613752199628,
+    "omega": 0.20603912046897488
+  }
+}

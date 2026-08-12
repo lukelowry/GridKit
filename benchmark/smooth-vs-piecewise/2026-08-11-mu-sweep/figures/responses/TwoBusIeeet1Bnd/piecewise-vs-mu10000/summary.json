@@ -1,0 +1,19 @@
+{
+  "rows": 2403,
+  "columns": 4,
+  "max_absolute_response_difference": 0.0005548546896871898,
+  "max_difference_column": "Ieeet1_DV3_efd",
+  "max_difference_time": 1.2625000000000002,
+  "case": "TwoBusIeeet1Bnd",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 1,
+    "delta": 0,
+    "omega": 1
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 1.2846721659354188e-05,
+    "delta": 0.0,
+    "omega": 0.00020479129813955055
+  }
+}

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <type_traits>
 
 #include <GridKit/Constants.hpp>
 #include <GridKit/ScalarTraits.hpp>
@@ -13,17 +14,58 @@ namespace GridKit
   {
 
     /**
+     * @brief Exact unit step, the gate of the classical switched model
+     *
+     * Computed as ceil(r / (1 + r)) with r = fmax(x, 0): exactly 0 for
+     * x <= 0 and exactly 1 for any positive x (r/(1+r) lies in (0, 1) and
+     * ceil rounds it up; the denominator is at least 1, so there is no
+     * singularity).
+     *
+     * @note A jump cannot be an fmax composition (those are continuous),
+     * and writing the step as a comparison-and-select defeats Enzyme's
+     * auto-sparsity solver (the i1 enters the value graph: "not sparse
+     * solvable"). ceil is the one jump-carrying operation whose derivative
+     * both AD paths agree is exactly zero, which is also the
+     * frozen-branch Jacobian of the classical model: a gate contributes
+     * no Jacobian entries through its argument. The DependencyTracking
+     * instantiation uses the primal comparison directly and returns a
+     * dependency-free constant.
+     *
+     * @note H(0) = 0. Exact initialization is strictly interior and never
+     * evaluates on the boundary.
+     *
+     * @tparam ScalarT - scalar data type
+     *
+     * @param[in] x - input signal
+     * @return exactly 1 for x > 0, exactly 0 otherwise
+     */
+    template <class ScalarT>
+    __attribute__((always_inline)) inline ScalarT heaviside(const ScalarT x)
+    {
+      using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
+      if constexpr (std::is_same_v<ScalarT, RealT>)
+      {
+        const ScalarT r = std::fmax(x, ScalarT{ZERO<RealT>});
+        return std::ceil(r / (ONE<RealT> + r));
+      }
+      else
+      {
+        return x > ScalarT{ZERO<RealT>} ? ScalarT{ONE<RealT>} : ScalarT{ZERO<RealT>};
+      }
+    }
+
+    /**
      * @brief Scaled sigmoid activation function
      *
      * @note The sigmoid constant (mu) value is chosen to balance accuracy
      * and finite derivatives. Large values more closely approximate a step
      * function, but can make the transition numerically stiff.
      *
-     * @note The Piecewise form is the piecewise-linear unit step, the unit
-     * clamp of mu x + 1/2 written as nested direct fmax: exactly 0 below
-     * x = -1/(2 mu), exactly 1 above x = +1/(2 mu), and linear with slope mu
-     * between, matching the smooth form's slope at the origin. It is built
-     * from fmax only; see @ref Smoothing for why.
+     * @note The Piecewise form is the exact unit step @ref heaviside, so
+     * every gate composed from this function switches discontinuously at
+     * its boundary, re-evaluated from the current iterate on every
+     * residual and Jacobian call. Crossings are resolved by the
+     * integrator's step control, not by event location.
      *
      * @tparam M - smoothing mode
      * @tparam ScalarT - scalar data type
@@ -37,13 +79,7 @@ namespace GridKit
       using RealT = typename GridKit::ScalarTraits<ScalarT>::RealT;
       if constexpr (M == Smoothing::Piecewise)
       {
-        // Piecewise-linear unit step of slope GATE_MU as a difference of
-        // single fmax terms. Nesting fmax inside fmax defeats Enzyme's
-        // sparsity solver; the difference form is validated through both AD
-        // paths.
-        const ScalarT t = GATE_MU<RealT> * x;
-        return std::fmax(t + HALF<RealT>, ScalarT{ZERO<RealT>})
-               - std::fmax(t - HALF<RealT>, ScalarT{ZERO<RealT>});
+        return heaviside(x);
       }
       else
       {

@@ -1127,10 +1127,18 @@ namespace GridKit
                 dependencyTrackingJacobian(data, current, success);
             const auto enzyme_jacobian = enzymeJacobian(data, current, success);
 
-            const auto ip_row  = index(Vars::IP);
-            const auto il_col  = index(Vars::IL);
-            success           *= dependency_tracking_jacobian[ip_row].contains(il_col);
-            success           *= enzyme_jacobian[ip_row].contains(il_col);
+            // The LVPL ceiling position couples into the IP row only through
+            // the smooth gate's transition tail; the exact piecewise gate has
+            // a structurally zero derivative there (a pinned Ip follows the
+            // ceiling's rate, not its position), so the (IP, IL) entry exists
+            // only in Smooth mode.
+            if (Math::SMOOTHING_MODE == Math::Smoothing::Smooth)
+            {
+              const auto ip_row  = index(Vars::IP);
+              const auto il_col  = index(Vars::IL);
+              success           *= dependency_tracking_jacobian[ip_row].contains(il_col);
+              success           *= enzyme_jacobian[ip_row].contains(il_col);
+            }
 
             success          *= (dependency_tracking_jacobian.size() == enzyme_jacobian.size());
             const auto nrows  = std::min(dependency_tracking_jacobian.size(),

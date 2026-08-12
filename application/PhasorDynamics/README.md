@@ -32,9 +32,8 @@ rebuild is required.
 
  Name      | Default
  ----------|-----------------------
- `mode`    | `"smooth"`; use `"piecewise"` for exact fmax-composed primitives with a piecewise-linear step
- `mu`      | `240.0`; sharpness scale of the smooth transitions
- `gate_mu` | `mu`; slope of the piecewise-linear step gates, letting the piecewise arm stay fixed while `mu` sweeps
+ `mode`    | `"smooth"`; use `"piecewise"` for the exact model (fmax-composed ramp family, heaviside step gates)
+ `mu`      | `240.0`; sharpness scale of the smooth transitions (unused by the piecewise mode)
 
 ## IDA options
 

@@ -4,7 +4,7 @@
 Per run: solver work counters (ida_stats.json), step/LTE statistics
 (ida_steps.json), wall time and profile buckets (stdout.txt), and trajectory
 errors against two references on the shared monitor grid:
-  ref_model : the case's pinned tight-tol piecewise arm (model + integration error)
+  ref_model : the case's tight-tol piecewise arm (model + integration error)
   ref_self  : tight-tol same-mode same-mu          (pure integration error)
 
 Trajectory error is reported per run as the WRMS and max of the pointwise
@@ -138,7 +138,7 @@ def main() -> None:
         row.update(load_stats(run_dir))
 
         if not e["tight"] and result.get("returncode") == 0:
-            # The piecewise reference arm is pinned, one per case
+            # One piecewise reference arm per case
             ref_model = next((x for x in manifest
                               if x["case"] == e["case"] and x["mode"] == "piecewise"
                               and x["tight"]), None)

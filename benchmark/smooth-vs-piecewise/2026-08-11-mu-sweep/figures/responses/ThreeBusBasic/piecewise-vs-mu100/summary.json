@@ -1,0 +1,19 @@
+{
+  "rows": 2403,
+  "columns": 6,
+  "max_absolute_response_difference": 8.713030297258229e-13,
+  "max_difference_column": "Bus_2_Vm",
+  "max_difference_time": 1.9625,
+  "case": "ThreeBusBasic",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 3,
+    "delta": 0,
+    "omega": 2
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 8.713030297258229e-13,
+    "delta": 0.0,
+    "omega": 1.199040866595169e-13
+  }
+}

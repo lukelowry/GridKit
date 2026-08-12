@@ -1,0 +1,20 @@
+{
+  "system_model_file": "ThreeBusGenrouBnd.case.json",
+  "dt_monitor": 0.004166666666666667,
+  "tmax": 10,
+  "fault_bus": 2,
+  "events": [
+    {
+      "time": 1,
+      "type": "fault_on"
+    },
+    {
+      "time": 1.1,
+      "type": "fault_off"
+    }
+  ],
+  "output_file": "ThreeBus_six_cycle_fault_bus1.csv",
+  "reference_file": "ThreeBusBasic.ref.csv",
+  "error_type": "absolute",
+  "error_tolerance": 0.0001
+}

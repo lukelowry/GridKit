@@ -4,11 +4,12 @@
 Each variant is a self-contained run directory with a generated solver.json:
   work/<case>/<mode>-mu<tag>[-tight]/<case>.solver.json
 
-Grid per tier:
-  dense : smooth x 9 half-decade mu in [1e0, 1e4], default and tight tolerance
-  coarse: smooth x {1e0, 1e2, 1e4},                default and tight tolerance
-  both  : one pinned piecewise reference arm per case (gates at GATE_MU_PIN),
-          default and tight tolerance
+Grid per tier (mu in [1e1, 1e4]; below 10 the smooth model is out of the
+study's considered range):
+  dense : smooth x 25 eighth-decade mu, default and tight tolerance
+  medium: smooth x 13 quarter-decade mu, default and tight tolerance
+  coarse: smooth x {1e1, 1e2, 1e3, 1e4}, default and tight tolerance
+  all   : one exact piecewise arm per case, default and tight tolerance
 
 The tight-tolerance piecewise run is the exact-model accuracy reference for
 every smooth run of its case; tight-tolerance runs of the same (mode, mu)
@@ -23,16 +24,18 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
 
-MU_DENSE = [1.0, 3.1622776601683795, 10.0, 31.622776601683793, 100.0,
-            316.22776601683796, 1000.0, 3162.2776601683795, 10000.0]
-MU_COARSE = [1.0, 100.0, 10000.0]
+MU_GRID = {
+    "dense": [10.0 ** (1.0 + 0.125 * k) for k in range(25)],
+    "medium": [10.0 ** (1.0 + 0.25 * k) for k in range(13)],
+    "coarse": [10.0, 100.0, 1000.0, 10000.0],
+}
 
 TIGHT_REL_TOL = 1.0e-9
 TIGHT_ABS_TOL = 1.0e-11
 
-# The piecewise arm is one fixed reference model per case: its ramp family is
-# exact at any mu and its PWL step gates are pinned to this slope.
-GATE_MU_PIN = 10000.0
+# The piecewise arm is one exact model per case (mu enters nothing); the mu
+# recorded for its runs is only a manifest key.
+PIECEWISE_MU = 10000.0
 
 # case name -> (source solver.json, tier)
 CASES = {
@@ -40,9 +43,22 @@ CASES = {
     "TwoBusGensal": ("examples/PhasorDynamics/Tiny/TwoBus/Gensal/TwoBusGensal.solver.json", "dense"),
     "TwoBusIeeet1": ("examples/PhasorDynamics/Tiny/TwoBus/Ieeet1/TwoBusIeeet1.solver.json", "dense"),
     "ThreeBusBasic": ("examples/PhasorDynamics/Tiny/ThreeBus/Basic/ThreeBusBasic.solver.json", "dense"),
+    # Saturated variants (study-local): the canonical cases run every machine
+    # unsaturated, so these are the only cells that exercise the machine
+    # saturation qramp (GENROU round-rotor and GENSAL salient forms).
+    "ThreeBusGenrouSat": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/ThreeBusGenrouSat.solver.json", "dense"),
+    "TwoBusGensalSat": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/TwoBusGensalSat.solver.json", "dense"),
+    # Boundary-stressed variants (study-local): every machine's saturation
+    # knee moved to its steady-state operating point and every governor's
+    # Pvmax pinned at pmech0, so each nonsmooth point sits exactly where the
+    # system operates.
+    "TwoBusTgov1Bnd": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/TwoBusTgov1Bnd.solver.json", "dense"),
+    "TwoBusIeeet1Bnd": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/TwoBusIeeet1Bnd.solver.json", "dense"),
+    "TwoBusGensalBnd": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/TwoBusGensalBnd.solver.json", "dense"),
+    "ThreeBusGenrouBnd": ("benchmark/smooth-vs-piecewise/2026-08-11-mu-sweep/cases/ThreeBusGenrouBnd.solver.json", "dense"),
     "ACTIVSg200": ("examples/PhasorDynamics/validation/ACTIVSg200/ACTIVSg200.solver.json", "dense"),
     "ACTIVSg500": ("examples/PhasorDynamics/validation/ACTIVSg500/ACTIVSg500.solver.json", "dense"),
-    "WECC240": ("examples/PhasorDynamics/validation/WECC240/WECC240.solver.json", "coarse"),
+    "WECC240": ("examples/PhasorDynamics/validation/WECC240/WECC240.solver.json", "medium"),
     "ACTIVSg10k": ("examples/PhasorDynamics/Huge/activsg10k/activsg10k.solver.json", "coarse"),
 }
 
@@ -67,10 +83,7 @@ def make_variant(case: str, src: Path, mode: str, mu: float, tight: bool, out_ro
 
     cfg = dict(base)
     cfg["system_model_file"] = str(model)
-    if mode == "piecewise":
-        cfg["math"] = {"mode": mode, "mu": mu, "gate_mu": GATE_MU_PIN}
-    else:
-        cfg["math"] = {"mode": mode, "mu": mu}
+    cfg["math"] = {"mode": mode, "mu": mu}
     cfg["ida_stats"] = "ida_stats.json"
     cfg["ida_steps"] = "ida_steps.json"
     # Must not collide with any case's own monitor-sink file name; the app
@@ -107,8 +120,7 @@ def main() -> None:
     for case in args.cases:
         rel_src, tier = CASES[case]
         src = REPO / rel_src
-        mus = MU_DENSE if tier == "dense" else MU_COARSE
-        for mu in mus:
+        for mu in MU_GRID[tier]:
             for tight in (False, True):
                 run_dir = make_variant(case, src, "smooth", mu, tight, out_root)
                 manifest.append({
@@ -119,14 +131,14 @@ def main() -> None:
                     "tight": tight,
                     "dir": str(run_dir.relative_to(out_root)),
                 })
-        # One pinned piecewise reference arm per case
+        # One exact piecewise arm per case
         for tight in (False, True):
-            run_dir = make_variant(case, src, "piecewise", GATE_MU_PIN, tight, out_root)
+            run_dir = make_variant(case, src, "piecewise", PIECEWISE_MU, tight, out_root)
             manifest.append({
                 "case": case,
                 "tier": tier,
                 "mode": "piecewise",
-                "mu": GATE_MU_PIN,
+                "mu": PIECEWISE_MU,
                 "tight": tight,
                 "dir": str(run_dir.relative_to(out_root)),
             })

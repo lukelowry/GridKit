@@ -1,0 +1,19 @@
+{
+  "rows": 2403,
+  "columns": 12,
+  "max_absolute_response_difference": 4.529451304163823e-07,
+  "max_difference_column": "Genrou_genrou_3_1_q",
+  "max_difference_time": 1.2583333333333335,
+  "case": "ThreeBusGenrouSat",
+  "representative_trace_limit": 20,
+  "selected_trace_counts": {
+    "voltage": 3,
+    "delta": 2,
+    "omega": 2
+  },
+  "selected_max_absolute_differences": {
+    "voltage": 4.669698283610302e-08,
+    "delta": 1.0163118820294414e-05,
+    "omega": 2.2945080502267956e-07
+  }
+}

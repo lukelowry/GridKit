@@ -59,8 +59,6 @@ namespace GridKit
       GridKit::Math::Smoothing mode{GridKit::Math::Smoothing::Smooth};
       /// sharpness scale of the smooth family
       double                   mu{240.0};
-      /// slope of the piecewise-linear step gates (defaults to mu)
-      std::optional<double>    gate_mu;
     };
 
     /**
@@ -210,7 +208,7 @@ namespace GridKit
 
       for (auto entry = j.begin(); entry != j.end(); ++entry)
       {
-        if (entry.key() != "mode" && entry.key() != "mu" && entry.key() != "gate_mu")
+        if (entry.key() != "mode" && entry.key() != "mu")
         {
           throw std::invalid_argument("Unknown math option: " + entry.key());
         }
@@ -233,12 +231,6 @@ namespace GridKit
       if (options.mu <= 0.0)
       {
         throw std::invalid_argument("math.mu must be positive");
-      }
-
-      getOptional(j, "gate_mu", options.gate_mu);
-      if (options.gate_mu.has_value() && *options.gate_mu <= 0.0)
-      {
-        throw std::invalid_argument("math.gate_mu must be positive");
       }
     }
 
