@@ -7,7 +7,7 @@ from scipy.sparse.csgraph import connected_components
 Modes = namedtuple("Modes", "tv ti lam h tau")
 
 
-def match(cost, maximize=False):
+def assign(cost, maximize=False):
     return linear_sum_assignment(cost, maximize)[1]
 
 
@@ -26,13 +26,13 @@ def canonical(lam, V):
 
 def follow(lam, V, previous, gap):
     tv, ti, lam0 = previous
-    raw = match(np.abs(ti.conj().T @ V), maximize=True)
+    raw = assign(np.abs(ti.conj().T @ V), maximize=True)
     lam, V = lam[raw], V[:, raw]
     for c in clusters(lam, gap):
         Q, _ = np.linalg.qr(V[:, c])
         U, _, Wh = np.linalg.svd(Q.conj().T @ tv[:, c])
         V[:, c] = Q @ U @ Wh
-        lam[c] = lam[c][match(np.abs(lam0[c][:, None] - lam[c]))]
+        lam[c] = lam[c][assign(np.abs(lam0[c][:, None] - lam[c]))]
     return lam, V
 
 

@@ -10,6 +10,12 @@ EARTH_RADIUS = 6371008.8
 
 
 @dataclass(frozen=True)
+class Earth:
+    sigma: float
+    eps: float
+
+
+@dataclass(frozen=True)
 class Line:
     x: np.ndarray
     h: np.ndarray
@@ -20,8 +26,7 @@ class Line:
     phase: tuple
     circuit: np.ndarray
     length: float
-    earth_sigma: float
-    earth_eps: float
+    earth: Earth
 
 
 def load(path):
@@ -46,8 +51,7 @@ def load(path):
         phase=tuple(c["phase"] for c in entries),
         circuit=np.array([c.get("circuit", 1) for c in entries]),
         length=length,
-        earth_sigma=doc["earth"]["conductivity"],
-        earth_eps=doc["earth"].get("permittivity", 1.0) * EPS0,
+        earth=Earth(doc["earth"]["conductivity"], doc["earth"].get("permittivity", 1.0) * EPS0),
     )
     validate(line)
     return line
@@ -89,19 +93,9 @@ def validate(line):
         (np.all(line.h > 0), "heights"),
         (np.all((dx**2 + dh**2 > 0) | np.eye(len(dx), dtype=bool)), "distinct positions"),
         (line.length > 0, "length"),
-        (line.earth_sigma > 0 and line.earth_eps >= EPS0, "earth"),
+        (line.earth.sigma > 0 and line.earth.eps >= EPS0, "earth"),
         (set(line.phase) <= set("abcng") and set(line.phase) != {"g"}, "phases"),
     ]
     for ok, what in checks:
         if not ok:
             raise ValueError(f"invalid {what}")
-
-
-def terminals(line):
-    keys = [None if p == "g" else (p, c if p in "abc" else 0) for p, c in zip(line.phase, line.circuit)]
-    order = list(dict.fromkeys(k for k in keys if k))
-    E = np.zeros((len(keys), len(order)))
-    for i, key in enumerate(keys):
-        if key:
-            E[i, order.index(key)] = 1
-    return E

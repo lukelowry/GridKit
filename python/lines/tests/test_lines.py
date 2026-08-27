@@ -4,8 +4,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from lines import EPS0, MU0, Effects, Line, load, modes, reduce, response, rlgc, terminals, zy
-from lines.parameters import internal_impedance
+from lines import (EPS0, MU0, SERIES, SHUNT, Earth, Line, admittance, geometric, impedance, incidence,
+                   internal, leakage, load, modes, propagation, reduce, rlgc, sweep)
 
 REPO = Path(__file__).resolve().parents[3]
 LINES = REPO / "examples" / "EMT" / "Lines"
@@ -31,7 +31,7 @@ OMEGA = 2 * np.pi * np.geomspace(10, 1e8, 61)
 def conductor(q=0.0, **fields):
     line = Line(x=np.array([0.0]), h=np.array([20.0]), r=np.array([0.01519]), q=np.array([q]),
                 sigma=np.array([3.5e7]), mu=np.array([MU0]), phase=("a",), circuit=np.array([1]),
-                length=1e5, earth_sigma=0.01, earth_eps=EPS0)
+                length=1e5, earth=Earth(0.01, EPS0))
     return replace(line, **fields)
 
 
@@ -50,32 +50,33 @@ def test_load_coordinates(name):
 def test_internal_impedance_limits():
     for q in (0.0, 0.00464):
         line = conductor(q)
-        z = internal_impedance(np.array([1e-3]), line)[0, 0]
+        z = internal(np.array([1e-3]), line)[0, 0, 0]
         assert np.isclose(z.real, 1 / (np.pi * line.sigma[0] * (line.r[0] ** 2 - q**2)), rtol=1e-6)
         if q == 0.0:
             assert np.isclose(z.imag / 1e-3, MU0 / (8 * np.pi), rtol=1e-4)
         omega = 2 * np.pi * 1e8
         depth = np.sqrt(2 / (omega * line.mu[0] * line.sigma[0]))
-        z = internal_impedance(np.array([omega]), line)[0, 0]
+        z = internal(np.array([omega]), line)[0, 0, 0]
         assert np.isclose(z.real * 2 * np.pi * line.r[0] * line.sigma[0] * depth, 1.0, rtol=2e-3)
-        assert np.all(np.isfinite(internal_impedance(2 * np.pi * np.geomspace(1e-3, 1e8, 200), line)))
+        assert np.all(np.isfinite(internal(2 * np.pi * np.geomspace(1e-3, 1e8, 200), line)))
 
 
 def test_parity_with_cpp_sweep():
     table = np.genfromtxt(OVERHEAD / "output" / "overhead.response.csv", delimiter=",", names=True)
     line = load(OVERHEAD / "overhead.line.json")
-    R, L, G, C = rlgc(line, table["omega"])
-    off = ~np.eye(3, dtype=bool)
+    omega = table["omega"]
+    R, L, G, C = rlgc(impedance(omega, line), admittance(omega, line), omega)
     for name, values in (("R", R), ("L", L), ("C", C)):
-        for i, j in zip(*np.nonzero(off if name != "C" else np.ones((3, 3), bool))):
-            assert np.allclose(values[:, i, j], table[f"Overhead_{name}_{i}_{j}"], rtol=1e-6)
+        for i in range(3):
+            for j in range(3):
+                assert np.allclose(values[:, i, j], table[f"Overhead_{name}_{i}_{j}"], rtol=1e-6)
     assert np.all(G == 0)
 
 
 def test_reduction():
     line = load(LINES / "345kv-horizontal.line.json")
-    Z, Y = zy(line, OMEGA)
-    E = terminals(line)
+    Z, Y = impedance(OMEGA, line), admittance(OMEGA, line)
+    E = incidence(line)
     Zt, Yt = reduce(Z, Y, E)
     K, P = E.shape
     system = np.block([[Z[0], -E], [E.T, np.zeros((P, P))]])
@@ -85,44 +86,46 @@ def test_reduction():
     assert Zt.shape == (len(OMEGA), 3, 3)
 
     shielded = load(LINES / "138kv-delta.line.json")
-    Z, Y = zy(shielded, OMEGA)
-    E = terminals(shielded)
+    Z, Y = impedance(OMEGA, shielded), admittance(OMEGA, shielded)
+    E = incidence(shielded)
     live, ground = E.any(axis=1), ~E.any(axis=1)
     kron = Z[:, live][:, :, live] - Z[:, live][:, :, ground] @ np.linalg.solve(Z[:, ground][:, :, ground], Z[:, ground][:, :, live])
     assert np.allclose(reduce(Z, Y, E)[0], kron)
 
-    Z, Y = zy(conductor(), OMEGA)
+    Z, Y = impedance(OMEGA, conductor()), admittance(OMEGA, conductor())
     assert np.allclose(reduce(Z, Y, np.eye(1))[0], Z)
 
 
-def test_ordering_and_effects():
+def test_ordering_and_terms():
     line = load(LINES / "345kv-horizontal.line.json")
     reverse = {f: getattr(line, f)[::-1] for f in ("x", "h", "r", "q", "sigma", "mu", "circuit")}
     reverse["phase"] = line.phase[::-1]
-    R, L, G, C = rlgc(line, OMEGA)
-    Rr, Lr, Gr, Cr = rlgc(replace(line, **reverse), OMEGA)
-    for a, b in ((R, Rr), (L, Lr), (C, Cr)):
+    Z, Y = impedance(OMEGA, line), admittance(OMEGA, line)
+    Zr, Yr = impedance(OMEGA, replace(line, **reverse)), admittance(OMEGA, replace(line, **reverse))
+    for a, b in ((Z, Zr), (Y, Yr)):
         assert np.allclose(a[:, ::-1, ::-1], b)
         assert np.allclose(a, np.swapaxes(a, 1, 2))
-    R0, L0, G0, C0 = rlgc(line, OMEGA, Effects(earth=None))
-    assert np.allclose(R0, np.eye(len(line.x)) * internal_impedance(OMEGA, line).real[:, None, :])
-    R1, L1, G1, C1 = rlgc(line, OMEGA, Effects(skin=None, leakage=1e-11))
-    assert np.allclose(np.diagonal(G1, axis1=1, axis2=2), 1e-11)
-    assert np.allclose(np.diagonal(R1, axis1=1, axis2=2), np.diagonal(R - R0, axis1=1, axis2=2))
+    perfect_ground = impedance(OMEGA, line, (geometric, internal))
+    assert np.allclose(perfect_ground.real, internal(OMEGA, line).real)
+    assert np.allclose(Z, sum(term(OMEGA, line) for term in SERIES))
+    leaky = admittance(OMEGA, line, SHUNT + (leakage(1e-11),))
+    assert np.allclose(np.diagonal(leaky.real, axis1=1, axis2=2), 1e-11)
+    assert np.allclose(leaky.imag, Y.imag)
 
 
-def test_response_and_modes():
+def test_propagation_and_modes():
     line = load(LINES / "345kv-horizontal.line.json")
-    Z, Y = reduce(*zy(line, OMEGA), terminals(line))
-    gamma, yc, zc = response(Z, Y)
+    Z, Y = reduce(impedance(OMEGA, line), admittance(OMEGA, line), incidence(line))
+    gamma, yc, zc = propagation(Z, Y)
     assert np.allclose(gamma @ gamma, Z @ Y)
     assert np.allclose(yc @ Z @ yc, Y)
     assert np.allclose(zc @ yc, np.eye(3))
     m = modes(OMEGA, gamma, line.length)
-    eye = np.eye(3)
-    assert np.allclose(np.conj(np.swapaxes(m.ti, 1, 2)) @ m.tv, eye, atol=1e-10)
-    rebuilt = m.tv @ (m.lam[:, :, None] * np.linalg.inv(m.tv))
-    assert np.allclose(rebuilt, gamma)
+    assert np.allclose(np.conj(np.swapaxes(m.ti, 1, 2)) @ m.tv, np.eye(3), atol=1e-10)
+    assert np.allclose(m.tv @ (m.lam[:, :, None] * np.linalg.inv(m.tv)), gamma)
     assert np.all(np.isfinite(m.tau)) and np.all(m.tau > 0)
     assert np.allclose(m.h, np.exp(-line.length * m.lam))
     assert np.max(np.abs(np.diff(m.tv, axis=0))) < 0.5
+    result = sweep(line, OMEGA)
+    assert np.allclose(result.yc, yc) and np.allclose(result.tau, m.tau)
+    assert sweep(line, OMEGA, reduced=False).R.shape == (len(OMEGA), 8, 8)
